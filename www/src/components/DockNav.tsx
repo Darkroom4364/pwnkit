@@ -50,12 +50,12 @@ export default function DockNav() {
         style={{ fontFamily: "'Space Mono', monospace" }}
       >
         <a href="#" className="flex items-center gap-1.5 h-9 rounded-xl px-2.5 mr-0.5 hover:bg-white/[0.04] transition-colors">
-          <svg className="w-[18px] h-[18px] shrink-0 -mt-px" viewBox="4 3 24 26">
+          <svg className="w-[16px] h-[16px] shrink-0 mt-[1px]" viewBox="6 5 20 22">
             <path d="M8 12 L16 6 L24 12 L24 22 L20 26 L16 22 L12 26 L8 22Z" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinejoin="round"/>
             <circle cx="13" cy="16" r="1.5" fill="#DC2626"/>
             <circle cx="19" cy="16" r="1.5" fill="#DC2626"/>
           </svg>
-          <span className="text-[13px] font-bold text-white tracking-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>nightfang</span>
+          <span className="text-[13px] font-bold text-white tracking-tight leading-none" style={{ fontFamily: "'Outfit', sans-serif" }}>nightfang</span>
         </a>
 
         <div className="h-5 w-px bg-white/10" />

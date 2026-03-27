@@ -11,7 +11,7 @@ const SECTIONS = [
 ];
 
 const NIGHTFANG_ICON = (
-  <svg className="w-4 h-4" viewBox="0 0 32 32">
+  <svg className="w-4 h-4 shrink-0 align-middle" viewBox="0 0 32 32">
     <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
     <path d="M8 12 L16 6 L24 12 L24 22 L20 26 L16 22 L12 26 L8 22Z" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinejoin="round"/>
     <circle cx="13" cy="16" r="1.5" fill="#DC2626"/>

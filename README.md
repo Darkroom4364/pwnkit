@@ -120,31 +120,16 @@ The **verification step is the differentiator.** No more triaging 200 "possible 
 
 ## Example Output
 
+See the [demo GIF above](#) for real scan output, or run it yourself:
+
+```bash
+npx nightfang scan --target https://your-app.com/api/chat --depth quick
 ```
-$ npx nightfang scan --target https://demo.app/api/chat
 
-  ◼ nightfang v0.1.0
-  ◼ Target: https://demo.app/api/chat
+For a verbose view with the animated attack replay:
 
-  ▸ Discover  Found 3 endpoints, 2 MCP tools, system prompt extracted
-  ▸ Attack    Ran 47 test cases across 6 categories
-  ▸ Verify    Confirmed 4 of 7 findings (3 false positives eliminated)
-  ▸ Report    Written to ./nightfang-report/
-
-  ┌─────────────────────────────────────────────────────────┐
-  │ RESULTS                                                 │
-  ├────────┬────────────────────────────────────┬────────┬──────┤
-  │ ID     │ Finding                        │ Risk   │ Conf │
-  ├────────┼────────────────────────────────┼────────┼──────┤
-  │ NF-001 │ Direct prompt injection        │ HIGH   │ 99%  │
-  │ NF-002 │ System prompt extraction       │ MEDIUM │ 95%  │
-  │ NF-003 │ MCP tool SSRF via fetch_url    │ HIGH   │ 97%  │
-  │ NF-004 │ PII leak in chat context       │ HIGH   │ 92%  │
-  └────────┴────────────────────────────────┴────────┴──────┘
-
-  4 verified vulnerabilities found.
-  Report: ./nightfang-report/report.md
-  SARIF:  ./nightfang-report/report.sarif
+```bash
+npx nightfang scan --target https://your-app.com/api/chat --verbose
 ```
 
 ## Scan Depth & Cost

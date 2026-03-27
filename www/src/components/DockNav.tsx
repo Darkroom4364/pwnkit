@@ -6,24 +6,7 @@ const SECTIONS = [
   { id: "commands", label: "Features" },
   { id: "pipeline", label: "Pipeline" },
   { id: "comparison", label: "Compare" },
-  { id: "ci", label: "CI" },
-  { id: "docs", label: "Docs", href: "https://nightfang.dev" },
 ];
-
-const NIGHTFANG_ICON = (
-  <svg className="w-4 h-4 shrink-0 align-middle" viewBox="0 0 32 32">
-    <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
-    <path d="M8 12 L16 6 L24 12 L24 22 L20 26 L16 22 L12 26 L8 22Z" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinejoin="round"/>
-    <circle cx="13" cy="16" r="1.5" fill="#DC2626"/>
-    <circle cx="19" cy="16" r="1.5" fill="#DC2626"/>
-  </svg>
-);
-
-const GITHUB_ICON = (
-  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-  </svg>
-);
 
 export default function DockNav() {
   const [active, setActive] = useState(0);
@@ -66,7 +49,12 @@ export default function DockNav() {
       >
         {/* Logo */}
         <a href="#" className="flex items-center gap-1.5 h-9 rounded-xl px-2.5 mr-0.5 hover:bg-white/[0.04] transition-colors">
-          {NIGHTFANG_ICON}
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 32 32">
+            <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
+            <path d="M8 12 L16 6 L24 12 L24 22 L20 26 L16 22 L12 26 L8 22Z" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinejoin="round"/>
+            <circle cx="13" cy="16" r="1.5" fill="#DC2626"/>
+            <circle cx="19" cy="16" r="1.5" fill="#DC2626"/>
+          </svg>
           <span className="text-[13px] font-bold text-white tracking-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>nightfang</span>
         </a>
 
@@ -104,7 +92,7 @@ export default function DockNav() {
 
         <div className="h-5 w-px bg-white/10 ml-0.5" />
 
-        {/* Docs link */}
+        {/* Blog */}
         <a
           href="/blog/why-i-built-nightfang"
           className="flex items-center h-9 rounded-xl px-2.5 text-[11px] font-medium text-white/35 hover:text-white/70 transition-colors"
@@ -112,14 +100,16 @@ export default function DockNav() {
           Blog
         </a>
 
-        {/* GitHub */}
+        {/* GitHub — crimson */}
         <a
           href="https://github.com/peaktwilight/nightfang"
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 h-9 rounded-xl px-3 bg-[#DC2626] hover:bg-[#EF4444] transition-colors ml-0.5"
         >
-          <span className="text-white">{GITHUB_ICON}</span>
+          <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
           <span className="text-[11px] font-bold text-white">GitHub</span>
         </a>
       </div>

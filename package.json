@@ -1,0 +1,28 @@
+{
+  "name": "nightfang",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AI-powered red-teaming toolkit for LLM applications",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "lint": "eslint . --ext .ts",
+    "clean": "pnpm -r clean"
+  },
+  "keywords": [
+    "ai",
+    "security",
+    "red-team",
+    "llm",
+    "prompt-injection"
+  ],
+  "author": "peaktwilight",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0"
+  }
+}

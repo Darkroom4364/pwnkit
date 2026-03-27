@@ -2,11 +2,13 @@
 
 export type ScanDepth = "quick" | "default" | "deep";
 export type OutputFormat = "terminal" | "json" | "markdown";
+export type RuntimeMode = "api" | "claude" | "codex";
 
 export interface ScanConfig {
   target: string;
   depth: ScanDepth;
   format: OutputFormat;
+  runtime?: RuntimeMode;
   apiKey?: string;
   model?: string;
   templateFilter?: string[];

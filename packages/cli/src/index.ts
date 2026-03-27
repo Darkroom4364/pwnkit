@@ -4,8 +4,8 @@ import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
 import { VERSION } from "@nightfang/shared";
-import type { ScanDepth, OutputFormat } from "@nightfang/shared";
-import { scan } from "@nightfang/core";
+import type { ScanDepth, OutputFormat, RuntimeMode } from "@nightfang/shared";
+import { scan, createRuntime } from "@nightfang/core";
 import { formatReport } from "./formatters/index.js";
 
 const program = new Command();
@@ -21,18 +21,35 @@ program
   .requiredOption("--target <url>", "Target API endpoint URL")
   .option("--depth <depth>", "Scan depth: quick, default, deep", "default")
   .option("--format <format>", "Output format: terminal, json, md", "terminal")
+  .option("--runtime <runtime>", "Runtime: api, claude, codex", "api")
   .option("--timeout <ms>", "Request timeout in milliseconds", "30000")
   .option("--verbose", "Show detailed output", false)
   .action(async (opts) => {
     const depth = opts.depth as ScanDepth;
     const format = (opts.format === "md" ? "markdown" : opts.format) as OutputFormat;
+    const runtime = opts.runtime as RuntimeMode;
     const verbose = opts.verbose as boolean;
+
+    // Check runtime availability
+    if (runtime !== "api") {
+      const rt = createRuntime({ type: runtime, timeout: parseInt(opts.timeout, 10) });
+      const available = await rt.isAvailable();
+      if (!available) {
+        console.error(
+          chalk.red(`Runtime '${runtime}' not available. Is ${runtime} installed?`)
+        );
+        process.exit(2);
+      }
+    }
 
     // Banner
     if (format === "terminal") {
       console.log("");
       console.log(chalk.red.bold("  NIGHTFANG") + chalk.gray(" v" + VERSION));
       console.log(chalk.gray("  AI Red-Teaming Toolkit"));
+      if (runtime !== "api") {
+        console.log(chalk.gray(`  Runtime: ${runtime}`));
+      }
       console.log("");
     }
 
@@ -44,6 +61,7 @@ program
           target: opts.target,
           depth,
           format,
+          runtime,
           timeout: parseInt(opts.timeout, 10),
           verbose,
         },

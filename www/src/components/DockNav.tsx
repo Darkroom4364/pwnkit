@@ -97,13 +97,26 @@ export default function DockNav() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.8, ease: [0.22, 1, 0.36, 1] }}
-      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden md:block"
+      className="fixed top-3 left-1/2 -translate-x-1/2 z-50 hidden md:block"
     >
       <motion.div
         layout
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
         className="flex items-center gap-0.5 rounded-2xl border border-white/10 bg-[#0a0a0a]/70 backdrop-blur-2xl px-1.5 py-1.5 shadow-2xl shadow-black/20"
       >
+        {/* Nightfang logo */}
+        <a href="#" className="flex items-center gap-1.5 h-9 rounded-xl px-2.5 mr-1">
+          <svg className="w-4 h-4" viewBox="0 0 32 32">
+            <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
+            <path d="M8 12 L16 6 L24 12 L24 22 L20 26 L16 22 L12 26 L8 22Z" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinejoin="round"/>
+            <circle cx="13" cy="16" r="1.5" fill="#DC2626"/>
+            <circle cx="19" cy="16" r="1.5" fill="#DC2626"/>
+          </svg>
+          <span className="text-[13px] font-semibold text-white tracking-tight">nightfang</span>
+        </a>
+
+        <div className="h-5 w-px bg-white/10 mr-0.5" />
+
         {SECTIONS.map((section, i) => {
           const isActive = i === active;
           const isExternal = !!section.href;
@@ -151,10 +164,10 @@ export default function DockNav() {
                 href={section.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group relative flex items-center gap-1.5 h-9 rounded-xl px-3 bg-white hover:opacity-90 transition-opacity ml-0.5"
+                className="group relative flex items-center gap-1.5 h-9 rounded-xl px-3 bg-[#DC2626] hover:bg-[#EF4444] transition-colors ml-0.5"
               >
-                <span className="text-black shrink-0">{section.icon}</span>
-                <span className="text-[11px] font-semibold text-black">{section.label}</span>
+                <span className="text-white shrink-0">{section.icon}</span>
+                <span className="text-[11px] font-semibold text-white">{section.label}</span>
               </a>
             );
           }

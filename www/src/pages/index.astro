@@ -325,53 +325,8 @@ import DataGridBackground from '../components/DataGridBackground';
       </div>
     </section>
 
-    <!-- Pipeline -->
-    <section id="pipeline" data-section="pipeline" class="py-24 border-t border-white/5">
-      <div class="max-w-5xl mx-auto px-6 space-y-12">
-        <div class="grid items-center gap-4 md:grid-cols-2 md:gap-12">
-          <h2 class="text-3xl sm:text-4xl font-bold tracking-tight" style="font-family: 'Outfit', sans-serif">Autonomous agents. One pipeline.</h2>
-          <p class="text-smoke sm:ml-auto max-w-sm">Each agent is specialized for a phase of the security audit. They work in sequence, building on each other's output.</p>
-        </div>
-
-        <!-- Demo visual -->
-        <div class="relative rounded-2xl overflow-hidden border border-white/10">
-          <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] to-transparent z-10 pointer-events-none"></div>
-          <img src="/demo.gif" alt="pwnkit scanning a target" class="w-full" loading="lazy" />
-        </div>
-
-        <!-- 4 phase columns -->
-        <div class="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-8 lg:grid-cols-4">
-          <div class="space-y-2">
-            <div class="flex items-center gap-2">
-              <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <h3 class="text-sm font-medium text-white">Discover</h3>
-            </div>
-            <p class="text-ash text-sm">Maps endpoints, extracts system prompts, fingerprints models.</p>
-          </div>
-          <div class="space-y-2">
-            <div class="flex items-center gap-2">
-              <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-              <h3 class="text-sm font-medium text-white">Attack</h3>
-            </div>
-            <p class="text-ash text-sm">Crafts payloads, adapts to responses, multi-turn conversations.</p>
-          </div>
-          <div class="space-y-2">
-            <div class="flex items-center gap-2">
-              <svg class="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              <h3 class="text-sm font-medium text-white">Verify</h3>
-            </div>
-            <p class="text-ash text-sm">Re-exploits each finding independently. Can't reproduce? Dropped.</p>
-          </div>
-          <div class="space-y-2">
-            <div class="flex items-center gap-2">
-              <svg class="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              <h3 class="text-sm font-medium text-white">Report</h3>
-            </div>
-            <p class="text-ash text-sm">SARIF for GitHub Security tab, JSON for CI, Markdown for humans.</p>
-          </div>
-        </div>
-      </div>
-    </section>
+    <!-- Pipeline — kept as anchor for nav -->
+    <section id="pipeline" data-section="pipeline" class="hidden"></section>
 
     <!-- Attack Coverage — compact list under pipeline -->
     <section class="py-24 border-t border-white/5">
@@ -410,7 +365,7 @@ import DataGridBackground from '../components/DataGridBackground';
             <thead>
               <tr class="border-b border-white/10">
                 <th class="text-left py-3 pr-4 text-smoke font-medium">Feature</th>
-                <th class="py-3 px-3 text-crimson font-bold"><img src="/nightfang-icon.gif" class="w-4 h-4 inline-block mr-1" />pwnkit</th>
+                <th class="py-3 px-3 text-crimson font-bold"><img src="/pwnkit-icon.gif" class="w-4 h-4 inline-block mr-1" />pwnkit</th>
                 <th class="py-3 px-3 text-ash font-medium">promptfoo <span class="text-[10px] text-ash/60 font-normal">(acquired by OpenAI)</span></th>
                 <th class="py-3 px-3 text-ash font-medium">garak</th>
                 <th class="py-3 px-3 text-ash font-medium">nuclei</th>

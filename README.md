@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/nightfang-icon.gif" alt="pwnkit" width="80" />
+  <img src="assets/pwnkit-icon.gif" alt="pwnkit" width="80" />
 </p>
 
 <h1 align="center">pwnkit</h1>

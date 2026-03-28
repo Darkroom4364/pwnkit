@@ -67,7 +67,7 @@ export default function DockNav() {
         style={{ fontFamily: "'Outfit', sans-serif" }}
       >
         <a href="/" className="flex items-center gap-1.5 h-9 rounded-lg px-2.5 mr-0.5 hover:bg-white/[0.04] transition-colors">
-          <img src="/nightfang-icon.gif" alt="" className="w-[28px] h-[28px] shrink-0 rounded-sm" />
+          <img src="/pwnkit-icon.gif" alt="" className="w-[28px] h-[28px] shrink-0 rounded-sm" />
           <span className="text-[13px] font-bold text-white tracking-tight leading-none" style={{ fontFamily: "'Outfit', sans-serif" }}>pwnkit</span>
         </a>
 

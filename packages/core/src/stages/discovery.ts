@@ -1,4 +1,4 @@
-import type { ScanContext, StageResult, TargetInfo } from "@nightfang/shared";
+import type { ScanContext, StageResult, TargetInfo } from "@pwnkit/shared";
 import type { NativeRuntime, RuntimeType } from "../runtime/types.js";
 import { sendPrompt, extractResponseText } from "../http.js";
 import { LlmApiRuntime } from "../runtime/llm-api.js";

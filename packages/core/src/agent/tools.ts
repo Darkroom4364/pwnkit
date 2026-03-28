@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { isAbsolute, resolve } from "node:path";
-import type { Finding, AttackResult, TargetInfo } from "@nightfang/shared";
+import type { Finding, AttackResult, TargetInfo } from "@pwnkit/shared";
 import type { ToolDefinition, ToolCall, ToolResult, ToolContext } from "./types.js";
 import { sendPrompt, extractResponseText } from "../http.js";
-import type { NightfangDB } from "@nightfang/db";
+import type { PwnkitDB } from "@pwnkit/db";
 
 // ── Tool Registry ──
 
@@ -288,10 +288,10 @@ function validateScopedCommand(tokens: string[]): void {
 // ── Tool Executor ──
 
 export class ToolExecutor {
-  private db: NightfangDB | null;
+  private db: PwnkitDB | null;
   private ctx: ToolContext;
 
-  constructor(ctx: ToolContext, db: NightfangDB | null = null) {
+  constructor(ctx: ToolContext, db: PwnkitDB | null = null) {
     this.ctx = ctx;
     this.db = db;
   }

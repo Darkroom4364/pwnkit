@@ -20,7 +20,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
 
-      # Review nightfang's own source code (dogfooding)
+      # Review pwnkit's own source code (dogfooding)
       - run: node packages/cli/dist/index.js review . --format json --runtime api --model free --depth default > scan-results.json 2>&1 || true
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

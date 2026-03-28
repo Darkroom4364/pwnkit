@@ -32,7 +32,7 @@ export type AttackCategory =
   | "output-manipulation"
   | "encoding-bypass"
   | "multi-turn"
-  // Source-code audit categories (nightfang audit)
+  // Source-code audit categories (pwnkit audit)
   | "prototype-pollution"
   | "path-traversal"
   | "command-injection"
@@ -215,7 +215,7 @@ export interface ReportSummary {
   info: number;
 }
 
-// ── Package Audit (nightfang audit) ──
+// ── Package Audit (pwnkit audit) ──
 
 export interface AuditConfig {
   package: string;
@@ -264,7 +264,7 @@ export interface AuditReport {
   findings: Finding[];
 }
 
-// ── Source Code Review (nightfang review) ──
+// ── Source Code Review (pwnkit review) ──
 
 export interface ReviewConfig {
   repo: string;

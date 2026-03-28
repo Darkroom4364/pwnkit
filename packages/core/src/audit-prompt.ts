@@ -1,4 +1,4 @@
-import type { NpmAuditFinding, SemgrepFinding } from "@nightfang/shared";
+import type { NpmAuditFinding, SemgrepFinding } from "@pwnkit/shared";
 
 /**
  * Build the system prompt for the package audit agent.

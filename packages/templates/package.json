@@ -1,5 +1,5 @@
 {
-  "name": "@nightfang/templates",
+  "name": "@pwnkit/templates",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -14,7 +14,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@nightfang/shared": "workspace:*",
+    "@pwnkit/shared": "workspace:*",
     "yaml": "^2.4.0"
   },
   "devDependencies": {

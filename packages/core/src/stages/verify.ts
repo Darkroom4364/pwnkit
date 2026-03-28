@@ -4,8 +4,8 @@ import type {
   Finding,
   AttackResult,
   FindingStatus,
-} from "@nightfang/shared";
-import { loadTemplateById } from "@nightfang/templates";
+} from "@pwnkit/shared";
+import { loadTemplateById } from "@pwnkit/templates";
 import type { NativeRuntime, RuntimeType } from "../runtime/types.js";
 import { LlmApiRuntime } from "../runtime/llm-api.js";
 import { runNativeAgentLoop } from "../agent/native-loop.js";

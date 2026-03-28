@@ -113,13 +113,13 @@ export class ProcessRuntime implements Runtime {
     };
 
     if (context?.target) {
-      env.NIGHTFANG_TARGET = context.target;
+      env.PWNKIT_TARGET = context.target;
     }
     if (context?.findings) {
-      env.NIGHTFANG_FINDINGS = context.findings;
+      env.PWNKIT_FINDINGS = context.findings;
     }
     if (context?.templateId) {
-      env.NIGHTFANG_TEMPLATE_ID = context.templateId;
+      env.PWNKIT_TEMPLATE_ID = context.templateId;
     }
 
     return env;

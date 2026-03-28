@@ -4,8 +4,8 @@ import type {
   AttackTemplate,
   AttackResult,
   AttackOutcome,
-} from "@nightfang/shared";
-import { DEPTH_CONFIG } from "@nightfang/shared";
+} from "@pwnkit/shared";
+import { DEPTH_CONFIG } from "@pwnkit/shared";
 import type { Runtime, NativeRuntime, RuntimeContext, RuntimeType } from "../runtime/types.js";
 import { buildDeepScanPrompt, buildMcpAuditPrompt } from "../prompts.js";
 import { runNativeAgentLoop } from "../agent/native-loop.js";

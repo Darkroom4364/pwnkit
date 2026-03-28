@@ -1,4 +1,4 @@
-export { NightfangDB } from "./database.js";
+export { PwnkitDB } from "./database.js";
 export {
   scans,
   targets,

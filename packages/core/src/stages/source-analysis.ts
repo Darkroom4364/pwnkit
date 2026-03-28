@@ -5,7 +5,7 @@ import type {
   Finding,
   Severity,
   AttackCategory,
-} from "@nightfang/shared";
+} from "@pwnkit/shared";
 import type { Runtime, RuntimeContext } from "../runtime/types.js";
 import { buildSourceAnalysisPrompt } from "../prompts.js";
 

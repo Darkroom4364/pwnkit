@@ -1,7 +1,7 @@
 import chalk from "chalk";
 
 /**
- * Nightfang branded CLI spinner.
+ * Pwnkit branded CLI spinner.
  *
  * Uses the fang diamond motif with eye-blink animation frames,
  * rendered via raw stdout writes for zero-dependency terminal animation.
@@ -24,22 +24,22 @@ const FRAMES = [
 
 const INTERVAL_MS = 120;
 
-export interface NightfangSpinner {
+export interface PwnkitSpinner {
   /** Begin the animation. Idempotent — calling twice is safe. */
-  start(): NightfangSpinner;
+  start(): PwnkitSpinner;
   /** Freeze the spinner and clear its line. */
-  stop(): NightfangSpinner;
+  stop(): PwnkitSpinner;
   /** Replace the trailing text without restarting. */
-  update(text: string): NightfangSpinner;
+  update(text: string): PwnkitSpinner;
   /** Stop with a success marker. */
-  succeed(text?: string): NightfangSpinner;
+  succeed(text?: string): PwnkitSpinner;
   /** Stop with a failure marker. */
-  fail(text?: string): NightfangSpinner;
+  fail(text?: string): PwnkitSpinner;
   /** Stop with a warning marker. */
-  warn(text?: string): NightfangSpinner;
+  warn(text?: string): PwnkitSpinner;
 }
 
-export function createNightfangSpinner(text: string): NightfangSpinner {
+export function createPwnkitSpinner(text: string): PwnkitSpinner {
   let frameIndex = 0;
   let timer: ReturnType<typeof setInterval> | null = null;
   let currentText = text;
@@ -77,7 +77,7 @@ export function createNightfangSpinner(text: string): NightfangSpinner {
     lineLength = 0;
   }
 
-  const spinner: NightfangSpinner = {
+  const spinner: PwnkitSpinner = {
     start() {
       if (timer !== null) return spinner;
       frameIndex = 0;

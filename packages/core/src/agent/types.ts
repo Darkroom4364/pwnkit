@@ -1,4 +1,4 @@
-import type { Finding, AttackResult, TargetInfo } from "@nightfang/shared";
+import type { Finding, AttackResult, TargetInfo } from "@pwnkit/shared";
 
 // ── Agent Roles ──
 

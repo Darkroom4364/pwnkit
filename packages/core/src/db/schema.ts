@@ -1,4 +1,4 @@
-import type { Severity, AttackCategory, FindingStatus, AttackOutcome, ScanDepth } from "@nightfang/shared";
+import type { Severity, AttackCategory, FindingStatus, AttackOutcome, ScanDepth } from "@pwnkit/shared";
 
 // ── Row types returned by the DB ──
 

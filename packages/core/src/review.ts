@@ -10,7 +10,7 @@ import type {
   Finding,
   ScanConfig,
   Severity,
-} from "@nightfang/shared";
+} from "@pwnkit/shared";
 import type { ScanEvent, ScanListener } from "./scanner.js";
 // DB lazy-loaded to avoid native module issues
 import { createRuntime } from "./runtime/index.js";
@@ -51,7 +51,7 @@ function resolveRepo(
   }
 
   // Clone the repo
-  const tempDir = join(tmpdir(), `nightfang-review-${randomUUID().slice(0, 8)}`);
+  const tempDir = join(tmpdir(), `pwnkit-review-${randomUUID().slice(0, 8)}`);
   mkdirSync(tempDir, { recursive: true });
 
   emit({
@@ -467,7 +467,7 @@ async function runReviewAgent(
  * 2. Run semgrep with security rules
  * 3. AI agent performs deep source code review
  * 4. Generate report with severity and PoC suggestions
- * 5. Persist to nightfang DB
+ * 5. Persist to pwnkit DB
  */
 export async function sourceReview(
   opts: SourceReviewOptions,
@@ -480,7 +480,7 @@ export async function sourceReview(
   const { repoPath, cloned, tempDir } = resolveRepo(config.repo, emit);
 
   // Initialize DB and create scan record
-  const db = await (async () => { try { const { NightfangDB } = await import("@nightfang/db"); return new NightfangDB(config.dbPath); } catch { return null as any; } })() as any;
+  const db = await (async () => { try { const { PwnkitDB } = await import("@pwnkit/db"); return new PwnkitDB(config.dbPath); } catch { return null as any; } })() as any;
   const scanConfig: ScanConfig = {
     target: `repo:${config.repo}`,
     depth: config.depth,

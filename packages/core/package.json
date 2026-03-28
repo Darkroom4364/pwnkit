@@ -1,5 +1,5 @@
 {
-  "name": "@nightfang/core",
+  "name": "@pwnkit/core",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -13,9 +13,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@nightfang/db": "workspace:*",
-    "@nightfang/shared": "workspace:*",
-    "@nightfang/templates": "workspace:*",
+    "@pwnkit/db": "workspace:*",
+    "@pwnkit/shared": "workspace:*",
+    "@pwnkit/templates": "workspace:*",
     "better-sqlite3": "^12.8.0"
   },
   "devDependencies": {

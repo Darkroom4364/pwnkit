@@ -198,7 +198,7 @@ describe("Safe server responses", () => {
   });
 });
 
-describe("Nightfang scan integration", () => {
+describe("Pwnkit scan integration", () => {
   it("completes a scan against the vulnerable target without errors", async () => {
     const report = await runScan({
       target: vulnTarget,
@@ -237,7 +237,7 @@ describe("Nightfang scan integration", () => {
   });
 
   it("lists findings from the parent findings command", async () => {
-    const dbPath = join(tmpdir(), `nightfang-findings-${Date.now()}.db`);
+    const dbPath = join(tmpdir(), `pwnkit-findings-${Date.now()}.db`);
 
     await runScan(
       {

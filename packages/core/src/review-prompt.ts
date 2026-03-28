@@ -1,4 +1,4 @@
-import type { SemgrepFinding } from "@nightfang/shared";
+import type { SemgrepFinding } from "@pwnkit/shared";
 
 /**
  * Build the system prompt for the source code review agent.

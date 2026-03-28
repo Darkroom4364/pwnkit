@@ -1,5 +1,5 @@
 import type { RuntimeType } from "./types.js";
-import type { PipelineStage } from "@nightfang/shared";
+import type { PipelineStage } from "@pwnkit/shared";
 
 export interface RuntimeInfo {
   type: RuntimeType;

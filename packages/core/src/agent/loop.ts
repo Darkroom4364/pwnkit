@@ -6,14 +6,14 @@ import type {
 } from "./types.js";
 import { ToolExecutor, getToolsForRole } from "./tools.js";
 import type { ToolContext } from "./types.js";
-import type { NightfangDB } from "@nightfang/db";
+import type { PwnkitDB } from "@pwnkit/db";
 import type { Runtime } from "../runtime/types.js";
-import type { Finding, TargetInfo } from "@nightfang/shared";
+import type { Finding, TargetInfo } from "@pwnkit/shared";
 
 export interface AgentLoopOptions {
   config: AgentConfig;
   runtime: Runtime;
-  db: NightfangDB | null;
+  db: PwnkitDB | null;
   onTurn?: (turn: number, message: AgentMessage) => void;
 }
 
@@ -63,7 +63,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentState> 
     .join("\n\n");
 
   const initialPrompt = [
-    `You are a ${config.role} agent for Nightfang, an AI red-teaming toolkit.`,
+    `You are a ${config.role} agent for Pwnkit, an AI red-teaming toolkit.`,
     `Target: ${config.target}`,
     `Scan ID: ${config.scanId}`,
     "",

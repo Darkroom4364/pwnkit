@@ -1,5 +1,5 @@
 {
-  "name": "@nightfang/db",
+  "name": "@pwnkit/db",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -13,7 +13,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@nightfang/shared": "workspace:*",
+    "@pwnkit/shared": "workspace:*",
     "better-sqlite3": "^12.8.0",
     "drizzle-orm": "^0.44.0"
   },

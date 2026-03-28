@@ -8,7 +8,7 @@ import {
   spring,
 } from "remotion";
 import { loadFont } from "@remotion/google-fonts/SpaceMono";
-import { NightfangIcon } from "./NightfangIcon";
+import { PwnkitIcon } from "./PwnkitIcon";
 
 const { fontFamily: spaceMono } = loadFont("normal", {
   weights: ["400", "700"],
@@ -50,7 +50,7 @@ const S = {
   ctaEnd: 22,
 };
 
-const COMMAND = "npx nightfang scan --target https://api.example.com";
+const COMMAND = "npx pwnkit scan --target https://api.example.com";
 
 // ── Main Component ──
 export const DemoVideo = () => {
@@ -198,7 +198,7 @@ const IntroScene = () => {
           position: "relative",
         }}
       >
-        <NightfangIcon />
+        <PwnkitIcon />
       </div>
 
       {/* Title */}
@@ -212,7 +212,7 @@ const IntroScene = () => {
           letterSpacing: -1,
         }}
       >
-        nightfang
+        pwnkit
       </div>
 
       {/* Tagline */}
@@ -233,8 +233,8 @@ const IntroScene = () => {
   );
 };
 
-// ── Nightfang Logo (Fang SVG with eyes) ──
-const NightfangLogo = ({ size = 120 }: { size?: number }) => (
+// ── Pwnkit Logo (Fang SVG with eyes) ──
+const PwnkitLogo = ({ size = 120 }: { size?: number }) => (
   <svg
     width={size}
     height={size}
@@ -954,7 +954,7 @@ const CTAScene = () => {
           borderRadius: 8,
         }}
       >
-        <NightfangIcon />
+        <PwnkitIcon />
       </div>
 
       {/* Command */}
@@ -971,7 +971,7 @@ const CTAScene = () => {
         }}
       >
         <span style={{ color: C.green }}>{">"}</span>{" "}
-        npx nightfang scan --target{" "}
+        npx pwnkit scan --target{" "}
         <span style={{ color: C.crimson }}>{"<your-url>"}</span>
       </div>
 
@@ -985,7 +985,7 @@ const CTAScene = () => {
           marginTop: 8,
         }}
       >
-        nightfang.dev
+        pwnkit.com
       </div>
 
       {/* GitHub badge */}

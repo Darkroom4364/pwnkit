@@ -1,4 +1,4 @@
-import type { ScanReport, AuditReport, ReviewReport, OutputFormat } from "@nightfang/shared";
+import type { ScanReport, AuditReport, ReviewReport, OutputFormat } from "@pwnkit/shared";
 import { formatTerminal } from "./terminal.js";
 import { formatJson } from "./json.js";
 import { formatMarkdown } from "./markdown.js";

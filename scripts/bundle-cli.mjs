@@ -14,7 +14,7 @@ await build({
   platform: "node",
   target: "node18",
   banner: {
-    js: '#!/usr/bin/env node\nimport { createRequire as __nightfangCreateRequire } from "node:module";\nconst require = __nightfangCreateRequire(import.meta.url);',
+    js: '#!/usr/bin/env node\nimport { createRequire as __pwnkitCreateRequire } from "node:module";\nconst require = __pwnkitCreateRequire(import.meta.url);',
   },
   external: [
     "better-sqlite3",

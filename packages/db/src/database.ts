@@ -5,14 +5,14 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { mkdirSync } from "node:fs";
-import type { Finding, AttackResult, TargetInfo, ScanConfig, AgentVerdict, PipelineEvent } from "@nightfang/shared";
+import type { Finding, AttackResult, TargetInfo, ScanConfig, AgentVerdict, PipelineEvent } from "@pwnkit/shared";
 import * as schema from "./schema.js";
 import { findingStatuses, type FindingStatusDB } from "./schema.js";
 
-const DEFAULT_DB_DIR = join(homedir(), ".nightfang");
-const DEFAULT_DB_PATH = join(DEFAULT_DB_DIR, "nightfang.db");
+const DEFAULT_DB_DIR = join(homedir(), ".pwnkit");
+const DEFAULT_DB_PATH = join(DEFAULT_DB_DIR, "pwnkit.db");
 
-export class NightfangDB {
+export class PwnkitDB {
   private sqlite: Database.Database;
   private db: ReturnType<typeof drizzle>;
 

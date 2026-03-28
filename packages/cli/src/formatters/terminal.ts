@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import type { ScanReport, Finding, Severity } from "@nightfang/shared";
+import type { ScanReport, Finding, Severity } from "@pwnkit/shared";
 
 // ── Severity Design System ──
 

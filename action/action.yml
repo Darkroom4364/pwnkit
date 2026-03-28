@@ -1,5 +1,5 @@
-name: Nightfang Security Scan
-description: Run Nightfang in CI, generate SARIF, and fail on a configurable severity threshold.
+name: Pwnkit Security Scan
+description: Run Pwnkit in CI, generate SARIF, and fail on a configurable severity threshold.
 author: peaktwilight
 
 inputs:
@@ -33,9 +33,9 @@ inputs:
   report-dir:
     description: Directory where report.json and report.sarif are written.
     required: false
-    default: nightfang-report
-  nightfang-version:
-    description: Nightfang npm version to install (for example: latest, 0.1.0).
+    default: pwnkit-report
+  pwnkit-version:
+    description: Pwnkit npm version to install (for example: latest, 0.1.0).
     required: false
     default: latest
 
@@ -58,12 +58,12 @@ runs:
       with:
         node-version: 20
 
-    - name: Install Nightfang CLI
+    - name: Install Pwnkit CLI
       shell: bash
-      run: npm install --global "nightfang@${{ inputs.nightfang-version }}"
+      run: npm install --global "pwnkit@${{ inputs.pwnkit-version }}"
 
     - id: scan
-      name: Run Nightfang scan
+      name: Run Pwnkit scan
       shell: bash
       run: "${{ github.action_path }}/run-scan.sh"
       env:

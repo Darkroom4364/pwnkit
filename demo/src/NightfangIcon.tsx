@@ -7,7 +7,7 @@ import {
 } from "remotion";
 
 /**
- * Animated Nightfang fang/diamond icon.
+ * Animated pwnkit fang/diamond icon.
  *
  * - Eyes blink periodically (opacity on the two circles)
  * - Subtle breathing pulse on the whole shape (scale 1.0 -> 1.03 -> 1.0)
@@ -19,7 +19,7 @@ import {
 const CRIMSON = "#DC2626";
 const GLOW_COLOR = "rgba(220, 38, 38, 0.35)";
 
-export const NightfangIcon: React.FC = () => {
+export const PwnkitIcon: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 

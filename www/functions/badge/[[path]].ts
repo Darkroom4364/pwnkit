@@ -1,7 +1,7 @@
 /**
- * Nightfang Badge Service
+ * Pwnkit Badge Service
  *
- * Generates SVG badges for repos scanned by Nightfang.
+ * Generates SVG badges for repos scanned by Pwnkit.
  *
  * Routes:
  *   /badge/<owner>/<repo>         — scan status badge
@@ -42,7 +42,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // Expect: owner/repo or owner/repo/shield
   if (pathParts.length < 2) {
     return renderBadge({
-      label: "nightfang",
+      label: "pwnkit",
       message: "invalid",
       color: "#999",
       critical: 0,
@@ -94,14 +94,14 @@ async function getBadgeData(
     if (cached) return cached as BadgeData;
   }
 
-  // Fetch from GitHub Actions — check for nightfang self-scan workflow
+  // Fetch from GitHub Actions — check for pwnkit self-scan workflow
   try {
     const workflowRes = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/actions/workflows`,
       {
         headers: {
           Accept: "application/vnd.github+json",
-          "User-Agent": "nightfang-badge/1.0",
+          "User-Agent": "pwnkit-badge/1.0",
         },
       },
     );
@@ -114,25 +114,25 @@ async function getBadgeData(
       workflows: Array<{ id: number; name: string; path: string }>;
     };
 
-    // Find nightfang-related workflows
-    const nightfangWorkflow = workflows.workflows.find(
+    // Find pwnkit-related workflows
+    const pwnkitWorkflow = workflows.workflows.find(
       (w) =>
-        w.name.toLowerCase().includes("nightfang") ||
+        w.name.toLowerCase().includes("pwnkit") ||
         w.name.toLowerCase().includes("self-scan") ||
-        w.path.includes("nightfang"),
+        w.path.includes("pwnkit"),
     );
 
-    if (!nightfangWorkflow) {
+    if (!pwnkitWorkflow) {
       return makeUnknownBadge();
     }
 
     // Get latest run
     const runsRes = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${nightfangWorkflow.id}/runs?per_page=1&status=completed`,
+      `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${pwnkitWorkflow.id}/runs?per_page=1&status=completed`,
       {
         headers: {
           Accept: "application/vnd.github+json",
-          "User-Agent": "nightfang-badge/1.0",
+          "User-Agent": "pwnkit-badge/1.0",
         },
       },
     );
@@ -157,7 +157,7 @@ async function getBadgeData(
     // Try to get scan results from README (parse the SELF-SCAN markers)
     const readmeRes = await fetch(
       `https://raw.githubusercontent.com/${owner}/${repo}/main/README.md`,
-      { headers: { "User-Agent": "nightfang-badge/1.0" } },
+      { headers: { "User-Agent": "pwnkit-badge/1.0" } },
     );
 
     let critical = 0;
@@ -207,7 +207,7 @@ async function getBadgeData(
     }
 
     const data: BadgeData = {
-      label: "nightfang",
+      label: "pwnkit",
       message,
       color,
       critical,
@@ -232,7 +232,7 @@ async function getBadgeData(
 
 function makeUnknownBadge(): BadgeData {
   return {
-    label: "nightfang",
+    label: "pwnkit",
     message: "not scanned",
     color: "#999",
     critical: 0,
@@ -270,7 +270,7 @@ function renderBadge(data: BadgeData): Response {
     <text aria-hidden="true" x="${labelWidth + messageWidth / 2}" y="15" fill="#010101" fill-opacity=".3">${escapeXml(data.message)}</text>
     <text x="${labelWidth + messageWidth / 2}" y="14">${escapeXml(data.message)}</text>
   </g>
-  <!-- nightfang fang icon -->
+  <!-- pwnkit fang icon -->
   <g transform="translate(1, 1) scale(0.9)">
     <path d="M4 7 L10 2 L16 7 L16 14 L13 18 L10 14 L7 18 L4 14Z" fill="none" stroke="#DC2626" stroke-width="1.4" stroke-linejoin="round"/>
     <circle cx="8" cy="10.5" r="1" fill="#DC2626"/>

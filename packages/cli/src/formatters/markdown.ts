@@ -1,9 +1,9 @@
-import type { ScanReport, Finding } from "@nightfang/shared";
+import type { ScanReport, Finding } from "@pwnkit/shared";
 
 export function formatMarkdown(report: ScanReport): string {
   const lines: string[] = [];
 
-  lines.push("# Nightfang Scan Report");
+  lines.push("# Pwnkit Scan Report");
   lines.push("");
   lines.push(`| Field | Value |`);
   lines.push(`|-------|-------|`);

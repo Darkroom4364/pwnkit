@@ -1,12 +1,12 @@
-# Contributing to Nightfang
+# Contributing to Pwnkit
 
 We love contributions! Here's how to get started.
 
 ## Development Setup
 
 ```bash
-git clone https://github.com/peaktwilight/nightfang.git
-cd nightfang
+git clone https://github.com/peaktwilight/pwnkit.git
+cd pwnkit
 pnpm install
 pnpm -r build
 ```
@@ -19,7 +19,7 @@ pnpm vulnerable &
 pnpm safe &
 
 # Run tests
-pnpm --filter @nightfang/test-targets test
+pnpm --filter @pwnkit/test-targets test
 ```
 
 ## Adding Attack Templates

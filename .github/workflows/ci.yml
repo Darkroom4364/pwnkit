@@ -35,4 +35,4 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
-      - run: pnpm --filter @nightfang/test-targets test
+      - run: pnpm --filter @pwnkit/test-targets test

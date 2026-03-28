@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug in Nightfang
+description: Report a bug in Pwnkit
 labels: [bug]
 body:
   - type: textarea
@@ -20,8 +20,8 @@ body:
       description: What should have happened?
   - type: input
     attributes:
-      label: Nightfang version
-      description: Run `nightfang --version`
+      label: Pwnkit version
+      description: Run `pwnkit --version`
     validations:
       required: true
   - type: input

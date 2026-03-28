@@ -5,7 +5,7 @@ import type {
   AttackResult,
   TargetInfo,
   Severity,
-} from "@nightfang/shared";
+} from "@pwnkit/shared";
 
 // ── Types ──
 
@@ -320,7 +320,7 @@ function buildReplayLines(data: ReplayData): ReplayLine[] {
     text: boxRow(
       chalk.white(`Completed in ${duration}`) +
         chalk.dim(" \u2192 ") +
-        chalk.gray("./nightfang-report.json")
+        chalk.gray("./pwnkit-report.json")
     ),
     delay: MED,
   });
@@ -338,7 +338,7 @@ export async function renderReplay(data: ReplayData): Promise<void> {
   // Banner
   process.stdout.write("\n");
   process.stdout.write(
-    chalk.red.bold("  \u25c6 nightfang") +
+    chalk.red.bold("  \u25c6 pwnkit") +
       chalk.gray(" attack replay") +
       "\n"
   );
@@ -365,7 +365,7 @@ export function renderReplayStatic(data: ReplayData): string {
 
   output.push("");
   output.push(
-    chalk.red.bold("  \u25c6 nightfang") + chalk.gray(" attack replay")
+    chalk.red.bold("  \u25c6 pwnkit") + chalk.gray(" attack replay")
   );
   output.push(chalk.dim("  " + "\u2500".repeat(BOX_WIDTH + 1)));
   output.push("");

@@ -11,7 +11,7 @@ import type {
   Finding,
   ScanConfig,
   Severity,
-} from "@nightfang/shared";
+} from "@pwnkit/shared";
 import type { ScanEvent, ScanListener } from "./scanner.js";
 // DB lazy-loaded to avoid native module issues
 import { createRuntime } from "./runtime/index.js";
@@ -44,7 +44,7 @@ function installPackage(
   requestedVersion: string | undefined,
   emit: ScanListener,
 ): InstalledPackage {
-  const tempDir = join(tmpdir(), `nightfang-audit-${randomUUID().slice(0, 8)}`);
+  const tempDir = join(tmpdir(), `pwnkit-audit-${randomUUID().slice(0, 8)}`);
   mkdirSync(tempDir, { recursive: true });
 
   const spec = requestedVersion
@@ -802,7 +802,7 @@ async function runAuditAgent(
  * 2. Run semgrep with security rules
  * 3. AI agent analyzes semgrep findings + hunts for additional vulns
  * 4. Generate report with severity and PoC suggestions
- * 5. Persist to nightfang DB
+ * 5. Persist to pwnkit DB
  */
 export async function packageAudit(
   opts: PackageAuditOptions,
@@ -815,7 +815,7 @@ export async function packageAudit(
   const pkg = installPackage(config.package, config.version, emit);
 
   // Initialize DB and create scan record
-  const db = await (async () => { try { const { NightfangDB } = await import("@nightfang/db"); return new NightfangDB(config.dbPath); } catch { return null as any; } })() as any;
+  const db = await (async () => { try { const { PwnkitDB } = await import("@pwnkit/db"); return new PwnkitDB(config.dbPath); } catch { return null as any; } })() as any;
   const scanConfig: ScanConfig = {
     target: `npm:${pkg.name}@${pkg.version}`,
     depth: config.depth,

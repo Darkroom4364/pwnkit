@@ -3,14 +3,14 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { mkdirSync } from "node:fs";
-import type { Finding, AttackResult, TargetInfo, ScanConfig } from "@nightfang/shared";
+import type { Finding, AttackResult, TargetInfo, ScanConfig } from "@pwnkit/shared";
 import type { DBScan, DBFinding, DBTarget, DBAttackResult } from "./schema.js";
 import { SCHEMA_SQL } from "./schema.js";
 
-const DEFAULT_DB_DIR = join(homedir(), ".nightfang");
-const DEFAULT_DB_PATH = join(DEFAULT_DB_DIR, "nightfang.db");
+const DEFAULT_DB_DIR = join(homedir(), ".pwnkit");
+const DEFAULT_DB_PATH = join(DEFAULT_DB_DIR, "pwnkit.db");
 
-export class NightfangDB {
+export class PwnkitDB {
   private db: Database.Database;
 
   constructor(dbPath?: string) {

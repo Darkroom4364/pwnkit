@@ -2,19 +2,19 @@
 
 import { Command } from "commander";
 import chalk from "chalk";
-import { VERSION } from "@nightfang/shared";
-import { createNightfangSpinner } from "./spinner.js";
+import { VERSION } from "@pwnkit/shared";
+import { createPwnkitSpinner } from "./spinner.js";
 import type {
   ScanDepth,
   OutputFormat,
   RuntimeMode,
   ScanMode,
-} from "@nightfang/shared";
-import { scan, agenticScan, createRuntime, packageAudit, sourceReview } from "@nightfang/core";
+} from "@pwnkit/shared";
+import { scan, agenticScan, createRuntime, packageAudit, sourceReview } from "@pwnkit/core";
 import { formatReport, formatAuditReport, formatReviewReport } from "./formatters/index.js";
 import { renderProgressBar } from "./formatters/terminal.js";
 import { renderReplay, replayDataFromReport, createReplayCollector } from "./formatters/replay.js";
-import type { ScanReport, AuditReport, ReviewReport } from "@nightfang/shared";
+import type { ScanReport, AuditReport, ReviewReport } from "@pwnkit/shared";
 import { gzipSync } from "zlib";
 
 /**
@@ -24,7 +24,7 @@ function buildShareUrl(report: ScanReport | AuditReport | ReviewReport): string 
   const json = JSON.stringify(report);
   const compressed = gzipSync(Buffer.from(json, "utf-8"));
   const b64 = compressed.toString("base64url");
-  return `https://nightfang.dev/r#${b64}`;
+  return `https://pwnkit.com/r#${b64}`;
 }
 
 // ── "Holy Shit" First-Run Interactive Menu ──
@@ -33,7 +33,7 @@ async function showInteractiveMenu(): Promise<void> {
 
   console.log("");
   console.log(
-    chalk.red.bold("  nightfang") +
+    chalk.red.bold("  pwnkit") +
     chalk.gray(` v${VERSION}`) +
     chalk.gray(" — AI-Powered Agentic Security Scanner")
   );
@@ -57,7 +57,7 @@ async function showInteractiveMenu(): Promise<void> {
 
   if (action === "docs") {
     const { exec } = await import("child_process");
-    const url = "https://nightfang.dev";
+    const url = "https://pwnkit.com";
     const openCmd =
       process.platform === "darwin" ? `open ${url}` :
       process.platform === "win32"  ? `start ${url}` :
@@ -135,7 +135,7 @@ async function showInteractiveMenu(): Promise<void> {
 const program = new Command();
 
 program
-  .name("nightfang")
+  .name("pwnkit")
   .description("AI-powered agentic security scanner")
   .version(VERSION);
 
@@ -150,9 +150,9 @@ program
   .option("--repo <path>", "Path to target repo for deep scan source analysis")
   .option("--timeout <ms>", "Request timeout in milliseconds", "30000")
   .option("--agentic", "Use multi-turn agentic scan with tool use and SQLite persistence", false)
-  .option("--db-path <path>", "Path to SQLite database (default: ~/.nightfang/nightfang.db)")
+  .option("--db-path <path>", "Path to SQLite database (default: ~/.pwnkit/pwnkit.db)")
   .option("--api-key <key>", "API key for LLM provider (or set OPENROUTER_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY)")
-  .option("--model <model>", "LLM model to use (or set NIGHTFANG_MODEL)")
+  .option("--model <model>", "LLM model to use (or set PWNKIT_MODEL)")
   .option("--verbose", "Show detailed output with live attack replay", false)
   .option("--replay", "Replay the last scan's results as an animated attack chain", false)
   .action(async (opts) => {
@@ -166,8 +166,8 @@ program
     // ── Replay last scan (--replay flag) ──
     if (replayMode) {
       try {
-        const { NightfangDB } = await import("@nightfang/db");
-        const db = new NightfangDB(opts.dbPath);
+        const { PwnkitDB } = await import("@pwnkit/db");
+        const db = new PwnkitDB(opts.dbPath);
         const scans = db.listScans(1);
         if (scans.length === 0) {
           console.error(chalk.red("No scan history found. Run a scan first."));
@@ -188,9 +188,9 @@ program
           templateId: f.templateId,
           title: f.title,
           description: f.description,
-          severity: f.severity as import("@nightfang/shared").Severity,
-          category: f.category as import("@nightfang/shared").AttackCategory,
-          status: f.status as import("@nightfang/shared").FindingStatus,
+          severity: f.severity as import("@pwnkit/shared").Severity,
+          category: f.category as import("@pwnkit/shared").AttackCategory,
+          status: f.status as import("@pwnkit/shared").FindingStatus,
           evidence: {
             request: f.evidenceRequest,
             response: f.evidenceResponse,
@@ -252,7 +252,7 @@ program
     if (format === "terminal") {
       console.log("");
       console.log(
-        chalk.red.bold("  ◆ nightfang") + chalk.gray(` v${VERSION}`)
+        chalk.red.bold("  ◆ pwnkit") + chalk.gray(` v${VERSION}`)
       );
       console.log("");
       console.log(
@@ -274,7 +274,7 @@ program
       console.log("");
     }
 
-    const spinner = format === "terminal" ? createNightfangSpinner("Initializing...") : null;
+    const spinner = format === "terminal" ? createPwnkitSpinner("Initializing...") : null;
     let attackTotal = 0;
     let attacksDone = 0;
 
@@ -422,8 +422,8 @@ program
   .option("--scan <scanId>", "Replay a specific scan by ID (default: last scan)")
   .action(async (opts) => {
     try {
-      const { NightfangDB } = await import("@nightfang/db");
-      const db = new NightfangDB(opts.dbPath);
+      const { PwnkitDB } = await import("@pwnkit/db");
+      const db = new PwnkitDB(opts.dbPath);
 
       let scanRecord;
       if (opts.scan) {
@@ -462,9 +462,9 @@ program
         templateId: f.templateId,
         title: f.title,
         description: f.description,
-        severity: f.severity as import("@nightfang/shared").Severity,
-        category: f.category as import("@nightfang/shared").AttackCategory,
-        status: f.status as import("@nightfang/shared").FindingStatus,
+        severity: f.severity as import("@pwnkit/shared").Severity,
+        category: f.category as import("@pwnkit/shared").AttackCategory,
+        status: f.status as import("@pwnkit/shared").FindingStatus,
         evidence: {
           request: f.evidenceRequest,
           response: f.evidenceResponse,
@@ -476,7 +476,7 @@ program
       const targetInfo = target
         ? {
             url: target.url,
-            type: target.type as import("@nightfang/shared").TargetInfo["type"],
+            type: target.type as import("@pwnkit/shared").TargetInfo["type"],
             systemPrompt: target.systemPrompt ?? undefined,
             detectedFeatures: target.detectedFeatures
               ? JSON.parse(target.detectedFeatures)
@@ -507,8 +507,8 @@ program
   .option("--db-path <path>", "Path to SQLite database")
   .option("--limit <n>", "Number of scans to show", "10")
   .action(async (opts) => {
-    const { NightfangDB } = await import("@nightfang/db");
-    const db = new NightfangDB(opts.dbPath);
+    const { PwnkitDB } = await import("@pwnkit/db");
+    const db = new PwnkitDB(opts.dbPath);
     const scans = db.listScans(parseInt(opts.limit, 10));
     db.close();
 
@@ -518,7 +518,7 @@ program
     }
 
     console.log("");
-    console.log(chalk.red.bold("  ◆ nightfang") + chalk.gray(" scan history"));
+    console.log(chalk.red.bold("  ◆ pwnkit") + chalk.gray(" scan history"));
     console.log("");
 
     for (const scan of scans) {
@@ -560,8 +560,8 @@ function withFindingsListOptions(command: Command): Command {
 }
 
 async function renderFindingsList(opts: FindingsListOptions): Promise<void> {
-  const { NightfangDB } = await import("@nightfang/db");
-  const db = new NightfangDB(opts.dbPath);
+  const { PwnkitDB } = await import("@pwnkit/db");
+  const db = new PwnkitDB(opts.dbPath);
   const rows = db.listFindings({
     scanId: opts.scan,
     severity: opts.severity,
@@ -577,7 +577,7 @@ async function renderFindingsList(opts: FindingsListOptions): Promise<void> {
   }
 
   console.log("");
-  console.log(chalk.red.bold("  ◆ nightfang") + chalk.gray(` findings (${rows.length})`));
+  console.log(chalk.red.bold("  ◆ pwnkit") + chalk.gray(` findings (${rows.length})`));
   console.log("");
 
   for (const f of rows) {
@@ -627,8 +627,8 @@ findingsCmd
   .argument("<id>", "Finding ID (full or prefix)")
   .option("--db-path <path>", "Path to SQLite database")
   .action(async (id: string, opts) => {
-    const { NightfangDB } = await import("@nightfang/db");
-    const db = new NightfangDB(opts.dbPath);
+    const { PwnkitDB } = await import("@pwnkit/db");
+    const db = new PwnkitDB(opts.dbPath);
 
     // Support prefix matching
     let finding = db.getFinding(id);
@@ -644,7 +644,7 @@ findingsCmd
     }
 
     console.log("");
-    console.log(chalk.red.bold("  ◆ nightfang") + chalk.gray(" finding detail"));
+    console.log(chalk.red.bold("  ◆ pwnkit") + chalk.gray(" finding detail"));
     console.log("");
 
     const sevColor =
@@ -691,7 +691,7 @@ program
   .option("--runtime <runtime>", "Runtime: auto, claude, codex, gemini, opencode, api", "auto")
   .option("--db-path <path>", "Path to SQLite database")
   .option("--api-key <key>", "API key for LLM provider (or set OPENROUTER_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY)")
-  .option("--model <model>", "LLM model to use (or set NIGHTFANG_MODEL)")
+  .option("--model <model>", "LLM model to use (or set PWNKIT_MODEL)")
   .option("--verbose", "Show detailed output", false)
   .option("--timeout <ms>", "AI agent timeout in milliseconds", "600000")
   .action(async (repo: string, opts: Record<string, string | boolean>) => {
@@ -704,7 +704,7 @@ program
     if (format === "terminal") {
       console.log("");
       console.log(
-        chalk.red.bold("  ◆ nightfang review") + chalk.gray(` v${VERSION}`)
+        chalk.red.bold("  ◆ pwnkit review") + chalk.gray(` v${VERSION}`)
       );
       console.log("");
       console.log(
@@ -721,7 +721,7 @@ program
       console.log("");
     }
 
-    const spinner = format === "terminal" ? createNightfangSpinner("Initializing review...") : null;
+    const spinner = format === "terminal" ? createPwnkitSpinner("Initializing review...") : null;
 
     const eventHandler = (event: { type: string; stage?: string; message: string; data?: unknown }) => {
       if (format !== "terminal") return;
@@ -809,7 +809,7 @@ program
   .option("--runtime <runtime>", "Runtime: auto, claude, codex, gemini, opencode, api", "auto")
   .option("--db-path <path>", "Path to SQLite database")
   .option("--api-key <key>", "API key for LLM provider (or set OPENROUTER_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY)")
-  .option("--model <model>", "LLM model to use (or set NIGHTFANG_MODEL)")
+  .option("--model <model>", "LLM model to use (or set PWNKIT_MODEL)")
   .option("--verbose", "Show detailed output", false)
   .option("--timeout <ms>", "AI agent timeout in milliseconds", "600000")
   .action(async (packageName: string, opts: Record<string, string | boolean>) => {
@@ -846,7 +846,7 @@ program
     if (format === "terminal") {
       console.log("");
       console.log(
-        chalk.red.bold("  ◆ nightfang audit") + chalk.gray(` v${VERSION}`)
+        chalk.red.bold("  ◆ pwnkit audit") + chalk.gray(` v${VERSION}`)
       );
       console.log("");
       console.log(
@@ -863,7 +863,7 @@ program
       console.log("");
     }
 
-    const spinner = format === "terminal" ? createNightfangSpinner("Initializing audit...") : null;
+    const spinner = format === "terminal" ? createPwnkitSpinner("Initializing audit...") : null;
 
     const eventHandler = (event: { type: string; stage?: string; message: string; data?: unknown }) => {
       if (format !== "terminal") return;

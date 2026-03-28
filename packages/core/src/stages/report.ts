@@ -1,4 +1,4 @@
-import type { ScanContext, StageResult, ScanReport, ReportSummary } from "@nightfang/shared";
+import type { ScanContext, StageResult, ScanReport, ReportSummary } from "@pwnkit/shared";
 
 export async function generateReport(
   ctx: ScanContext

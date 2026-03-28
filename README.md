@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/nightfang-icon.gif" alt="Nightfang" width="80" />
+  <img src="assets/nightfang-icon.gif" alt="Pwnkit" width="80" />
 </p>
 
-<h1 align="center">Nightfang</h1>
+<h1 align="center">Pwnkit</h1>
 
 <p align="center">
   <strong>Security research automation for the AI era</strong><br/>
@@ -10,22 +10,22 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/nightfang"><img src="https://img.shields.io/npm/v/nightfang?color=crimson&style=flat-square" alt="npm version" /></a>
-  <a href="https://github.com/peaktwilight/nightfang/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license" /></a>
-  <a href="https://github.com/peaktwilight/nightfang/actions"><img src="https://img.shields.io/github/actions/workflow/status/peaktwilight/nightfang/ci.yml?style=flat-square" alt="CI" /></a>
-  <a href="https://github.com/peaktwilight/nightfang/stargazers"><img src="https://img.shields.io/github/stars/peaktwilight/nightfang?style=flat-square&color=gold" alt="stars" /></a>
-  <a href="https://nightfang.dev"><img src="https://nightfang.dev/badge/peaktwilight/nightfang" alt="nightfang verified" /></a>
+  <a href="https://www.npmjs.com/package/pwnkit"><img src="https://img.shields.io/npm/v/pwnkit?color=crimson&style=flat-square" alt="npm version" /></a>
+  <a href="https://github.com/peaktwilight/pwnkit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license" /></a>
+  <a href="https://github.com/peaktwilight/pwnkit/actions"><img src="https://img.shields.io/github/actions/workflow/status/peaktwilight/pwnkit/ci.yml?style=flat-square" alt="CI" /></a>
+  <a href="https://github.com/peaktwilight/pwnkit/stargazers"><img src="https://img.shields.io/github/stars/peaktwilight/pwnkit?style=flat-square&color=gold" alt="stars" /></a>
+  <a href="https://pwnkit.com"><img src="https://pwnkit.com/badge/peaktwilight/pwnkit" alt="pwnkit verified" /></a>
 </p>
 
 <p align="center">
-  <img src="assets/demo.gif" alt="Nightfang Demo" width="700" />
+  <img src="assets/demo.gif" alt="Pwnkit Demo" width="700" />
 </p>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#commands">Commands</a> &middot;
   <a href="#how-it-works">How It Works</a> &middot;
-  <a href="#what-nightfang-scans">What It Scans</a> &middot;
+  <a href="#what-pwnkit-scans">What It Scans</a> &middot;
   <a href="#how-it-compares">Comparison</a> &middot;
   <a href="#github-action">CI/CD</a> &middot;
   <a href="#built-by">About</a>
@@ -33,7 +33,7 @@
 
 ---
 
-Nightfang is an open-source agentic security toolkit. Autonomous agents discover, attack, verify, and report vulnerabilities. Point it at an API, an npm package, or a Git repo — the agents read code, craft payloads, analyze responses, and **re-exploit each finding to kill false positives**. No templates, no static rules — multi-turn agentic reasoning that thinks like an attacker.
+Pwnkit is an open-source agentic security toolkit. Autonomous agents discover, attack, verify, and report vulnerabilities. Point it at an API, an npm package, or a Git repo — the agents read code, craft payloads, analyze responses, and **re-exploit each finding to kill false positives**. No templates, no static rules — multi-turn agentic reasoning that thinks like an attacker.
 
 One command. Zero config. Every finding re-exploited or dropped.
 
@@ -41,32 +41,32 @@ One command. Zero config. Every finding re-exploited or dropped.
 
 ```bash
 # Scan an LLM endpoint
-npx nightfang scan --target https://your-app.com/api/chat
+npx pwnkit scan --target https://your-app.com/api/chat
 
 # Audit an npm package for vulnerabilities
-npx nightfang audit lodash
+npx pwnkit audit lodash
 
 # Deep security review of a codebase
-npx nightfang review ./my-ai-app
+npx pwnkit review ./my-ai-app
 ```
 
-That's it. Nightfang discovers your attack surface, launches targeted attacks, verifies findings, and generates a report — all in under 5 minutes.
+That's it. Pwnkit discovers your attack surface, launches targeted attacks, verifies findings, and generates a report — all in under 5 minutes.
 
 ## Commands
 
-Nightfang ships five commands — from quick API probes to deep source-level audits:
+Pwnkit ships five commands — from quick API probes to deep source-level audits:
 
 | Command | What It Does | Example |
 |---------|-------------|---------|
-| **`scan`** | Probe LLM endpoints, MCP servers, and AI APIs for vulnerabilities | `npx nightfang scan --target https://api.example.com/chat` |
-| **`audit`** | Install and security-audit any npm package with static analysis + AI review | `npx nightfang audit express@4.18.2` |
-| **`review`** | Deep source code security review of a local repo or GitHub URL | `npx nightfang review https://github.com/user/repo` |
-| **`history`** | Browse past scans with status, depth, findings count, and duration | `npx nightfang history --limit 20` |
-| **`findings`** | Query, filter, and inspect verified findings across all scans | `npx nightfang findings list --severity critical` |
+| **`scan`** | Probe LLM endpoints, MCP servers, and AI APIs for vulnerabilities | `npx pwnkit scan --target https://api.example.com/chat` |
+| **`audit`** | Install and security-audit any npm package with static analysis + AI review | `npx pwnkit audit express@4.18.2` |
+| **`review`** | Deep source code security review of a local repo or GitHub URL | `npx pwnkit review https://github.com/user/repo` |
+| **`history`** | Browse past scans with status, depth, findings count, and duration | `npx pwnkit history --limit 20` |
+| **`findings`** | Query, filter, and inspect verified findings across all scans | `npx pwnkit findings list --severity critical` |
 
 ## How It Works
 
-Nightfang runs autonomous AI agents in sequence. Each agent uses tools (`read_file`, `run_command`, `send_prompt`, `save_finding`) and makes multi-turn decisions — adapting its strategy based on what it learns:
+Pwnkit runs autonomous AI agents in sequence. Each agent uses tools (`read_file`, `run_command`, `send_prompt`, `save_finding`) and makes multi-turn decisions — adapting its strategy based on what it learns:
 
 ```
   +-----------+     +-----------+     +-----------+     +-----------+
@@ -88,7 +88,7 @@ Nightfang runs autonomous AI agents in sequence. Each agent uses tools (`read_fi
 
 The **verification step is the differentiator.** No more triaging 200 "possible prompt injections" that turn out to be nothing.
 
-## What Nightfang Scans
+## What Pwnkit Scans
 
 | Target | Command | How |
 |--------|---------|-----|
@@ -118,13 +118,13 @@ The **verification step is the differentiator.** No more triaging 200 "possible 
 See the [demo GIF above](#) for real scan output, or run it yourself:
 
 ```bash
-npx nightfang scan --target https://your-app.com/api/chat --depth quick
+npx pwnkit scan --target https://your-app.com/api/chat --depth quick
 ```
 
 For a verbose view with the animated attack replay:
 
 ```bash
-npx nightfang scan --target https://your-app.com/api/chat --verbose
+npx pwnkit scan --target https://your-app.com/api/chat --verbose
 ```
 
 ## Scan Depth & Cost
@@ -139,27 +139,27 @@ Default model is `anthropic/claude-sonnet-4.6` via [OpenRouter](https://openrout
 
 ```bash
 # Quick scan for CI
-npx nightfang scan --target https://api.example.com/chat --depth quick
+npx pwnkit scan --target https://api.example.com/chat --depth quick
 
 # Deep audit before launch
-npx nightfang scan --target https://api.example.com/chat --depth deep
+npx pwnkit scan --target https://api.example.com/chat --depth deep
 
 # Source + API scan with Claude Code
-npx nightfang scan --target https://api.example.com/chat --runtime claude --mode deep --repo ./src
+npx pwnkit scan --target https://api.example.com/chat --runtime claude --mode deep --repo ./src
 
 # MCP server audit
-npx nightfang scan --target https://mcp-server.example.com --mode mcp --runtime claude
+npx pwnkit scan --target https://mcp-server.example.com --mode mcp --runtime claude
 
 # Audit an npm package
-npx nightfang audit react --depth deep --runtime claude
+npx pwnkit audit react --depth deep --runtime claude
 
 # Review a GitHub repo
-npx nightfang review https://github.com/user/repo --runtime codex --depth deep
+npx pwnkit review https://github.com/user/repo --runtime codex --depth deep
 ```
 
 ## Runtime Modes
 
-Bring your own agent CLI — Nightfang orchestrates it:
+Bring your own agent CLI — Pwnkit orchestrates it:
 
 | Runtime | Flag | Best For |
 |---------|------|----------|
@@ -182,8 +182,8 @@ Combined with scan modes:
 
 ## How It Compares
 
-| Feature | Nightfang | promptfoo | garak | semgrep | nuclei |
-|---------|-----------|-----------|-------|---------|--------|
+| Feature | Pwnkit | promptfoo | garak | semgrep | nuclei |
+|---------|--------|-----------|-------|---------|--------|
 | **Agentic multi-turn pipeline** | Yes — Autonomous agents with tool use | No Single runner | No Single runner | No Rule-based | No Template runner |
 | **Verification (no false positives)** | Yes — Re-exploits to confirm | No | No | No | No |
 | **LLM endpoint scanning** | Yes — Prompt injection, jailbreaks, exfil | Yes — Red-teaming | Yes — Probes | No | No |
@@ -192,15 +192,15 @@ Combined with scan modes:
 | **Source code review** | Yes — AI-powered deep analysis | No | No | Yes — Rules only | No |
 | **OWASP LLM Top 10** | Yes — 8/10 covered | Partial | Partial | N/A | N/A |
 | **SARIF + GitHub Security tab** | Yes — | Yes — | No | Yes — | Yes — |
-| **One command, zero config** | Yes — `npx nightfang scan` | Needs YAML config | Needs Python setup | Needs rules config | Needs templates |
+| **One command, zero config** | Yes — `npx pwnkit scan` | Needs YAML config | Needs Python setup | Needs rules config | Needs templates |
 | **Open source** | Yes — MIT | Yes — (acquired by OpenAI) | Yes — | Yes — | Yes — |
 | **Cost per scan** | $0.05–$1.00 | Varies | Free (local) | Free (OSS) / Paid (Pro) | Free |
 
-Nightfang isn't replacing semgrep or nuclei — it covers the AI-specific attack surface they can't see. Use them together.
+Pwnkit isn't replacing semgrep or nuclei — it covers the AI-specific attack surface they can't see. Use them together.
 
 ## GitHub Action
 
-Add Nightfang to your CI/CD pipeline:
+Add Pwnkit to your CI/CD pipeline:
 
 ```yaml
 name: AI Security Scan
@@ -211,13 +211,13 @@ permissions:
   security-events: write
 
 jobs:
-  nightfang:
+  pwnkit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Nightfang
-        uses: peaktwilight/nightfang/action@v1
+      - name: Run Pwnkit
+        uses: peaktwilight/pwnkit/action@v1
         with:
           target: ${{ secrets.STAGING_API_URL }}
           depth: default  # quick | default | deep
@@ -228,26 +228,26 @@ jobs:
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: nightfang-report/report.sarif
+          sarif_file: pwnkit-report/report.sarif
 ```
 
-> **API Key Priority:** Nightfang checks for `OPENROUTER_API_KEY` first, then `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY`. OpenRouter gives you access to many models (including free ones) through a single key at [openrouter.ai](https://openrouter.ai).
+> **API Key Priority:** Pwnkit checks for `OPENROUTER_API_KEY` first, then `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY`. OpenRouter gives you access to many models (including free ones) through a single key at [openrouter.ai](https://openrouter.ai).
 
 Findings show up directly in the **Security** tab of your repository.
 
 ### Badge
 
-Add a Nightfang badge to your README:
+Add a Pwnkit badge to your README:
 
 ```markdown
-[![nightfang](https://nightfang.dev/badge/YOUR_ORG/YOUR_REPO)](https://nightfang.dev)
+[![pwnkit](https://pwnkit.com/badge/YOUR_ORG/YOUR_REPO)](https://pwnkit.com)
 ```
 
 The badge auto-updates from your GitHub Actions scan results. Shows `verified` (green), finding counts (yellow/red), or `not scanned` (gray).
 
 Also available as a [shields.io endpoint](https://shields.io/endpoint):
 ```
-https://img.shields.io/endpoint?url=https://nightfang.dev/badge/YOUR_ORG/YOUR_REPO/shield
+https://img.shields.io/endpoint?url=https://pwnkit.com/badge/YOUR_ORG/YOUR_REPO/shield
 ```
 
 ## Findings Management
@@ -256,16 +256,16 @@ Every finding is persisted in a local SQLite database. Query across scans:
 
 ```bash
 # List critical findings
-npx nightfang findings list --severity critical
+npx pwnkit findings list --severity critical
 
 # Filter by category
-npx nightfang findings list --category prompt-injection --status confirmed
+npx pwnkit findings list --category prompt-injection --status confirmed
 
 # Inspect a specific finding with full evidence
-npx nightfang findings show NF-001
+npx pwnkit findings show NF-001
 
 # Browse scan history
-npx nightfang history --limit 10
+npx pwnkit history --limit 10
 ```
 
 Finding lifecycle: `discovered → verified → confirmed → scored → reported` (or `false-positive` if verification fails).
@@ -290,15 +290,15 @@ Finding lifecycle: `discovered → verified → confirmed → scored → reporte
 
 Created by a security researcher with [7 published CVEs](https://doruk.ch/blog) across node-forge, mysql2, uptime-kuma, liquidjs, picomatch, and jspdf.
 
-Nightfang exists because traditional security tools can't see AI attack surfaces. You can't `nmap` a language model. You can't write a static rule for a jailbreak that hasn't been invented yet. You need agents that think like attackers — and then re-exploit what they find to prove it's real.
+Pwnkit exists because traditional security tools can't see AI attack surfaces. You can't `nmap` a language model. You can't write a static rule for a jailbreak that hasn't been invented yet. You need agents that think like attackers — and then re-exploit what they find to prove it's real.
 
 ## Contributing
 
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ```bash
-git clone https://github.com/peaktwilight/nightfang.git
-cd nightfang
+git clone https://github.com/peaktwilight/pwnkit.git
+cd pwnkit
 pnpm install
 pnpm test
 ```

@@ -1,5 +1,5 @@
-import type { ScanConfig, ScanContext, ScanReport, PipelineStage } from "@nightfang/shared";
-import { loadTemplates } from "@nightfang/templates";
+import type { ScanConfig, ScanContext, ScanReport, PipelineStage } from "@pwnkit/shared";
+import { loadTemplates } from "@pwnkit/templates";
 import { createScanContext, finalize } from "./context.js";
 import { createRuntime } from "./runtime/index.js";
 import type { Runtime, RuntimeType } from "./runtime/index.js";
@@ -14,8 +14,8 @@ let _db: any = null;
 async function getDB(dbPath?: string) {
   if (!_db) {
     try {
-      const { NightfangDB } = await import("@nightfang/db");
-      _db = new NightfangDB(dbPath);
+      const { PwnkitDB } = await import("@pwnkit/db");
+      _db = new PwnkitDB(dbPath);
     } catch {
       // DB unavailable (native module issue) — continue without persistence
       _db = null;

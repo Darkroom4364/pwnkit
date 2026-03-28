@@ -104,7 +104,7 @@ function detectProvider(configApiKey?: string): {
  *
  * Priority: OPENROUTER_API_KEY -> ANTHROPIC_API_KEY -> OPENAI_API_KEY
  *
- * Model can be overridden with NIGHTFANG_MODEL env var or --model flag.
+ * Model can be overridden with PWNKIT_MODEL env var or --model flag.
  *
  * Supports two modes:
  * - Legacy: single-prompt execute() for backward compat with existing agent loop
@@ -124,7 +124,7 @@ export class LlmApiRuntime implements Runtime, NativeRuntime {
     this.provider = detected.provider;
     this.apiKey = detected.apiKey;
     this.baseUrl = detected.baseUrl;
-    const requestedModel = config.model ?? process.env.NIGHTFANG_MODEL;
+    const requestedModel = config.model ?? process.env.PWNKIT_MODEL;
     // "free" is a special alias for the free OpenRouter model
     if (requestedModel === "free" && this.provider === "openrouter") {
       this.model = FREE_OPENROUTER_MODEL;
@@ -146,8 +146,8 @@ export class LlmApiRuntime implements Runtime, NativeRuntime {
         Authorization: `Bearer ${this.apiKey}`,
       };
       if (this.provider === "openrouter") {
-        headers["HTTP-Referer"] = "https://nightfang.dev";
-        headers["X-Title"] = "Nightfang Security Scanner";
+        headers["HTTP-Referer"] = "https://pwnkit.com";
+        headers["X-Title"] = "Pwnkit Security Scanner";
       }
       return headers;
     }

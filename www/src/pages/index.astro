@@ -325,60 +325,51 @@ import DataGridBackground from '../components/DataGridBackground';
       </div>
     </section>
 
-    <!-- 4-agent pipeline -->
+    <!-- Pipeline -->
     <section id="pipeline" data-section="pipeline" class="py-24 border-t border-white/5">
-      <div class="max-w-4xl mx-auto px-6">
-        <div class="text-center mb-12">
-          <h2 class="text-3xl sm:text-4xl font-bold tracking-tight mb-4" style="font-family: 'Outfit', sans-serif">Autonomous agents. One pipeline.</h2>
-          <p class="text-smoke text-lg max-w-xl mx-auto">Each agent is specialized for a phase of the security audit. They work in sequence, building on each other's output.</p>
+      <div class="max-w-5xl mx-auto px-6 space-y-12">
+        <div class="grid items-center gap-4 md:grid-cols-2 md:gap-12">
+          <h2 class="text-3xl sm:text-4xl font-bold tracking-tight" style="font-family: 'Outfit', sans-serif">Autonomous agents. One pipeline.</h2>
+          <p class="text-smoke sm:ml-auto max-w-sm">Each agent is specialized for a phase of the security audit. They work in sequence, building on each other's output.</p>
         </div>
 
-        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div class="relative bg-night-lighter border border-white/5 rounded-xl p-6 hover:border-emerald-500/30 transition-colors h-full">
-            <div class="text-xs text-emerald-400 mb-3 uppercase tracking-wider" style="font-family: 'Space Mono', monospace">01 &middot; Discover</div>
-            <h3 class="font-semibold text-lg mb-2" style="font-family: 'Outfit', sans-serif">Map the attack surface</h3>
-            <p class="text-smoke text-sm leading-relaxed">Maps endpoints, extracts system prompts, detects models, enumerates tools.</p>
-            <div class="mt-4 pt-4 border-t border-white/5 text-xs text-ash space-y-1" style="font-family: 'Space Mono', monospace">
-              <div>&#8226; API mapping</div>
-              <div>&#8226; System prompt extraction</div>
-              <div>&#8226; Model fingerprinting</div>
-            </div>
-          </div>
-
-          <div class="relative bg-night-lighter border border-white/5 rounded-xl p-6 hover:border-amber-500/30 transition-colors h-full">
-            <div class="text-xs text-amber-400 mb-3 uppercase tracking-wider" style="font-family: 'Space Mono', monospace">02 &middot; Attack</div>
-            <h3 class="font-semibold text-lg mb-2" style="font-family: 'Outfit', sans-serif">Agentic multi-turn attacks</h3>
-            <p class="text-smoke text-sm leading-relaxed">AI agent crafts and adapts payloads across injection, jailbreaks, exfiltration, tool poisoning.</p>
-            <div class="mt-4 pt-4 border-t border-white/5 text-xs text-ash space-y-1" style="font-family: 'Space Mono', monospace">
-              <div>&#8226; Adaptive payloads</div>
-              <div>&#8226; Multi-turn conversations</div>
-              <div>&#8226; Response-aware pivoting</div>
-            </div>
-          </div>
-
-          <div class="relative bg-night-lighter border border-white/5 rounded-xl p-6 hover:border-blue-500/30 transition-colors h-full">
-            <div class="text-xs text-blue-400 mb-3 uppercase tracking-wider" style="font-family: 'Space Mono', monospace">03 &middot; Verify</div>
-            <h3 class="font-semibold text-lg mb-2" style="font-family: 'Outfit', sans-serif">Re-exploit. Kill false positives.</h3>
-            <p class="text-smoke text-sm leading-relaxed">Every finding gets independently reproduced. If it can't be reproduced, it's dropped.</p>
-            <div class="mt-4 pt-4 border-t border-white/5 text-xs text-ash space-y-1" style="font-family: 'Space Mono', monospace">
-              <div>&#8226; Independent re-exploitation</div>
-              <div>&#8226; Proof artifacts</div>
-              <div>&#8226; Confidence scoring</div>
-            </div>
-          </div>
-
-          <div class="relative bg-night-lighter border border-white/5 rounded-xl p-6 hover:border-purple-500/30 transition-colors h-full">
-            <div class="text-xs text-purple-400 mb-3 uppercase tracking-wider" style="font-family: 'Space Mono', monospace">04 &middot; Report</div>
-            <h3 class="font-semibold text-lg mb-2" style="font-family: 'Outfit', sans-serif">SARIF, JSON, Markdown</h3>
-            <p class="text-smoke text-sm leading-relaxed">Plugs into GitHub Security tab, CI pipelines, and human review. Severity, remediation, full evidence.</p>
-            <div class="mt-4 pt-4 border-t border-white/5 text-xs text-ash space-y-1" style="font-family: 'Space Mono', monospace">
-              <div>&#8226; GitHub Security tab</div>
-              <div>&#8226; CI/CD integration</div>
-              <div>&#8226; Remediation guidance</div>
-            </div>
-          </div>
+        <!-- Demo visual -->
+        <div class="relative rounded-2xl overflow-hidden border border-white/10">
+          <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] to-transparent z-10 pointer-events-none"></div>
+          <img src="/demo.gif" alt="pwnkit scanning a target" class="w-full" loading="lazy" />
         </div>
 
+        <!-- 4 phase columns -->
+        <div class="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-8 lg:grid-cols-4">
+          <div class="space-y-2">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <h3 class="text-sm font-medium text-white">Discover</h3>
+            </div>
+            <p class="text-ash text-sm">Maps endpoints, extracts system prompts, fingerprints models.</p>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              <h3 class="text-sm font-medium text-white">Attack</h3>
+            </div>
+            <p class="text-ash text-sm">Crafts payloads, adapts to responses, multi-turn conversations.</p>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <h3 class="text-sm font-medium text-white">Verify</h3>
+            </div>
+            <p class="text-ash text-sm">Re-exploits each finding independently. Can't reproduce? Dropped.</p>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <h3 class="text-sm font-medium text-white">Report</h3>
+            </div>
+            <p class="text-ash text-sm">SARIF for GitHub Security tab, JSON for CI, Markdown for humans.</p>
+          </div>
+        </div>
       </div>
     </section>
 

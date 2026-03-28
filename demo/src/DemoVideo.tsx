@@ -193,8 +193,8 @@ const IntroScene = () => {
           opacity: logoOpacity,
           transform: `scale(${logoScale})`,
           marginBottom: 24,
-          width: 140,
-          height: 140,
+          width: 80,
+          height: 80,
           position: "relative",
         }}
       >
@@ -393,7 +393,7 @@ type AgentLane = {
 const lanes: AgentLane[] = [
   {
     name: "DISCOVER",
-    icon: "\u{1F50D}",
+    icon: "01",
     color: C.blue,
     activateAt: 0.3,
     items: [
@@ -404,7 +404,7 @@ const lanes: AgentLane[] = [
   },
   {
     name: "ATTACK",
-    icon: "\u{26A1}",
+    icon: "02",
     color: C.crimson,
     activateAt: 1.5,
     items: [
@@ -416,7 +416,7 @@ const lanes: AgentLane[] = [
   },
   {
     name: "VERIFY",
-    icon: "\u{2705}",
+    icon: "03",
     color: C.green,
     activateAt: 3.0,
     items: [
@@ -427,7 +427,7 @@ const lanes: AgentLane[] = [
   },
   {
     name: "REPORT",
-    icon: "\u{1F4CB}",
+    icon: "04",
     color: C.orange,
     activateAt: 4.5,
     items: [
@@ -565,7 +565,12 @@ const LaneColumn = ({
           borderBottom: `1px solid ${C.border}`,
         }}
       >
-        <div style={{ fontSize: 22, marginBottom: 4 }}>{lane.icon}</div>
+        <div style={{ marginBottom: 6, display: "flex", justifyContent: "center" }}>
+          <svg width="28" height="28" viewBox="0 0 28 28">
+            <circle cx="14" cy="14" r="12" fill="none" stroke={isActive ? lane.color : C.dimmed} strokeWidth="1.5" opacity={0.4 + headerGlow * 0.6} />
+            <text x="14" y="18" textAnchor="middle" fill={isActive ? lane.color : C.dimmed} fontSize="11" fontFamily={spaceMono} fontWeight="700" opacity={0.4 + headerGlow * 0.6}>{lane.icon}</text>
+          </svg>
+        </div>
         <div
           style={{
             fontSize: 13,

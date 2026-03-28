@@ -184,7 +184,9 @@ export function registerScanCommand(program: Command): void {
       };
 
       try {
-        const report = opts.agentic
+        // Web mode always uses agentic scanner (needs AI to reason about HTTP responses)
+        const useAgentic = opts.agentic || mode === "web";
+        const report = useAgentic
           ? await agenticScan({
               config: scanConfig,
               dbPath: opts.dbPath,

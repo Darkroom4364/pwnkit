@@ -396,6 +396,37 @@ function parseFindingsFromCliOutput(output: string, scanId: string): Finding[] {
   const findings: Finding[] = [];
   const blocks = output.split("---FINDING---").slice(1);
 
+  if (blocks.length === 0) {
+    // No structured findings — check if the output mentions no vulnerabilities
+    const lower = output.toLowerCase();
+    if (lower.includes("no vulnerabilit") || lower.includes("no security issue") || lower.includes("no findings") || lower.includes("looks secure") || lower.includes("no real") || output.trim().length === 0) {
+      return [];
+    }
+    // Claude wrote prose findings — create a single finding from the whole output
+    if (output.trim().length > 50) {
+      // Extract a title from the first meaningful line
+      const lines = output.trim().split("\n").filter(l => l.trim().length > 10);
+      const title = lines[0]?.trim().slice(0, 100) || "Security finding from AI analysis";
+      findings.push({
+        id: randomUUID(),
+        templateId: `cli-audit-${Date.now()}`,
+        title,
+        description: output.trim().slice(0, 2000),
+        severity: "info" as Severity,
+        category: "other" as Finding["category"],
+        status: "discovered",
+        evidence: {
+          request: "Automated AI source code audit",
+          response: output.trim().slice(0, 2000),
+          analysis: "Found by CLI agent during automated audit. Review the full output for details.",
+        },
+        confidence: undefined,
+        timestamp: Date.now(),
+      });
+    }
+    return findings;
+  }
+
   for (const block of blocks) {
     const endIdx = block.indexOf("---END---");
     const content = endIdx >= 0 ? block.slice(0, endIdx) : block;

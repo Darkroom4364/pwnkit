@@ -11,9 +11,21 @@ const SECTIONS = [
 ];
 
 export default function DockNav() {
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState(-1);
+  const [isHomepage, setIsHomepage] = useState(false);
+  const [isBlogPage, setIsBlogPage] = useState(false);
 
   useEffect(() => {
+    const path = window.location.pathname;
+    const onHome = path === "/" || path === "";
+    setIsHomepage(onHome);
+    setIsBlogPage(path.startsWith("/blog"));
+
+    if (!onHome) {
+      setActive(-1); // No section active on non-homepage
+      return;
+    }
+
     const onScroll = () => {
       const ids = [...SECTIONS.map(s => s.id)].reverse();
       for (const id of ids) {
@@ -33,9 +45,14 @@ export default function DockNav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const scrollTo = (id: string) => {
-    const el = document.querySelector(`[data-section="${id}"]`);
-    el?.scrollIntoView({ behavior: "smooth" });
+  const handleClick = (id: string) => {
+    if (isHomepage) {
+      const el = document.querySelector(`[data-section="${id}"]`);
+      el?.scrollIntoView({ behavior: "smooth" });
+    } else {
+      // Navigate to homepage with anchor
+      window.location.href = id === "hero" ? "/" : `/#${id}`;
+    }
   };
 
   return (
@@ -49,7 +66,7 @@ export default function DockNav() {
         className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-[#0a0a0a]/80 backdrop-blur-2xl px-1.5 py-1.5 shadow-2xl shadow-black/30"
         style={{ fontFamily: "'Space Mono', monospace" }}
       >
-        <a href="#" className="flex items-center gap-1.5 h-9 rounded-lg px-2.5 mr-0.5 hover:bg-white/[0.04] transition-colors">
+        <a href="/" className="flex items-center gap-1.5 h-9 rounded-lg px-2.5 mr-0.5 hover:bg-white/[0.04] transition-colors">
           <img src="/nightfang-icon.gif" alt="" className="w-[28px] h-[28px] shrink-0 rounded-sm" />
           <span className="text-[13px] font-bold text-white tracking-tight leading-none" style={{ fontFamily: "'Outfit', sans-serif" }}>nightfang</span>
         </a>
@@ -61,7 +78,7 @@ export default function DockNav() {
           return (
             <motion.button
               key={section.id}
-              onClick={() => scrollTo(section.id)}
+              onClick={() => handleClick(section.id)}
               layout="position"
               transition={{ type: "spring", stiffness: 400, damping: 30 }}
               className={`group relative flex items-center h-9 rounded-lg px-2.5 transition-colors ${
@@ -87,7 +104,9 @@ export default function DockNav() {
 
         <div className="h-5 w-px bg-white/10 ml-0.5" />
 
-        <a href="/blog" className="flex items-center h-9 rounded-lg px-2.5 text-[11px] font-medium text-white/35 hover:text-white/70 transition-colors">Blog</a>
+        <a href="/blog" className={`flex items-center h-9 rounded-lg px-2.5 text-[11px] font-medium transition-colors ${
+          isBlogPage ? "text-white/70 bg-white/[0.08]" : "text-white/35 hover:text-white/70"
+        }`}>Blog</a>
 
         <a href="https://github.com/peaktwilight/nightfang" target="_blank" rel="noopener noreferrer"
           className="flex items-center gap-1.5 h-9 rounded-lg px-3 bg-white hover:bg-white/90 transition-colors ml-0.5">

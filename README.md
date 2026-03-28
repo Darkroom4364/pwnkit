@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Security research automation for the AI era</strong><br/>
-  <em>Scan LLM endpoints. Audit npm packages. Review source code. Prove every finding is real.</em>
+  <em>Scan LLM endpoints. Audit npm packages. Review source code. Re-exploit to kill false positives.</em>
 </p>
 
 <p align="center">
@@ -33,9 +33,9 @@
 
 ---
 
-Nightfang is an open-source agentic security toolkit. Four AI agents autonomously discover, attack, verify, and report vulnerabilities. Point it at an API, an npm package, or a Git repo — the agents read code, craft payloads, analyze responses, and **prove every finding is exploitable**. No templates, no static rules — multi-turn agentic reasoning that thinks like an attacker.
+Nightfang is an open-source agentic security toolkit. Autonomous agents discover, attack, verify, and report vulnerabilities. Point it at an API, an npm package, or a Git repo — the agents read code, craft payloads, analyze responses, and **re-exploit each finding to kill false positives**. No templates, no static rules — multi-turn agentic reasoning that thinks like an attacker.
 
-One command. Zero config. Every finding verified with proof.
+One command. Zero config. Every finding re-exploited or dropped.
 
 ## Quick Start
 
@@ -66,7 +66,7 @@ Nightfang ships five commands — from quick API probes to deep source-level aud
 
 ## How It Works
 
-Nightfang runs four specialized AI agents in sequence. Each agent uses tools (`read_file`, `run_command`, `send_prompt`, `save_finding`) and makes multi-turn decisions — adapting its strategy based on what it learns:
+Nightfang runs autonomous AI agents in sequence. Each agent uses tools (`read_file`, `run_command`, `send_prompt`, `save_finding`) and makes multi-turn decisions — adapting its strategy based on what it learns:
 
 ```
   +-----------+     +-----------+     +-----------+     +-----------+
@@ -184,7 +184,7 @@ Combined with scan modes:
 
 | Feature | Nightfang | promptfoo | garak | semgrep | nuclei |
 |---------|-----------|-----------|-------|---------|--------|
-| **Agentic multi-turn pipeline** | :white_check_mark: 4 agents with tool use | :x: Single runner | :x: Single runner | :x: Rule-based | :x: Template runner |
+| **Agentic multi-turn pipeline** | :white_check_mark: Autonomous agents with tool use | :x: Single runner | :x: Single runner | :x: Rule-based | :x: Template runner |
 | **Verification (no false positives)** | :white_check_mark: Re-exploits to confirm | :x: | :x: | :x: | :x: |
 | **LLM endpoint scanning** | :white_check_mark: Prompt injection, jailbreaks, exfil | :white_check_mark: Red-teaming | :white_check_mark: Probes | :x: | :x: |
 | **MCP server security** | :white_check_mark: Tool poisoning, schema abuse | :x: | :x: | :x: | :x: |
@@ -290,7 +290,7 @@ Finding lifecycle: `discovered → verified → confirmed → scored → reporte
 
 Created by a security researcher with [7 published CVEs](https://doruk.ch/blog) across node-forge, mysql2, uptime-kuma, liquidjs, picomatch, and jspdf.
 
-Nightfang exists because traditional security tools can't see AI attack surfaces. You can't `nmap` a language model. You can't write a static rule for a jailbreak that hasn't been invented yet. You need agents that think like attackers — and then prove what they find.
+Nightfang exists because traditional security tools can't see AI attack surfaces. You can't `nmap` a language model. You can't write a static rule for a jailbreak that hasn't been invented yet. You need agents that think like attackers — and then re-exploit what they find to prove it's real.
 
 ## Contributing
 

@@ -1,6 +1,9 @@
 import { spawn } from "node:child_process";
 import type { Runtime, RuntimeConfig, RuntimeContext, RuntimeResult } from "./types.js";
 
+// Dim the subprocess output so it's visually distinct from pwnkit's own output
+const dim = (text: string) => `\x1b[2m${text}\x1b[0m`;
+
 const RUNTIME_COMMANDS: Record<string, string> = {
   claude: "claude",
   codex: "codex",
@@ -40,7 +43,12 @@ export class ProcessRuntime implements Runtime {
       });
 
       proc.stderr.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
+        const text = chunk.toString();
+        stderr += text;
+        // Stream stderr to terminal so user sees live progress
+        if (process.stderr.isTTY) {
+          process.stderr.write(dim(text));
+        }
       });
 
       const timer = setTimeout(() => {

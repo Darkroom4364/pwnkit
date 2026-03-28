@@ -303,9 +303,7 @@ program
           if (format !== "terminal") return;
 
           switch (event.type) {
-            case "stage:start":
-              if (verbose) {
-                // In verbose mode, show each agent action as a visible log line
+            case "stage:start": {
                 const msg = event.message;
                 if (msg.startsWith("Reading ")) {
                   spinner?.stop();
@@ -317,16 +315,8 @@ program
                   spinner?.start();
                 } else {
                   spinner?.update(msg);
+                  spinner?.start();
                 }
-              } else if (event.stage === "attack") {
-                const match = event.message.match(/(\d+)/);
-                if (match) attackTotal = parseInt(match[1], 10);
-                attacksDone = 0;
-                spinner?.update(`Running attacks ${renderProgressBar(0, attackTotal || 1)}`);
-                spinner?.start();
-              } else {
-                spinner?.update(event.message);
-                spinner?.start();
               }
               break;
 
@@ -361,11 +351,11 @@ program
               break;
 
             case "finding":
-              if (verbose) {
-                console.log(
-                  `    ${chalk.yellow("⚡")} ${chalk.yellow(event.message)}`
-                );
-              }
+              spinner?.stop();
+              console.log(
+                `    ${chalk.yellow("⚡")} ${chalk.yellow(event.message)}`
+              );
+              spinner?.start();
               break;
 
             case "error":

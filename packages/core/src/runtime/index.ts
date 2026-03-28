@@ -10,7 +10,6 @@ export type {
   NativeToolDef,
   NativeRuntimeResult,
 } from "./types.js";
-export { ApiRuntime } from "./api.js";
 export { LlmApiRuntime } from "./llm-api.js";
 export { ProcessRuntime } from "./process.js";
 export {
@@ -21,7 +20,6 @@ export {
 } from "./registry.js";
 
 import type { RuntimeConfig, Runtime } from "./types.js";
-import { ApiRuntime } from "./api.js";
 import { LlmApiRuntime } from "./llm-api.js";
 import { ProcessRuntime } from "./process.js";
 
@@ -37,12 +35,4 @@ export function createRuntime(config: RuntimeConfig): Runtime {
     case "opencode":
       return new ProcessRuntime(config);
   }
-}
-
-/**
- * Create a runtime specifically for sending payloads to a target endpoint
- * (not for LLM reasoning). Used by the attack stage to deliver payloads.
- */
-export function createTargetRuntime(config: RuntimeConfig): ApiRuntime {
-  return new ApiRuntime(config);
 }

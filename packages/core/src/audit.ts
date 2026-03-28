@@ -13,16 +13,9 @@ import type {
   Severity,
 } from "@pwnkit/shared";
 import type { ScanEvent, ScanListener } from "./scanner.js";
-// DB lazy-loaded to avoid native module issues
-import { createRuntime } from "./runtime/index.js";
-import type { RuntimeType } from "./runtime/index.js";
-import { LlmApiRuntime } from "./runtime/llm-api.js";
-import { detectAvailableRuntimes, pickRuntimeForStage } from "./runtime/registry.js";
-import { runAgentLoop } from "./agent/loop.js";
-import { runNativeAgentLoop } from "./agent/native-loop.js";
-import { getToolsForRole } from "./agent/tools.js";
-import { auditAgentPrompt } from "./audit-prompt.js";
-import type { NativeRuntime } from "./runtime/types.js";
+import { auditAgentPrompt } from "./analysis-prompts.js";
+import { runAnalysisAgent } from "./agent-runner.js";
+import { bufferToString, runSemgrepScan } from "./shared-analysis.js";
 
 export interface PackageAuditOptions {
   config: AuditConfig;
@@ -102,94 +95,6 @@ function installPackage(
     path: packagePath,
     tempDir,
   };
-}
-
-/**
- * Run semgrep security scan against the package source.
- * Returns parsed findings from SARIF/JSON output.
- */
-function runSemgrepScan(
-  packagePath: string,
-  emit: ScanListener,
-): SemgrepFinding[] {
-  emit({
-    type: "stage:start",
-    stage: "source-analysis",
-    message: "Running semgrep security scan...",
-  });
-
-  let rawOutput = "";
-
-  try {
-    rawOutput = execFileSync(
-      "semgrep",
-      [
-        "scan",
-        "--config",
-        "auto",
-        "--json",
-        "--no-git-ignore",
-        "--timeout",
-        "60",
-        "--max-target-bytes",
-        "1000000",
-        packagePath,
-      ],
-      {
-        timeout: 300_000, // 5 min max for semgrep
-        stdio: "pipe",
-        encoding: "utf-8",
-        env: { ...process.env, SEMGREP_SEND_METRICS: "off" },
-      },
-    );
-  } catch (err) {
-    const stdout =
-      err && typeof err === "object" && "stdout" in err
-        ? (err.stdout as Buffer | string | undefined)
-        : undefined;
-    rawOutput = bufferToString(stdout);
-  }
-
-  let findings: SemgrepFinding[] = [];
-
-  if (rawOutput.trim()) {
-    try {
-      const raw = JSON.parse(rawOutput);
-      const results = (raw.results ?? []) as Array<{
-        check_id: string;
-        extra: {
-          message: string;
-          severity: string;
-          lines: string;
-          metadata?: Record<string, unknown>;
-        };
-        path: string;
-        start: { line: number };
-        end: { line: number };
-      }>;
-
-      findings = results.map((r) => ({
-        ruleId: r.check_id,
-        message: r.extra?.message ?? "",
-        severity: mapSemgrepSeverity(r.extra?.severity ?? "WARNING"),
-        path: r.path,
-        startLine: r.start?.line ?? 0,
-        endLine: r.end?.line ?? 0,
-        snippet: r.extra?.lines ?? "",
-        metadata: r.extra?.metadata,
-      }));
-    } catch {
-      // JSON parse failed — semgrep output was malformed
-    }
-  }
-
-  emit({
-    type: "stage:end",
-    stage: "source-analysis",
-    message: `Semgrep: ${findings.length} findings`,
-  });
-
-  return findings;
 }
 
 function runNpmAudit(
@@ -292,13 +197,6 @@ function parseNpmAuditOutput(rawOutput: string): NpmAuditFinding[] {
   }
 }
 
-function bufferToString(value: Buffer | string | undefined): string {
-  if (!value) {
-    return "";
-  }
-  return Buffer.isBuffer(value) ? value.toString("utf-8") : value;
-}
-
 function normalizeSeverity(value: string | undefined): Severity {
   switch ((value ?? "").toLowerCase()) {
     case "critical":
@@ -329,26 +227,6 @@ function formatFixAvailable(
 
   return false;
 }
-
-function mapSemgrepSeverity(level: string): string {
-  switch (level.toUpperCase()) {
-    case "ERROR":
-      return "high";
-    case "WARNING":
-      return "medium";
-    case "INFO":
-      return "low";
-    default:
-      return "info";
-  }
-}
-
-/**
- * CLI runtimes (claude, codex, etc.) are full agents — they can read files,
- * run commands, and do multi-turn analysis natively. We bypass our own agent
- * loop and let the CLI handle everything, then parse findings from its output.
- */
-const CLI_RUNTIME_TYPES = new Set<RuntimeType>(["claude", "codex", "gemini", "opencode"]);
 
 function buildCliAuditPrompt(
   pkg: InstalledPackage,
@@ -390,75 +268,6 @@ file: <path/to/file.js:lineNumber>
 ---END---
 
 Output as many ---FINDING--- blocks as needed. Be precise and honest about severity.`;
-}
-
-function parseFindingsFromCliOutput(output: string, scanId: string): Finding[] {
-  const findings: Finding[] = [];
-  const blocks = output.split("---FINDING---").slice(1);
-
-  if (blocks.length === 0) {
-    // No structured findings — check if the output mentions no vulnerabilities
-    const lower = output.toLowerCase();
-    if (lower.includes("no vulnerabilit") || lower.includes("no security issue") || lower.includes("no findings") || lower.includes("looks secure") || lower.includes("no real") || output.trim().length === 0) {
-      return [];
-    }
-    // Claude wrote prose findings — create a single finding from the whole output
-    if (output.trim().length > 50) {
-      // Extract a title from the first meaningful line
-      const lines = output.trim().split("\n").filter(l => l.trim().length > 10);
-      const title = lines[0]?.trim().slice(0, 100) || "Security finding from AI analysis";
-      findings.push({
-        id: randomUUID(),
-        templateId: `cli-audit-${Date.now()}`,
-        title,
-        description: output.trim().slice(0, 2000),
-        severity: "info" as Severity,
-        category: "other" as Finding["category"],
-        status: "discovered",
-        evidence: {
-          request: "Automated AI source code audit",
-          response: output.trim().slice(0, 2000),
-          analysis: "Found by CLI agent during automated audit. Review the full output for details.",
-        },
-        confidence: undefined,
-        timestamp: Date.now(),
-      });
-    }
-    return findings;
-  }
-
-  for (const block of blocks) {
-    const endIdx = block.indexOf("---END---");
-    const content = endIdx >= 0 ? block.slice(0, endIdx) : block;
-
-    const title = content.match(/^title:\s*(.+)$/m)?.[1]?.trim() ?? "Untitled finding";
-    const severity = content.match(/^severity:\s*(.+)$/m)?.[1]?.trim()?.toLowerCase() ?? "info";
-    const category = content.match(/^category:\s*(.+)$/m)?.[1]?.trim() ?? "other";
-    const description = content.match(/^description:\s*([\s\S]*?)(?=^(?:file|---)|$)/m)?.[1]?.trim() ?? "";
-    const file = content.match(/^file:\s*(.+)$/m)?.[1]?.trim() ?? "";
-
-    const validSeverities = new Set(["critical", "high", "medium", "low", "info"]);
-    const normalizedSeverity = validSeverities.has(severity) ? severity as Severity : "info";
-
-    findings.push({
-      id: randomUUID(),
-      templateId: `cli-audit-${Date.now()}`,
-      title,
-      description,
-      severity: normalizedSeverity,
-      category: category as Finding["category"],
-      status: "discovered",
-      evidence: {
-        request: `Audit of source at ${file}`,
-        response: description,
-        analysis: `Found by CLI agent during automated audit`,
-      },
-      confidence: undefined,
-      timestamp: Date.now(),
-    });
-  }
-
-  return findings;
 }
 
 /**
@@ -585,6 +394,8 @@ Be precise and honest about severity — only report real, exploitable issues.`;
 /**
  * Run an AI agent to analyze semgrep findings and hunt for additional
  * vulnerabilities in the package source code.
+ *
+ * Delegates to the unified runAnalysisAgent with audit-specific prompts.
  */
 async function runAuditAgent(
   pkg: InstalledPackage,
@@ -595,234 +406,25 @@ async function runAuditAgent(
   config: AuditConfig,
   emit: ScanListener,
 ): Promise<Finding[]> {
-  emit({
-    type: "stage:start",
-    stage: "attack",
-    message: "AI agent analyzing source code...",
-  });
-
-  // Detect available CLI runtimes
-  const available = await detectAvailableRuntimes();
-
-  // Determine runtime: prefer CLI runtimes, fall back to API agent loop
-  let runtimeType: RuntimeType;
-  if (config.runtime === "auto") {
-    runtimeType = available.size > 0
-      ? pickRuntimeForStage("source-analysis", available)
-      : "api";
-  } else {
-    runtimeType = (config.runtime ?? "api") as RuntimeType;
-  }
-
-  // ── Fast path: use CLI runtime (claude/codex/etc.) as a full agent ──
-  if (CLI_RUNTIME_TYPES.has(runtimeType) && available.has(runtimeType)) {
-    emit({
-      type: "stage:start",
-      stage: "attack",
-      message: `Using ${runtimeType} CLI for deep AI analysis...`,
-    });
-
-    const { ProcessRuntime } = await import("./runtime/process.js");
-    const cliRuntime = new ProcessRuntime({
-      type: runtimeType,
-      timeout: config.timeout ?? 600_000, // 10 min for deep analysis
-      cwd: pkg.path,
-    });
-
-    const prompt = buildCliAuditPrompt(pkg, semgrepFindings, npmAuditFindings);
-    const result = await cliRuntime.execute(prompt, {
-      systemPrompt: "You are a security researcher performing an authorized npm package audit. Be thorough and precise. Only report real, exploitable vulnerabilities.",
-    });
-
-    if (result.error && !result.output) {
-      emit({
-        type: "stage:end",
-        stage: "attack",
-        message: `CLI agent error: ${result.error}`,
-      });
-      // Fall through to basic mode
-    } else {
-      const findings = parseFindingsFromCliOutput(result.output, scanId);
-
-      for (const f of findings) {
-        emit({
-          type: "finding",
-          message: `[${f.severity}] ${f.title}`,
-          data: f,
-        });
-      }
-
-      emit({
-        type: "stage:end",
-        stage: "attack",
-        message: `CLI agent complete: ${findings.length} findings (${result.durationMs}ms)`,
-      });
-
-      return findings;
-    }
-  }
-
-  // ── API runtime: multi-turn agentic loop with native tool_use ──
-  if (runtimeType === "api" || !available.has(runtimeType)) {
-    emit({
-      type: "stage:start",
-      stage: "attack",
-      message: "Running agentic source code analysis via API...",
-    });
-
-    const apiRuntime = new LlmApiRuntime({
-      type: "api" as RuntimeType,
-      timeout: config.timeout ?? 120_000,
-      apiKey: config.apiKey,
-      model: config.model,
-    });
-
-    // Check if runtime supports native tool_use (multi-turn agentic loop)
-    const supportsNative = typeof (apiRuntime as NativeRuntime).executeNative === "function";
-
-    if (supportsNative) {
-      // ── Agentic path: multi-turn loop with tools (read_file, run_command, save_finding) ──
-      const maxTurns = config.depth === "deep" ? 30 : config.depth === "default" ? 20 : 10;
-
-      const systemPrompt = auditAgentPrompt(
-        pkg.name,
-        pkg.version,
-        pkg.path,
-        semgrepFindings,
-        npmAuditFindings,
-      );
-
-      const agentState = await runNativeAgentLoop({
-        config: {
-          role: "audit",
-          systemPrompt,
-          tools: getToolsForRole("audit"),
-          maxTurns,
-          target: `npm:${pkg.name}@${pkg.version}`,
-          scanId,
-          scopePath: pkg.path,
-        },
-        runtime: apiRuntime as NativeRuntime,
-        db,
-        onTurn: (turn, toolCalls, results) => {
-          for (const call of toolCalls) {
-            if (call.name === "save_finding") {
-              emit({
-                type: "finding",
-                message: `[${call.arguments.severity}] ${call.arguments.title}`,
-                data: call.arguments,
-              });
-            } else if (call.name === "read_file") {
-              emit({
-                type: "stage:start",
-                stage: "attack",
-                message: `Reading ${call.arguments.path}`,
-              });
-            } else if (call.name === "run_command") {
-              emit({
-                type: "stage:start",
-                stage: "attack",
-                message: `Running: ${call.arguments.command}`,
-              });
-            }
-          }
-        },
-      });
-
-      emit({
-        type: "stage:end",
-        stage: "attack",
-        message: `Agent complete: ${agentState.findings.length} findings in ${agentState.turnCount} turns (${agentState.totalUsage.inputTokens + agentState.totalUsage.outputTokens} tokens)`,
-      });
-
-      return agentState.findings;
-    }
-
-    // ── Fallback: single-shot prompt for runtimes without native tool_use ──
-    const prompt = buildDirectApiAuditPrompt(pkg, semgrepFindings, npmAuditFindings);
-    const result = await apiRuntime.execute(prompt, {
-      systemPrompt: "You are a security researcher performing an authorized npm package audit. Be thorough and precise. Only report real, exploitable vulnerabilities. Use the ---FINDING--- format specified.",
-    });
-
-    if (result.error && !result.output) {
-      emit({
-        type: "stage:end",
-        stage: "attack",
-        message: `API analysis error: ${result.error}`,
-      });
-      return [];
-    }
-
-    const findings = parseFindingsFromCliOutput(result.output, scanId);
-
-    for (const f of findings) {
-      emit({
-        type: "finding",
-        message: `[${f.severity}] ${f.title}`,
-        data: f,
-      });
-    }
-
-    emit({
-      type: "stage:end",
-      stage: "attack",
-      message: `API analysis complete: ${findings.length} findings (${result.durationMs}ms)`,
-    });
-
-    return findings;
-  }
-
-  // ── Fallback: multi-turn agent loop for non-CLI, non-API runtimes ──
-  const maxTurns =
-    config.depth === "deep" ? 50 : config.depth === "default" ? 50 : 15;
-
-  const runtimeConfig = {
-    type: runtimeType as RuntimeType,
-    timeout: config.timeout ?? 120_000,
-    apiKey: config.apiKey,
-    model: config.model,
-  };
-  const runtime = createRuntime(runtimeConfig);
-
-  const agentState = await runAgentLoop({
-    config: {
-      role: "audit",
-      systemPrompt: auditAgentPrompt(
-        pkg.name,
-        pkg.version,
-        pkg.path,
-        semgrepFindings,
-        npmAuditFindings,
-      ),
-      tools: getToolsForRole("audit"),
-      maxTurns,
-      target: `npm:${pkg.name}@${pkg.version}`,
-      scanId,
-      scopePath: pkg.path,
-    },
-    runtime,
+  return runAnalysisAgent({
+    role: "audit",
+    scopePath: pkg.path,
+    target: `npm:${pkg.name}@${pkg.version}`,
+    scanId,
+    config,
     db,
-    onTurn: (_turn, msg) => {
-      const calls = msg.toolCalls ?? [];
-      for (const call of calls) {
-        if (call.name === "save_finding") {
-          emit({
-            type: "finding",
-            message: `[${call.arguments.severity}] ${call.arguments.title}`,
-            data: call.arguments,
-          });
-        }
-      }
-    },
+    emit,
+    cliPrompt: buildCliAuditPrompt(pkg, semgrepFindings, npmAuditFindings),
+    agentSystemPrompt: auditAgentPrompt(
+      pkg.name,
+      pkg.version,
+      pkg.path,
+      semgrepFindings,
+      npmAuditFindings,
+    ),
+    cliSystemPrompt: "You are a security researcher performing an authorized npm package audit. Be thorough and precise. Only report real, exploitable vulnerabilities.",
+    directApiPrompt: buildDirectApiAuditPrompt(pkg, semgrepFindings, npmAuditFindings),
   });
-
-  emit({
-    type: "stage:end",
-    stage: "attack",
-    message: `Agent complete: ${agentState.findings.length} findings, ${agentState.summary}`,
-  });
-
-  return agentState.findings;
 }
 
 /**
@@ -859,7 +461,7 @@ export async function packageAudit(
   try {
     // Step 2: npm audit + Semgrep scan
     const npmAuditFindings = runNpmAudit(pkg.tempDir, emit);
-    const semgrepFindings = runSemgrepScan(pkg.path, emit);
+    const semgrepFindings = runSemgrepScan(pkg.path, emit, { noGitIgnore: true });
 
     // Step 3: AI agent analysis
     const findings = await runAuditAgent(

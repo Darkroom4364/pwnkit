@@ -1,0 +1,42 @@
+import type { Command } from "commander";
+import chalk from "chalk";
+
+export function registerHistoryCommand(program: Command): void {
+  program
+    .command("history")
+    .description("Show past scan history from the SQLite database")
+    .option("--db-path <path>", "Path to SQLite database")
+    .option("--limit <n>", "Number of scans to show", "10")
+    .action(async (opts) => {
+      const { pwnkitDB } = await import("@pwnkit/db");
+      const db = new pwnkitDB(opts.dbPath);
+      const scans = db.listScans(parseInt(opts.limit, 10));
+      db.close();
+
+      if (scans.length === 0) {
+        console.log(chalk.gray("No scan history found."));
+        return;
+      }
+
+      console.log("");
+      console.log(chalk.red.bold("  \u25C6 pwnkit") + chalk.gray(" scan history"));
+      console.log("");
+
+      for (const s of scans) {
+        const status =
+          s.status === "completed"
+            ? chalk.green("done")
+            : s.status === "failed"
+              ? chalk.red("fail")
+              : chalk.yellow("run");
+        const summary = s.summary ? JSON.parse(s.summary) : null;
+        const findings = summary?.totalFindings ?? "?";
+        const duration = s.durationMs ? `${(s.durationMs / 1000).toFixed(1)}s` : "-";
+
+        console.log(
+          `  ${status} ${chalk.white(s.target)} ${chalk.gray(`[${s.depth}]`)} ${chalk.gray(duration)} ${chalk.yellow(`${findings} findings`)} ${chalk.gray(s.startedAt)}`
+        );
+      }
+      console.log("");
+    });
+}

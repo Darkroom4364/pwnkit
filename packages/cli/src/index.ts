@@ -719,11 +719,11 @@ program
       switch (event.type) {
         case "stage:start": {
           const msg = event.message;
-          if (verbose && msg.startsWith("Reading ")) {
+          if (msg.startsWith("Reading ")) {
             spinner?.stop();
             console.log(`    ${chalk.cyan("→")} ${chalk.cyan("read")} ${chalk.gray(msg.replace("Reading ", ""))}`);
             spinner?.start();
-          } else if (verbose && msg.startsWith("Running: ")) {
+          } else if (msg.startsWith("Running: ")) {
             spinner?.stop();
             console.log(`    ${chalk.magenta("→")} ${chalk.magenta("exec")} ${chalk.gray(msg.replace("Running: ", ""))}`);
             spinner?.start();
@@ -737,11 +737,11 @@ program
           spinner?.succeed(event.message);
           break;
         case "finding":
-          if (verbose) {
+          { spinner?.stop();
             console.log(
               `    ${chalk.yellow("⚡")} ${chalk.yellow(event.message)}`
             );
-          }
+          spinner?.start(); }
           break;
         case "error":
           spinner?.fail(event.message);
@@ -861,11 +861,11 @@ program
       switch (event.type) {
         case "stage:start": {
           const msg = event.message;
-          if (verbose && msg.startsWith("Reading ")) {
+          if (msg.startsWith("Reading ")) {
             spinner?.stop();
             console.log(`    ${chalk.cyan("→")} ${chalk.cyan("read")} ${chalk.gray(msg.replace("Reading ", ""))}`);
             spinner?.start();
-          } else if (verbose && msg.startsWith("Running: ")) {
+          } else if (msg.startsWith("Running: ")) {
             spinner?.stop();
             console.log(`    ${chalk.magenta("→")} ${chalk.magenta("exec")} ${chalk.gray(msg.replace("Running: ", ""))}`);
             spinner?.start();
@@ -879,11 +879,11 @@ program
           spinner?.succeed(event.message);
           break;
         case "finding":
-          if (verbose) {
+          { spinner?.stop();
             console.log(
               `    ${chalk.yellow("⚡")} ${chalk.yellow(event.message)}`
             );
-          }
+          spinner?.start(); }
           break;
         case "error":
           spinner?.fail(event.message);

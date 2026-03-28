@@ -145,16 +145,18 @@ export async function runNativeAgentLoop(
       state.totalUsage.outputTokens += result.usage.outputTokens;
     }
 
-    // Handle error
-    if (result.error) {
-      onEvent?.("agent_error", { turn: state.turnCount, error: result.error });
+    // Handle error or empty response
+    if (result.error || (result.content.length === 0 && (!result.usage || result.usage.outputTokens === 0))) {
+      const errorMsg = result.error || "API returned empty response (0 tokens) — model may be rate-limited or unavailable";
+      onEvent?.("agent_error", { turn: state.turnCount, error: errorMsg });
+      state.summary = `Error: ${errorMsg}`;
       if (db) {
         db.logEvent({
           scanId: config.scanId,
           stage: config.role,
           eventType: "agent_error",
           agentRole: config.role,
-          payload: { turn: state.turnCount, error: result.error },
+          payload: { turn: state.turnCount, error: errorMsg },
           timestamp: Date.now(),
         });
       }

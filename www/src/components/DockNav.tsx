@@ -64,7 +64,7 @@ export default function DockNav() {
     >
       <div
         className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-[#0a0a0a]/80 backdrop-blur-2xl px-1.5 py-1.5 shadow-2xl shadow-black/30"
-        style={{ fontFamily: "'Space Mono', monospace" }}
+        style={{ fontFamily: "'Outfit', sans-serif" }}
       >
         <a href="/" className="flex items-center gap-1.5 h-9 rounded-lg px-2.5 mr-0.5 hover:bg-white/[0.04] transition-colors">
           <img src="/nightfang-icon.gif" alt="" className="w-[28px] h-[28px] shrink-0 rounded-sm" />

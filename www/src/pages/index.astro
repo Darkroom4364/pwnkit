@@ -130,8 +130,8 @@ import DataGridBackground from '../components/DataGridBackground';
 
     <!-- What you can scan -->
     <section class="py-24 border-t border-white/5">
-      <div class="max-w-6xl mx-auto px-6">
-        <div class="text-center mb-16">
+      <div class="max-w-4xl mx-auto px-6">
+        <div class="text-center mb-12">
           <h2 class="text-3xl sm:text-4xl font-bold tracking-tight mb-4" style="font-family: 'Outfit', sans-serif">One toolkit. Five attack surfaces.</h2>
           <p class="text-smoke text-lg max-w-xl mx-auto">From LLM endpoints to npm packages to git repos &mdash; pwnkit finds what scanners miss.</p>
         </div>
@@ -178,8 +178,8 @@ import DataGridBackground from '../components/DataGridBackground';
 
     <!-- 5 Commands -->
     <section id="commands" data-section="commands" class="py-24 border-t border-white/5">
-      <div class="max-w-6xl mx-auto px-6">
-        <div class="text-center mb-16">
+      <div class="max-w-4xl mx-auto px-6">
+        <div class="text-center mb-12">
           <h2 class="text-3xl sm:text-4xl font-bold tracking-tight mb-4" style="font-family: 'Outfit', sans-serif">Five commands. Full coverage.</h2>
           <p class="text-smoke text-lg max-w-xl mx-auto">Each command is purpose-built for a different attack surface. Zero config, instant results.</p>
         </div>
@@ -291,7 +291,7 @@ import DataGridBackground from '../components/DataGridBackground';
 
     <!-- Value props -->
     <section class="py-24 border-t border-white/5">
-      <div class="max-w-6xl mx-auto px-6">
+      <div class="max-w-4xl mx-auto px-6">
         <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-8">
           <div class="space-y-3">
             <div class="w-10 h-10 rounded-lg bg-crimson/10 flex items-center justify-center text-crimson">
@@ -327,8 +327,8 @@ import DataGridBackground from '../components/DataGridBackground';
 
     <!-- 4-agent pipeline -->
     <section id="pipeline" data-section="pipeline" class="py-24 border-t border-white/5">
-      <div class="max-w-6xl mx-auto px-6">
-        <div class="text-center mb-16">
+      <div class="max-w-4xl mx-auto px-6">
+        <div class="text-center mb-12">
           <h2 class="text-3xl sm:text-4xl font-bold tracking-tight mb-4" style="font-family: 'Outfit', sans-serif">Autonomous agents. One pipeline.</h2>
           <p class="text-smoke text-lg max-w-xl mx-auto">Each agent is specialized for a phase of the security audit. They work in sequence, building on each other's output.</p>
         </div>
@@ -406,15 +406,11 @@ import DataGridBackground from '../components/DataGridBackground';
       </div>
     </section>
 
-    <!-- Attack Coverage -->
+    <!-- Attack Coverage — compact list under pipeline -->
     <section class="py-24 border-t border-white/5">
       <div class="max-w-4xl mx-auto px-6">
-        <div class="text-center mb-12">
-          <h2 class="text-3xl sm:text-4xl font-bold tracking-tight mb-4" style="font-family: 'Outfit', sans-serif">What the agents hunt for</h2>
-          <p class="text-smoke text-lg">Agents decide what to attack based on what they find. No hardcoded test suites.</p>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <h3 class="text-lg font-semibold mb-6" style="font-family: 'Outfit', sans-serif">What the agents hunt for</h3>
+        <div class="space-y-2">
           {[
             { name: "Prompt Injection", detail: "Direct, indirect, multi-turn, encoding bypass" },
             { name: "System Prompt Extraction", detail: "Completion traps, translation tricks, role confusion" },
@@ -424,12 +420,10 @@ import DataGridBackground from '../components/DataGridBackground';
             { name: "npm Package Audit", detail: "Prototype pollution, ReDoS, path traversal, injection" },
             { name: "Source Code Review", detail: "Data flow analysis, trust boundary violations, unsafe patterns" },
           ].map((item) => (
-            <div class="flex items-center gap-3 px-4 py-3 rounded-lg border border-white/5 bg-night-lighter">
+            <div class="flex items-center gap-3">
               <div class="w-1.5 h-1.5 rounded-full bg-crimson shrink-0"></div>
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-white">{item.name}</div>
-                <div class="text-xs text-ash">{item.detail}</div>
-              </div>
+              <span class="text-sm font-medium text-white">{item.name}</span>
+              <span class="text-sm text-ash">{item.detail}</span>
             </div>
           ))}
         </div>
@@ -449,7 +443,7 @@ import DataGridBackground from '../components/DataGridBackground';
             <thead>
               <tr class="border-b border-white/10">
                 <th class="text-left py-3 pr-4 text-smoke font-medium">Feature</th>
-                <th class="py-3 px-3 text-crimson font-bold">pwnkit</th>
+                <th class="py-3 px-3 text-crimson font-bold"><img src="/nightfang-icon.gif" class="w-4 h-4 inline-block mr-1" />pwnkit</th>
                 <th class="py-3 px-3 text-ash font-medium">promptfoo <span class="text-[10px] text-ash/60 font-normal">(acquired by OpenAI)</span></th>
                 <th class="py-3 px-3 text-ash font-medium">garak</th>
                 <th class="py-3 px-3 text-ash font-medium">nuclei</th>
@@ -584,7 +578,7 @@ import DataGridBackground from '../components/DataGridBackground';
     </section>
 
     <!-- Self-Scan Badge — live dogfooding results -->
-    <section class="py-16 border-t border-white/5">
+    <section class="py-24 border-t border-white/5">
       <div class="max-w-4xl mx-auto px-6">
         <div class="bg-night-lighter border border-white/5 rounded-xl p-6 sm:p-8">
           <div class="flex flex-col sm:flex-row sm:items-center gap-4 mb-5">
@@ -647,11 +641,11 @@ import DataGridBackground from '../components/DataGridBackground';
     </section>
 
     <!-- Final CTA -->
-    <section class="py-32 border-t border-white/5 relative overflow-hidden">
+    <section class="py-24 border-t border-white/5 relative overflow-hidden">
       <!-- CSS grid + spotlight background -->
       <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-crimson/5 rounded-full blur-[120px]"></div>
 
-      <div class="relative max-w-3xl mx-auto px-6 text-center">
+      <div class="relative max-w-4xl mx-auto px-6 text-center">
         <h2 class="text-3xl sm:text-4xl font-bold tracking-tight mb-6" style="font-family: 'Outfit', sans-serif">
           Stop guessing.<br/>Start <span class="text-crimson">proving</span>.
         </h2>

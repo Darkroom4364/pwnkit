@@ -1,7 +1,7 @@
 {
   "name": "pwnkit-cli",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "description": "AI-powered agentic security scanner. Scan endpoints, audit packages, review source code. Autonomous agents discover, attack, verify, and report.",
   "bin": {
     "pwnkit": "dist/index.js"
@@ -47,14 +47,11 @@
     "pnpm": ">=8"
   },
   "dependencies": {
-    "@clack/prompts": "^1.1.0",
-    "@pwnkit/test-targets": "workspace:*",
     "better-sqlite3": "^12.8.0",
-    "chalk": "^5.3.0",
-    "commander": "^12.1.0",
-    "drizzle-orm": "^0.44.0",
-    "ora": "^8.0.0",
-    "yaml": "^2.4.0"
+    "drizzle-orm": "^0.44.0"
+  },
+  "optionalDependencies": {
+    "@clack/prompts": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

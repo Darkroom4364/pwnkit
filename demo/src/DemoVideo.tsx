@@ -8,6 +8,7 @@ import {
   spring,
 } from "remotion";
 import { loadFont } from "@remotion/google-fonts/SpaceMono";
+import { NightfangIcon } from "./NightfangIcon";
 
 const { fontFamily: spaceMono } = loadFont("normal", {
   weights: ["400", "700"],
@@ -186,16 +187,18 @@ const IntroScene = () => {
         opacity: fadeOut,
       }}
     >
-      {/* Logo SVG */}
+      {/* Animated Logo */}
       <div
         style={{
           opacity: logoOpacity,
           transform: `scale(${logoScale})`,
-          filter: `drop-shadow(0 0 ${30 * glowIntensity}px ${C.crimson})`,
           marginBottom: 24,
+          width: 140,
+          height: 140,
+          position: "relative",
         }}
       >
-        <NightfangLogo size={120} />
+        <NightfangIcon />
       </div>
 
       {/* Title */}
@@ -224,7 +227,7 @@ const IntroScene = () => {
           textTransform: "uppercase",
         }}
       >
-        AI-powered security research
+        Open-source agentic harness for autonomous security research
       </div>
     </AbsoluteFill>
   );
@@ -394,11 +397,9 @@ const lanes: AgentLane[] = [
     color: C.blue,
     activateAt: 0.3,
     items: [
-      { text: "/api/chat", delay: 0.5 },
-      { text: "/api/completions", delay: 1.0 },
-      { text: "/api/embeddings", delay: 1.4 },
-      { text: "System prompt found", delay: 2.0 },
-      { text: "3 input vectors", delay: 2.5 },
+      { text: "Probing target...", delay: 0.5 },
+      { text: "Extracting system prompt...", delay: 1.0 },
+      { text: "Mapping API surface...", delay: 1.8 },
     ],
   },
   {
@@ -407,11 +408,10 @@ const lanes: AgentLane[] = [
     color: C.crimson,
     activateAt: 1.5,
     items: [
-      { text: "Prompt Injection", delay: 1.8 },
-      { text: "System Prompt Extraction", delay: 2.6, isVuln: true },
-      { text: "DAN Jailbreak", delay: 3.2, isVuln: true },
-      { text: "Tool Call Manipulation", delay: 3.8, isVuln: true },
-      { text: "Context Overflow", delay: 4.2 },
+      { text: "Reading source code...", delay: 1.8 },
+      { text: "Crafting payload...", delay: 2.4, isVuln: true },
+      { text: "Analyzing response...", delay: 3.0, isVuln: true },
+      { text: "Adapting strategy...", delay: 3.6, isVuln: true },
     ],
   },
   {
@@ -420,11 +420,9 @@ const lanes: AgentLane[] = [
     color: C.green,
     activateAt: 3.0,
     items: [
-      { text: "Re-testing #1...", delay: 3.3 },
-      { text: "Confirmed: Critical", delay: 3.8, isVuln: true },
-      { text: "Confirmed: Critical", delay: 4.1, isVuln: true },
-      { text: "False positive", delay: 4.5, isFalsePositive: true },
-      { text: "Confirmed: High", delay: 4.8, isVuln: true },
+      { text: "Re-exploiting finding...", delay: 3.3 },
+      { text: "Reproducing independently...", delay: 3.8 },
+      { text: "Confirmed: exploitable", delay: 4.3, isVuln: true },
     ],
   },
   {
@@ -433,11 +431,8 @@ const lanes: AgentLane[] = [
     color: C.orange,
     activateAt: 4.5,
     items: [
-      { text: "Compiling findings...", delay: 4.7 },
-      { text: "3 Critical", delay: 5.0, isVuln: true },
-      { text: "1 High", delay: 5.2 },
-      { text: "1 Medium", delay: 5.4 },
-      { text: "Report ready", delay: 5.6 },
+      { text: "Generating SARIF...", delay: 4.7 },
+      { text: "Building evidence chain...", delay: 5.1 },
     ],
   },
 ];
@@ -837,7 +832,7 @@ const ResultsScene = () => {
             </span>
             <span style={{ color: C.border }}>|</span>
             <span>
-              <span style={{ color: C.white, fontWeight: 700 }}>47</span> probes
+              <span style={{ color: C.white, fontWeight: 700 }}>5</span> re-exploited
             </span>
             <span style={{ color: C.border }}>|</span>
             <span>
@@ -941,16 +936,18 @@ const CTAScene = () => {
         gap: 20,
       }}
     >
-      {/* Logo */}
+      {/* Animated Logo */}
       <div
         style={{
           opacity: logoOpacity,
           transform: `scale(${logoScale})`,
-          filter: `drop-shadow(0 0 ${20 * glowIntensity}px ${C.crimson})`,
           marginBottom: 8,
+          width: 100,
+          height: 100,
+          position: "relative",
         }}
       >
-        <NightfangLogo size={80} />
+        <NightfangIcon />
       </div>
 
       {/* Command */}

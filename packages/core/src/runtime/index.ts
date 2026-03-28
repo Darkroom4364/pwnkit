@@ -22,16 +22,27 @@ export {
 
 import type { RuntimeConfig, Runtime } from "./types.js";
 import { ApiRuntime } from "./api.js";
+import { ClaudeApiRuntime } from "./claude-api.js";
 import { ProcessRuntime } from "./process.js";
 
 export function createRuntime(config: RuntimeConfig): Runtime {
   switch (config.type) {
     case "api":
-      return new ApiRuntime(config);
+      // ClaudeApiRuntime implements both Runtime (legacy) and NativeRuntime (agentic)
+      // Use it for API mode so we get native tool_use support in agent loops
+      return new ClaudeApiRuntime(config);
     case "claude":
     case "codex":
     case "gemini":
     case "opencode":
       return new ProcessRuntime(config);
   }
+}
+
+/**
+ * Create a runtime specifically for sending payloads to a target endpoint
+ * (not for LLM reasoning). Used by the attack stage to deliver payloads.
+ */
+export function createTargetRuntime(config: RuntimeConfig): ApiRuntime {
+  return new ApiRuntime(config);
 }

@@ -19,8 +19,10 @@ import type { RuntimeType } from "./runtime/index.js";
 import { ClaudeApiRuntime } from "./runtime/claude-api.js";
 import { detectAvailableRuntimes, pickRuntimeForStage } from "./runtime/registry.js";
 import { runAgentLoop } from "./agent/loop.js";
+import { runNativeAgentLoop } from "./agent/native-loop.js";
 import { getToolsForRole } from "./agent/tools.js";
 import { auditAgentPrompt } from "./audit-prompt.js";
+import type { NativeRuntime } from "./runtime/types.js";
 
 export interface PackageAuditOptions {
   config: AuditConfig;
@@ -629,12 +631,12 @@ async function runAuditAgent(
     }
   }
 
-  // ── API runtime: direct single-shot LLM call with source code in prompt ──
+  // ── API runtime: multi-turn agentic loop with native tool_use ──
   if (runtimeType === "api" || !available.has(runtimeType)) {
     emit({
       type: "stage:start",
       stage: "attack",
-      message: "Running AI source code analysis via API...",
+      message: "Running agentic source code analysis via API...",
     });
 
     const apiRuntime = new ClaudeApiRuntime({
@@ -644,6 +646,68 @@ async function runAuditAgent(
       model: config.model,
     });
 
+    // Check if runtime supports native tool_use (multi-turn agentic loop)
+    const supportsNative = typeof (apiRuntime as NativeRuntime).executeNative === "function";
+
+    if (supportsNative) {
+      // ── Agentic path: multi-turn loop with tools (read_file, run_command, save_finding) ──
+      const maxTurns = config.depth === "deep" ? 30 : config.depth === "default" ? 20 : 10;
+
+      const systemPrompt = auditAgentPrompt(
+        pkg.name,
+        pkg.version,
+        pkg.path,
+        semgrepFindings,
+        npmAuditFindings,
+      );
+
+      const agentState = await runNativeAgentLoop({
+        config: {
+          role: "audit",
+          systemPrompt,
+          tools: getToolsForRole("audit"),
+          maxTurns,
+          target: `npm:${pkg.name}@${pkg.version}`,
+          scanId,
+          scopePath: pkg.path,
+        },
+        runtime: apiRuntime as NativeRuntime,
+        db,
+        onTurn: (turn, toolCalls, results) => {
+          for (const call of toolCalls) {
+            if (call.name === "save_finding") {
+              emit({
+                type: "finding",
+                message: `[${call.arguments.severity}] ${call.arguments.title}`,
+                data: call.arguments,
+              });
+            } else if (call.name === "read_file") {
+              emit({
+                type: "stage:start",
+                stage: "attack",
+                message: `Reading ${call.arguments.path}`,
+              });
+            } else if (call.name === "run_command") {
+              emit({
+                type: "stage:start",
+                stage: "attack",
+                message: `Running: ${call.arguments.command}`,
+              });
+            }
+          }
+        },
+      });
+
+      emit({
+        type: "stage:end",
+        stage: "attack",
+        message: `Agent complete: ${agentState.findings.length} findings in ${agentState.turnCount} turns (${agentState.totalUsage.inputTokens + agentState.totalUsage.outputTokens} tokens)`,
+      });
+
+      return agentState.findings;
+    }
+
+    // ── Fallback: single-shot prompt for runtimes without native tool_use ──
     const prompt = buildDirectApiAuditPrompt(pkg, semgrepFindings, npmAuditFindings);
     const result = await apiRuntime.execute(prompt, {
       systemPrompt: "You are a security researcher performing an authorized npm package audit. Be thorough and precise. Only report real, exploitable vulnerabilities. Use the ---FINDING--- format specified.",

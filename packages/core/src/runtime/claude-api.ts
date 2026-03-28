@@ -11,7 +11,8 @@ import type {
 } from "./types.js";
 
 const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
-const DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4";
+const DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4.6";
+const FREE_OPENROUTER_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free";
 const DEFAULT_OPENAI_MODEL = "gpt-4o";
 
 type ApiProvider = "openrouter" | "anthropic" | "openai";
@@ -123,10 +124,13 @@ export class ClaudeApiRuntime implements Runtime, NativeRuntime {
     this.provider = detected.provider;
     this.apiKey = detected.apiKey;
     this.baseUrl = detected.baseUrl;
-    this.model =
-      config.model ??
-      process.env.NIGHTFANG_MODEL ??
-      detected.defaultModel;
+    const requestedModel = config.model ?? process.env.NIGHTFANG_MODEL;
+    // "free" is a special alias for the free OpenRouter model
+    if (requestedModel === "free" && this.provider === "openrouter") {
+      this.model = FREE_OPENROUTER_MODEL;
+    } else {
+      this.model = requestedModel ?? detected.defaultModel;
+    }
   }
 
   /** Whether this provider uses OpenAI-compatible chat/completions format. */

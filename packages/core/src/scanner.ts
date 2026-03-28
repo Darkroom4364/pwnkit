@@ -52,6 +52,7 @@ export async function scan(
   // Initialize DB for persistence (optional — graceful fallback if native module unavailable)
   const db = await getDB(dbPath);
   const scanId = db?.createScan(config) ?? "no-db";
+  ctx.scanId = scanId;
 
   // For --runtime auto, detect available runtimes and pick per-stage
   const isAuto = config.runtime === "auto";

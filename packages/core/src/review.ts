@@ -341,15 +341,75 @@ async function runReviewAgent(
     }
   }
 
-  // ── Fallback: basic API agent loop ──
+  // ── API runtime: multi-turn agentic loop with native tool_use ──
   if (runtimeType === "api" || !available.has(runtimeType)) {
     emit({
       type: "stage:start",
       stage: "attack",
-      message: "⚠ Install Claude Code or Codex for deep AI analysis. Running basic mode only.",
+      message: "Running agentic source code review via API...",
     });
+
+    const apiRuntime = new ClaudeApiRuntime({
+      type: "api" as RuntimeType,
+      timeout: config.timeout ?? 120_000,
+      apiKey: config.apiKey,
+      model: config.model,
+    });
+
+    const supportsNative = typeof (apiRuntime as any).executeNative === "function";
+
+    if (supportsNative) {
+      const { runNativeAgentLoop } = await import("./agent/native-loop.js");
+      const maxTurns = config.depth === "deep" ? 40 : config.depth === "default" ? 25 : 15;
+
+      const agentState = await runNativeAgentLoop({
+        config: {
+          role: "review",
+          systemPrompt: reviewAgentPrompt(repoPath, semgrepFindings),
+          tools: getToolsForRole("review"),
+          maxTurns,
+          target: `repo:${repoPath}`,
+          scanId,
+          scopePath: repoPath,
+        },
+        runtime: apiRuntime as any,
+        db,
+        onTurn: (_turn, toolCalls) => {
+          for (const call of toolCalls) {
+            if (call.name === "save_finding") {
+              emit({
+                type: "finding",
+                message: `[${call.arguments.severity}] ${call.arguments.title}`,
+                data: call.arguments,
+              });
+            } else if (call.name === "read_file") {
+              emit({
+                type: "stage:start",
+                stage: "attack",
+                message: `Reading ${call.arguments.path}`,
+              });
+            } else if (call.name === "run_command") {
+              emit({
+                type: "stage:start",
+                stage: "attack",
+                message: `Running: ${call.arguments.command}`,
+              });
+            }
+          }
+        },
+      });
+
+      emit({
+        type: "stage:end",
+        stage: "attack",
+        message: `Review complete: ${agentState.findings.length} findings in ${agentState.turnCount} turns (${agentState.totalUsage.inputTokens + agentState.totalUsage.outputTokens} tokens)`,
+      });
+
+      return agentState.findings;
+    }
   }
 
+  // ── Legacy fallback: text-based agent loop ──
   const maxTurns =
     config.depth === "deep" ? 50 : config.depth === "default" ? 30 : 15;
 

@@ -24,7 +24,7 @@ jobs:
       - run: pnpm -r build
 
       # Audit nightfang's own dependencies (dogfooding)
-      - run: node packages/cli/dist/index.js audit better-sqlite3 --format json --runtime api > scan-results.json 2>&1 || true
+      - run: node packages/cli/dist/index.js audit better-sqlite3 --format json --runtime api --model free > scan-results.json 2>&1 || true
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 

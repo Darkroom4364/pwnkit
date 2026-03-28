@@ -75,6 +75,7 @@ export interface DetectionRules {
 
 export interface ScanContext {
   config: ScanConfig;
+  scanId?: string;
   target: TargetInfo;
   findings: Finding[];
   attacks: AttackResult[];

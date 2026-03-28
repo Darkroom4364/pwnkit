@@ -122,10 +122,10 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 
   read_file: {
     name: "read_file",
-    description: "Read a file from the filesystem. Use for source code analysis.",
+    description: "Read a source code file. Returns numbered lines. Path must be within the scoped directory (usually the package or repo root). Start by reading package.json to understand the project structure, then follow imports.",
     parameters: {
-      path: { type: "string", description: "Absolute file path to read" },
-      max_lines: { type: "number", description: "Max lines to read (default 500)" },
+      path: { type: "string", description: "File path (relative to scope root or absolute)" },
+      max_lines: { type: "number", description: "Max lines to read (default 500). Use for large files." },
     },
     required: ["path"],
   },
@@ -133,10 +133,10 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
   run_command: {
     name: "run_command",
     description:
-      "Run a read-only local command. Use for tools like rg, find, semgrep, and npm audit. Shell operators are not supported.",
+      "Run a local command for code analysis. Allowed commands: grep, rg, find, ls, cat, head, tail, wc, semgrep, codeql, jq, file, stat, npm (audit/view/ls). Supports piping with |. Examples: 'rg --files .', 'grep -rn \"eval\" .', 'find . -name \"*.js\"', 'cat package.json | jq .main', 'rg \"__proto__\" . | head -20'.",
     parameters: {
-      command: { type: "string", description: "Shell command to execute" },
-      cwd: { type: "string", description: "Working directory (optional)" },
+      command: { type: "string", description: "Command to execute. Use pipe (|) for chaining. No shell operators like ;, &&, <, >, $." },
+      cwd: { type: "string", description: "Working directory (defaults to package/repo root)" },
       timeout: { type: "number", description: "Timeout in ms (default 30000)" },
     },
     required: ["command"],
@@ -189,7 +189,8 @@ const ALLOWED_COMMANDS = new Set([
   "npm",
 ]);
 
-const DISALLOWED_SHELL_CHARS = /[|&;<>`$\n\r]/;
+// Block dangerous shell chars but allow | for piping (useful for grep|head etc.)
+const DISALLOWED_SHELL_CHARS = /[;<>`$\n\r]/;
 const ALLOWED_NPM_SUBCOMMANDS = new Set(["audit", "view", "ls", "list"]);
 
 function tokenizeCommand(command: string): string[] {
@@ -454,32 +455,38 @@ export class ToolExecutor {
       return {
         success: false,
         output: null,
-        error: "Shell operators are not allowed. Run a single read-only command only.",
+        error: `Shell operators (;, <, >, \`, $) are not allowed. Use pipe (|) for chaining. Permitted commands: ${[...ALLOWED_COMMANDS].join(", ")}`,
       };
     }
 
-    let tokens: string[];
-    try {
-      tokens = tokenizeCommand(command);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { success: false, output: null, error: msg };
-    }
+    // Split on pipe to support "grep foo | head -5" style commands
+    const segments = command.split("|").map((s) => s.trim()).filter(Boolean);
 
-    if (!isCommandAllowed(tokens)) {
-      return {
-        success: false,
-        output: null,
-        error: `Command not allowed. Permitted commands: ${[...ALLOWED_COMMANDS].join(", ")}`,
-      };
-    }
-
-    if (this.ctx.scopePath) {
+    // Validate each segment
+    for (const segment of segments) {
+      let tokens: string[];
       try {
-        validateScopedCommand(tokens);
+        tokens = tokenizeCommand(segment);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return { success: false, output: null, error: msg };
+      }
+
+      if (!isCommandAllowed(tokens)) {
+        return {
+          success: false,
+          output: null,
+          error: `Command "${tokens[0]}" not allowed. Permitted: ${[...ALLOWED_COMMANDS].join(", ")}`,
+        };
+      }
+
+      if (this.ctx.scopePath) {
+        try {
+          validateScopedCommand(tokens);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { success: false, output: null, error: msg };
+        }
       }
     }
 
@@ -490,16 +497,33 @@ export class ToolExecutor {
       : requestedCwd;
 
     try {
+      // Use shell execution for piped commands, direct spawn for simple ones
+      const useShell = segments.length > 1;
+
+      if (useShell) {
+        const result = spawnSync("sh", ["-c", command], {
+          cwd,
+          timeout,
+          maxBuffer: 1024 * 1024,
+          encoding: "utf-8",
+        });
+
+        if (result.error) throw result.error;
+        const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+        return result.status === 0
+          ? { success: true, output: output.slice(0, 10_000) }
+          : { success: false, output: null, error: output.slice(0, 2_000) || `Exit ${result.status}` };
+      }
+
+      const tokens = tokenizeCommand(segments[0]);
       const result = spawnSync(tokens[0], tokens.slice(1), {
         cwd,
         timeout,
-        maxBuffer: 1024 * 1024, // 1MB
+        maxBuffer: 1024 * 1024,
         encoding: "utf-8",
       });
 
-      if (result.error) {
-        throw result.error;
-      }
+      if (result.error) throw result.error;
 
       const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
       if (result.status !== 0) {
@@ -560,13 +584,17 @@ export class ToolExecutor {
 export function getToolsForRole(role: string): ToolDefinition[] {
   const common = ["query_findings", "done"];
 
+  // All agents get all tools — the agent decides what to use based on its prompt.
+  // Restricting tools caused agents to loop when they needed a tool they didn't have.
+  const allTools = Object.keys(TOOL_DEFINITIONS);
+
   const roleTools: Record<string, string[]> = {
-    discovery: ["send_prompt", "http_request", "update_target", ...common],
-    attack: ["send_prompt", "http_request", "save_finding", "read_file", "run_command", ...common],
-    verify: ["send_prompt", "http_request", "update_finding", ...common],
+    discovery: allTools,
+    attack: allTools,
+    verify: allTools,
     report: [...common],
-    audit: ["read_file", "run_command", "save_finding", ...common],
-    review: ["read_file", "run_command", "save_finding", "update_finding", ...common],
+    audit: allTools,
+    review: allTools,
   };
 
   const toolNames = roleTools[role] ?? Object.keys(TOOL_DEFINITIONS);

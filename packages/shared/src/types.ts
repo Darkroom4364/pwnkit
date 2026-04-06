@@ -445,6 +445,8 @@ export interface ReviewConfig {
   dbPath?: string;
   apiKey?: string;
   model?: string;
+  /** Hard cost ceiling in USD; aborts the review when exceeded. Default: no ceiling. */
+  costCeilingUsd?: number;
 }
 
 export interface ReviewReport {
@@ -455,4 +457,8 @@ export interface ReviewReport {
   semgrepFindings: number;
   summary: ReportSummary;
   findings: Finding[];
+  /** LLM token usage (input + output). Undefined when no LLM agent ran. */
+  usage?: TokenUsage;
+  /** Estimated USD cost from token usage at the configured model rates. */
+  estimatedCostUsd?: number;
 }

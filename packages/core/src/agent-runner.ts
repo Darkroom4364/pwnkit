@@ -21,7 +21,7 @@ export interface AnalysisAgentOptions {
   target: string;
   scanId: string;
   sessionId?: string;
-  config: { runtime?: string; timeout?: number; depth?: string; apiKey?: string; model?: string };
+  config: { runtime?: string; timeout?: number; depth?: string; apiKey?: string; model?: string; costCeilingUsd?: number };
   db: any;
   emit: ScanListener;
   /** Prompt sent to CLI runtimes (compact, includes ---FINDING--- format instructions) */
@@ -246,6 +246,8 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Anal
           scanId,
           scopePath,
           sessionId,
+          costCeilingUsd: config.costCeilingUsd,
+          costModel: config.model,
         },
         runtime: apiRuntime as NativeRuntime,
         db,

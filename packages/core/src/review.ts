@@ -146,7 +146,7 @@ async function runReviewAgent(
  */
 export async function sourceReview(
   opts: SourceReviewOptions,
-): Promise<ReviewReport> {
+): Promise<ReviewReport & { usage?: { inputTokens: number; outputTokens: number }; estimatedCostUsd?: number }> {
   const { config, onEvent } = opts;
   const emit: ScanListener = onEvent ?? (() => {});
   const startTime = Date.now();
@@ -208,6 +208,8 @@ export async function sourceReview(
       semgrepFindings: semgrepFindings.length,
       summary,
       findings,
+      usage: agentResult.usage,
+      estimatedCostUsd: agentResult.estimatedCostUsd,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

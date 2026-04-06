@@ -14,9 +14,20 @@ export function registerAuditCommand(program: Command): void {
     .option("--db-path <path>", "Path to SQLite database")
     .option("--api-key <key>", "API key for LLM provider")
     .option("--model <model>", "LLM model to use")
+    .option("--cost-ceiling <usd>", "Hard per-audit USD cost ceiling. Aborts cleanly with partial findings if exceeded.")
     .option("--verbose", "Show detailed output", false)
     .option("--timeout <ms>", "AI agent timeout in milliseconds", "600000")
     .action(async (packageName: string, opts: Record<string, string | boolean>) => {
+      let costCeilingUsd: number | undefined;
+      const ceilingSource =
+        (opts.costCeiling as string | undefined) ?? process.env.PWNKIT_COST_CEILING_USD;
+      if (ceilingSource !== undefined && ceilingSource !== "") {
+        const parsed = Number(ceilingSource);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          throw new Error(`Invalid cost ceiling '${ceilingSource}': must be a positive number (USD).`);
+        }
+        costCeilingUsd = parsed;
+      }
       await runUnified({
         target: packageName,
         targetType: "npm-package",
@@ -29,6 +40,7 @@ export function registerAuditCommand(program: Command): void {
         apiKey: opts.apiKey as string | undefined,
         model: opts.model as string | undefined,
         packageVersion: opts.version as string | undefined,
+        costCeilingUsd,
       });
     });
 }

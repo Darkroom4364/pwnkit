@@ -36,6 +36,31 @@ export interface RunOptions {
   costCeilingUsd?: number;
 }
 
+interface ResultLinePayload {
+  ok: boolean;
+  exitCode: number;
+  exit_reason: string;
+  target: string;
+  targetType?: string;
+  runtime: RuntimeMode;
+  format: OutputFormat;
+  cost_usd?: number;
+  token_input?: number;
+  token_output?: number;
+  finding_count?: number;
+  estimatedCostUsd?: number;
+  usage?: { inputTokens: number; outputTokens: number };
+  summary?: {
+    totalFindings: number;
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    info: number;
+  };
+  error?: string;
+}
+
 function toScanReport(report: any): ScanReport {
   if (report.targetType === "npm-package") {
     return {
@@ -64,6 +89,62 @@ function toScanReport(report: any): ScanReport {
   }
 
   return report as ScanReport;
+}
+
+function getEstimatedCost(report: any): number | undefined {
+  if (typeof report?.estimatedCostUsd === "number") return report.estimatedCostUsd;
+  if (typeof report?.benchmarkMeta?.estimatedCostUsd === "number") return report.benchmarkMeta.estimatedCostUsd;
+  return undefined;
+}
+
+function getUsage(report: any): { inputTokens: number; outputTokens: number } | undefined {
+  return report?.usage;
+}
+
+function getTargetType(report: any, opts: RunOptions): string | undefined {
+  return report?.targetType ?? opts.targetType;
+}
+
+function emitResultLine(payload: ResultLinePayload): void {
+  if (process.env.PWNKIT_EMIT_RESULT_LINE !== "1" && !process.env.PWNKIT_CLOUD_SINK) return;
+  console.log(`PWNKIT_RESULT=${JSON.stringify(payload)}`);
+}
+
+function getCloudFinalSinkConfig(): { sinkUrl: string; scanId: string; token?: string } | null {
+  if (process.env.PWNKIT_FEATURE_CLOUD_SINK === "0") return null;
+  const sinkUrl = process.env.PWNKIT_CLOUD_SINK?.trim();
+  const scanId = process.env.PWNKIT_CLOUD_SCAN_ID?.trim();
+  if (!sinkUrl || !scanId) return null;
+  const token = process.env.PWNKIT_CLOUD_TOKEN?.trim() || undefined;
+  return { sinkUrl, scanId, token };
+}
+
+async function postFinalResultToCloud(report: unknown): Promise<void> {
+  const config = getCloudFinalSinkConfig();
+  if (!config) return;
+  const url = `${config.sinkUrl.replace(/\/+$/, "")}/scans/${encodeURIComponent(config.scanId)}/findings`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Pwnkit-Scan-Id": config.scanId,
+  };
+  if (config.token) headers.Authorization = `Bearer ${config.token}`;
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ report, final: true }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      process.stderr.write(
+        `[pwnkit cloud-sink] report POST ${url} returned ${res.status}: ${text.slice(0, 200)}\n`,
+      );
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[pwnkit cloud-sink] report POST ${url} failed: ${msg}\n`);
+  }
 }
 
 export async function runUnified(opts: RunOptions): Promise<void> {
@@ -141,11 +222,16 @@ export async function runUnified(opts: RunOptions): Promise<void> {
           packageVersion: opts.packageVersion,
         } as any);
 
+    const reportAny = report as any;
+
+    if (opts.targetType !== "url" && opts.targetType !== "web-app") {
+      await postFinalResultToCloud(reportAny);
+    }
+
     if (inkUI) {
       inkUI.setReport(report as any);
       await inkUI.waitForExit();
     } else {
-      const reportAny = report as any;
       if (format === "html" || format === "pdf") {
         const extension = format === "pdf" ? "pdf" : "html";
         const filePath = opts.reportPath
@@ -174,6 +260,10 @@ export async function runUnified(opts: RunOptions): Promise<void> {
       }
     }
 
+    let exitCode = 0;
+    const estimatedCostUsd = getEstimatedCost(reportAny);
+    const usage = getUsage(reportAny);
+
     // ── Export findings to issue tracker if requested ──
     if (opts.exportTarget) {
       const match = opts.exportTarget.match(/^github:(.+\/.+)$/);
@@ -198,22 +288,67 @@ export async function runUnified(opts: RunOptions): Promise<void> {
       }
     }
 
-    // Cost ceiling abort: exit code 4 so operators (CI, schedulers) can
-    // distinguish a clean budget abort from a normal completion or failure.
-    if ((report as ScanReport).costCeilingExceeded) {
+    const ceilingRaw = process.env.PWNKIT_COST_CEILING_USD?.trim();
+    if (ceilingRaw) {
+      const ceiling = Number(ceilingRaw);
+      if (Number.isFinite(ceiling) && estimatedCostUsd !== undefined && estimatedCostUsd > ceiling) {
+        console.error(chalk.red(`Cost ceiling exceeded: $${estimatedCostUsd.toFixed(4)} > $${ceiling.toFixed(4)}`));
+        exitCode = 4;
+      }
+    }
+
+    // Cost ceiling abort from the live scan path: exit code 4 so operators
+    // (CI, schedulers, cloud watchers) can distinguish a clean budget abort
+    // from a normal completion or failure.
+    if ((report as ScanReport).costCeilingExceeded && exitCode === 0) {
       console.error(
         chalk.yellow(
           `Scan aborted: cost ceiling exceeded. ${report.summary.totalFindings} partial finding(s) preserved.`,
         ),
       );
-      process.exit(4);
+      exitCode = 4;
     }
 
-    if (report.summary.critical > 0 || report.summary.high > 0) {
-      process.exit(1);
+    if (exitCode === 0 && (report.summary.critical > 0 || report.summary.high > 0)) {
+      exitCode = 1;
     }
+
+    emitResultLine({
+      ok: exitCode === 0,
+      exitCode,
+      exit_reason:
+        exitCode === 4
+          ? "cost_ceiling_exceeded"
+          : exitCode === 1
+            ? "findings"
+            : "completed",
+      target,
+      targetType: getTargetType(reportAny, opts),
+      runtime,
+      format,
+      cost_usd: estimatedCostUsd,
+      token_input: usage?.inputTokens,
+      token_output: usage?.outputTokens,
+      finding_count: report.summary.totalFindings,
+      estimatedCostUsd,
+      usage,
+      summary: report.summary,
+    });
+
+    if (exitCode !== 0) process.exit(exitCode);
   } catch (err) {
-    console.error(chalk.red(err instanceof Error ? err.message : String(err)));
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(chalk.red(message));
+    emitResultLine({
+      ok: false,
+      exitCode: 2,
+      exit_reason: "error",
+      target,
+      targetType: opts.targetType,
+      runtime,
+      format,
+      error: message,
+    });
     process.exit(2);
   }
 }

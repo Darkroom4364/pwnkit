@@ -85,18 +85,15 @@ describe("CLI E2E", () => {
     expect(result.stdout).toContain("--runtime");
   });
 
-  it("audit is-odd --runtime api --format json works without API key", () => {
+  it("audit is-odd --runtime api --format json fails loudly without API key", () => {
     const result = run(
       ["audit", "is-odd", "--runtime", "api", "--format", "json", "--db-path", testDbPath],
       60_000,
       { OPENROUTER_API_KEY: "", ANTHROPIC_API_KEY: "", AZURE_OPENAI_API_KEY: "", OPENAI_API_KEY: "" },
     );
-    expect(result.status).toBe(0);
-    const json = JSON.parse(result.stdout);
-    expect(json).toHaveProperty("package");
-    expect(json).toHaveProperty("version");
-    expect(json).toHaveProperty("summary");
-    expect(json).toHaveProperty("findings");
+    expect(result.status).toBe(2);
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("No API key found");
   }, 60_000);
 
   it("review --help shows review options", () => {
@@ -116,13 +113,37 @@ describe("CLI E2E", () => {
     expect(result.stdout).toContain("--mode");
   });
 
-  it("share URL generated in audit output", () => {
+  it("share URL is not generated when explicit api runtime is unusable", () => {
     const result = run(
       ["audit", "is-odd", "--runtime", "api", "--format", "terminal", "--db-path", testDbPath + "-share"],
       60_000,
       { OPENROUTER_API_KEY: "", ANTHROPIC_API_KEY: "", AZURE_OPENAI_API_KEY: "", OPENAI_API_KEY: "" },
     );
     const output = result.stdout + result.stderr;
-    expect(output).toContain("pwnkit.com/r#");
+    expect(result.status).toBe(2);
+    expect(output).not.toContain("pwnkit.com/r#");
+    expect(output).toContain("No API key found");
+  }, 60_000);
+
+  it("emits a machine-readable result line on failure when requested", () => {
+    const result = run(
+      ["audit", "is-odd", "--runtime", "api", "--format", "json", "--db-path", testDbPath + "-result-line"],
+      60_000,
+      {
+        OPENROUTER_API_KEY: "",
+        ANTHROPIC_API_KEY: "",
+        AZURE_OPENAI_API_KEY: "",
+        OPENAI_API_KEY: "",
+        PWNKIT_EMIT_RESULT_LINE: "1",
+      },
+    );
+    const output = result.stdout + result.stderr;
+    expect(result.status).toBe(2);
+    const line = output.split("\n").find((entry) => entry.startsWith("PWNKIT_RESULT="));
+    expect(line).toBeTruthy();
+    const parsed = JSON.parse(line!.slice("PWNKIT_RESULT=".length));
+    expect(parsed.ok).toBe(false);
+    expect(parsed.exitCode).toBe(2);
+    expect(parsed.targetType).toBe("npm-package");
   }, 60_000);
 });

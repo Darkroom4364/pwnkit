@@ -39,6 +39,7 @@ export interface PipelineOptions {
   model?: string;
   timeout?: number;
   packageVersion?: string;
+  costCeilingUsd?: number;
 }
 
 export interface PipelineReport {
@@ -773,6 +774,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
             depth: opts.depth,
             apiKey: opts.apiKey,
             model: opts.model,
+            costCeilingUsd: opts.costCeilingUsd,
           },
           db,
           emit: researchEmit,
@@ -889,6 +891,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
                   depth: "quick",
                   apiKey: opts.apiKey,
                   model: opts.model,
+                  costCeilingUsd: opts.costCeilingUsd,
                 },
                 db: null,
                 emit: verifyEmit,

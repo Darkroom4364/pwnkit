@@ -11,7 +11,7 @@ pwnkit is an agentic harness — bring your own AI. The `--runtime` flag control
 
 | Runtime | Flag | Description |
 |---------|------|-------------|
-| `api` | `--runtime api` | Uses your API key (OpenRouter, Anthropic, OpenAI). Best for CI and quick scans. **Default.** |
+| `api` | `--runtime api` | Uses your API key (OpenRouter, Anthropic, Azure OpenAI, or OpenAI). Best for CI and quick scans. **Default.** |
 | `claude` | `--runtime claude` | Spawns the Claude Code CLI with your existing subscription. Best for deep analysis. |
 | `codex` | `--runtime codex` | Spawns the Codex CLI. Best for source-level analysis. |
 | `gemini` | `--runtime gemini` | Spawns the Gemini CLI. Best for large-context source analysis. |

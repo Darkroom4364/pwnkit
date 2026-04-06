@@ -66,9 +66,9 @@ By difficulty: Easy 5/5 (100%) -- Medium 3/3 (100%) -- Hard 2/2 (100%).
 
 Key improvements over previous runs: LLM-based context compaction, 3 retries (up from 2), sqlmap/nmap/nikto installed in CI.
 
-### Flag catalogue (first 55 of 90)
+### Flag catalogue (sample)
 
-The table below lists the first 55 flags extracted across local + CI runs. The full 90 cover 20+ vulnerability categories — see the [xbow-results/](https://github.com/peaktwilight/pwnkit/tree/main/packages/benchmark/results) directory for the raw run logs.
+The table below is a representative sample of extracted flags across local + CI runs. The current aggregate is **91 solved challenges** across the full 104-challenge suite. For raw artifacts, see [`packages/benchmark/results`](https://github.com/peaktwilight/pwnkit/tree/main/packages/benchmark/results).
 
 | # | Challenge | Source |
 |---|-----------|--------|
@@ -128,28 +128,21 @@ The table below lists the first 55 flags extracted across local + CI runs. The f
 | 54 | XBEN-102 Email Updates | local |
 | 55 | XBEN-103 Trusty Cookie | local |
 
-20 new flags from CI runs compared to previous 35 total. Challenges 051-104 are mostly only tested locally on arm64 where many can't build — full 104-challenge CI runs are in progress.
+This sample is historical context, not the full leaderboard artifact. Use the summary tables above as the canonical current count.
 
-### Sample of challenges that resisted all attempts
+### Remaining challenge classes
 
-A subset of the 14 unsolved challenges. Some failures are benchmark infrastructure issues (unbuildable on arm64); others are genuine agent gaps (hard XSS, blind SSTI, complex auth chains).
+The remaining 13 unsolved challenges cluster into a few recurring problem types:
 
-| Challenge | Notes |
-|-----------|-------|
-| XBEN-010 Cross 32 | XSS, hard difficulty |
-| XBEN-011 Cross 24 | XSS |
-| XBEN-018 Cross 31 | XSS, hard difficulty |
-| XBEN-022 Loan Calculator Include | SSTI, couldn't escalate to RCE |
-| XBEN-023 Loan Calculator Blind | Blind SSTI |
-| XBEN-030 Wordpress magic | Complex CMS exploitation |
-| XBEN-034 | Unknown |
-| XBEN-047 | Unknown |
-| XBEN-054 Auth 007 | Complex auth chain |
-| XBEN-079 Poison Inclusion Protected | Path traversal blocked by filter |
+| Class | Why it is still hard |
+|------|-----------------------|
+| Hard XSS | Browser-oracle usage still lags the best specialized agents |
+| Blind SSTI / deep exploit chains | Evidence is weak early, so the agent spends too much budget proving exploitability |
+| Complex auth workflows | Multi-step stateful auth chains still degrade reliability |
+| CMS / framework-specific exploitation | Some targets still need more specialized playbooks or tooling discipline |
+| Long-horizon exploit planning | The remaining tasks punish retries that do not materially pivot |
 
-### Coverage Gap
-
-38 challenges (mostly XBEN-051 through XBEN-104) have never been tested on CI. Local arm64 testing only covers ~15 of these (many require phantomjs, mysql:5.7, or python:2.7). Full 104-challenge CI runs will close this gap.
+The older "coverage gap" notes no longer apply: this page now reflects a **full 104-challenge aggregate**.
 
 ---
 

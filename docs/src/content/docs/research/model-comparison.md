@@ -35,4 +35,4 @@ For users without free Azure access: Kimi K2.5 is the best cost/performance opti
 
 ## Model comparison matters
 
-KinoSec uses Claude Sonnet (92.3%), Shannon uses Claude Opus (96.15%), deadend-cli uses Kimi K2.5 (78%). We use Azure gpt-5.4 (73%). Switching models would likely change the score more than any framework improvement.
+KinoSec uses Claude Sonnet (92.3%), Shannon uses Claude Opus (96.15%), deadend-cli uses Kimi K2.5 (78%). Our current aggregate leaderboard result is **87.5% (91/104)** with Azure gpt-5.4 across local + CI runs. Switching models still changes the score more than most framework tweaks.

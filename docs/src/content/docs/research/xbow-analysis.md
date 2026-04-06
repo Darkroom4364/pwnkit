@@ -14,17 +14,14 @@ description: Shannon gap analysis, competitor verification, what moves the score
 | [deadend-cli](https://xoxruns.medium.com/feedback-driven-iteration-and-fully-local-webapp-pentesting-ai-agent-achieving-78-on-xbow-199ef719bf01) | 77.55% (~76/98) | Single-agent CLI |
 | [MAPTA](https://arxiv.org/abs/2508.20816) | 76.9% (80/104) | Multi-agent, academic |
 | [BoxPwnr](https://github.com/0ca/BoxPwnr) | 97.1% (101/104) | Best-of-N across ~10 model+solver configs; best single model 81.7% |
-| **pwnkit** | **55/66 tested (83.3%) · 55/104 total (52.9%)** | Shell-first, open-source, Azure gpt-5.4 |
+| **pwnkit** | **91/104 (87.5%)** | Shell-first, open-source, Azure gpt-5.4 |
 
 For pwnkit's detailed flag table and per-category breakdown, see the [Benchmark](/benchmark/) page.
 
-## Gap analysis: where do the remaining 49 flags hide?
+## Gap analysis: where do the remaining 13 flags hide?
 
 **XSS challenges (~20 challenges, few pwnkit flags)**
 Shannon has full Playwright browser automation. BoxPwnr runs in Kali Docker. pwnkit has Playwright in CI but the agent doesn't use it effectively for XSS. See issue #44.
-
-**Untested challenges (38 challenges)**
-XBEN-051 through XBEN-104 have mostly never been run on CI. Full 104-challenge CI runs are in progress. If pwnkit maintains its 72-83% rate, these would add ~27-31 flags.
 
 **Ensemble gap**
 BoxPwnr's 97.1% comes from running ~10 model+solver configs per challenge. pwnkit uses a single model (Azure gpt-5.4) with 3 retries. Multi-model ensemble (issue #42) could push scores significantly.
@@ -35,7 +32,7 @@ Shannon: 10,000 max turns (unlimited). pwnkit: 40 turns with LLM-based context c
 **Domain-specialized agents**
 Shannon runs 5 parallel vuln agents with 200-400 line domain-specific prompts. pwnkit sends one agent with dynamic playbooks injected after recon. See issue #18.
 
-**Current realistic target: 85%+ on tested challenges, 80+ flags total on all 104.**
+**Current realistic target: 90%+ on all 104 without abandoning the single-command baseline.**
 
 ## Research-backed design decisions
 

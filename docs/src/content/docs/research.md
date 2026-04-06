@@ -7,6 +7,18 @@ This page is the single source of truth for "why we made these decisions and wha
 
 ## Topics
 
+### [Agent Techniques](/research/agent-techniques/)
+
+What shipped in the agent loop: planning, reflection checkpoints, context compaction, dynamic playbooks, progress handoff, and EGATS.
+
+### [FP Reduction Moat](/research/fp-reduction-moat/)
+
+The full false-positive reduction stack, why the layers are ordered the way they are, and which parts are inspired by Endor, Semgrep Assistant, or newer triage papers.
+
+### [Finding Triage ML](/research/finding-triage-ml/)
+
+Implementation notes for reachability, consensus verify, PoV generation, memories, adversarial debate, and multi-modal agreement with foxguard.
+
 ### [Shell-First Rationale](/research/shell-first/)
 
 Why bash beats structured tools for pentesting. Includes A/B test data on prompt length, reasoning effort, sub-agent spawning, tool routing, and multi-checkpoint budgets.
@@ -17,7 +29,7 @@ Head-to-head testing of gpt-5.4, Kimi K2.5, Qwen3 Coder, DeepSeek, GLM, and free
 
 ### [XBOW Analysis](/research/xbow-analysis/)
 
-Shannon gap analysis (why 96% vs our 73%), competitor verification, what moves the score, white-box vs black-box results, critical bugs found, and future benchmark targets (AutoPenBench, HarmBench, JailbreakBench).
+Shannon gap analysis (why 96% vs our 87.5% aggregate), competitor verification, what moves the score, white-box vs black-box results, critical bugs found, and future benchmark targets (AutoPenBench, HarmBench, JailbreakBench).
 
 ### [Competitive Landscape](/research/competitive-landscape/)
 

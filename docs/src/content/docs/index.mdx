@@ -24,9 +24,26 @@ import { Card, CardGrid } from "@astrojs/starlight/components";
     Every finding is independently re-exploited by a second agent that never sees the original reasoning. False positives are killed automatically.
   </Card>
   <Card title="Bring your own AI" icon="setting">
-    Use your API key (OpenRouter, Anthropic, OpenAI) or spawn Claude Code, Codex, or Gemini CLI with your existing subscription.
+    Use your API key (OpenRouter, Anthropic, Azure OpenAI, OpenAI) or spawn Claude Code, Codex, or Gemini CLI with your existing subscription.
   </Card>
   <Card title="Full-spectrum pentesting" icon="list-format">
-    AI/LLM apps, web applications, npm packages, and source code repositories. Not just AI security -- pwnkit covers traditional web vulnerabilities too. 10/10 on AI/LLM regression tests, 29 flags on XBOW web benchmark (73% of tested, 15 vuln categories).
+    AI/LLM apps, web applications, npm packages, and source code repositories. Not just AI security -- pwnkit covers traditional web vulnerabilities too. Current XBOW aggregate: 91/104 = 87.5%, plus 8/10 on the first Cybench subset.
   </Card>
 </CardGrid>
+
+## Explore the docs
+
+### Core concepts
+
+- [Agent Loop](/agent-loop/) — how the autonomous loop thinks, calls tools, reflects, and stops
+- [Blind Verification](/blind-verification/) — why findings are re-exploited before they count
+- [White-Box Mode](/white-box-mode/) — source-aware scanning with `--repo`
+- [Budget Management](/budget-management/) — turn budgets, retries, and reflection checkpoints
+
+### Research and benchmark analysis
+
+- [Research overview](/research/) — the index of design notes and experiments
+- [FP Reduction Moat](/research/fp-reduction-moat/) — the full false-positive reduction stack
+- [Finding Triage ML](/research/finding-triage-ml/) — the shipped triage layers and why they exist
+- [XBOW Analysis](/research/xbow-analysis/) — what moved the score and what still blocks the remaining challenges
+- [Benchmark](/benchmark/) — current results, caveats, and historical context

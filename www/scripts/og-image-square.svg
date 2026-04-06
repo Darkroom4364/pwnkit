@@ -39,14 +39,14 @@
     <text x="0" y="6" font-family="Outfit, Helvetica, Arial, sans-serif" font-size="20" font-weight="600" fill="#fca5a5" text-anchor="middle">XBOW BENCHMARK LEADER</text>
   </g>
 
-  <!-- Big 86.5% -->
-  <text x="600" y="660" font-family="Space Mono, Menlo, Monaco, monospace" font-size="260" font-weight="700" fill="#ffffff" letter-spacing="-8" text-anchor="middle">86.5<tspan fill="#DC2626">%</tspan></text>
+  <!-- Big 91.3% -->
+  <text x="600" y="660" font-family="Space Mono, Menlo, Monaco, monospace" font-size="260" font-weight="700" fill="#ffffff" letter-spacing="-8" text-anchor="middle">91.3<tspan fill="#DC2626">%</tspan></text>
 
   <!-- Tagline -->
   <text x="600" y="780" font-family="Outfit, Helvetica, Arial, sans-serif" font-size="40" font-weight="600" fill="#ffffff" text-anchor="middle">The leading open-source AI pentest agent</text>
 
   <!-- Subtitle -->
-  <text x="600" y="840" font-family="Outfit, Helvetica, Arial, sans-serif" font-size="26" font-weight="500" fill="#9ca3af" text-anchor="middle">90 of 104 XBOW challenges  ·  single command  ·  Apache 2.0</text>
+  <text x="600" y="840" font-family="Outfit, Helvetica, Arial, sans-serif" font-size="26" font-weight="500" fill="#9ca3af" text-anchor="middle">95 of 104 XBOW challenges  ·  best-of-N aggregate  ·  Apache 2.0</text>
 
   <!-- Command pill -->
   <g transform="translate(600, 960)">

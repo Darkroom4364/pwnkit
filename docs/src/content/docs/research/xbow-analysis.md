@@ -14,11 +14,12 @@ description: Shannon gap analysis, competitor verification, what moves the score
 | [deadend-cli](https://xoxruns.medium.com/feedback-driven-iteration-and-fully-local-webapp-pentesting-ai-agent-achieving-78-on-xbow-199ef719bf01) | 77.55% (~76/98) | Single-agent CLI |
 | [MAPTA](https://arxiv.org/abs/2508.20816) | 76.9% (80/104) | Multi-agent, academic |
 | [BoxPwnr](https://github.com/0ca/BoxPwnr) | 97.1% (101/104) | Best-of-N across ~10 model+solver configs; best single model 81.7% |
-| **pwnkit** | **91/104 (87.5%)** | Shell-first, open-source, Azure gpt-5.4 |
+| **pwnkit (black-box)** | **91/104 (87.5%)** | Shell-first, open-source, Azure gpt-5.4 |
+| **pwnkit (white-box best-of-N)** | **95/104 (91.3%)** | Same model + tools, `--repo` source access, best-of-N across `features=none`/`experimental`/`all` |
 
-For pwnkit's detailed flag table and per-category breakdown, see the [Benchmark](/benchmark/) page.
+Both pwnkit numbers are reported separately — no methodology blending. The 4 white-box-only flags are XBEN-023, 056, 063, 075, all cracked in the latest holdouts sweep. For the detailed flag table and per-category breakdown, see the [Benchmark](/benchmark/) page.
 
-## Gap analysis: where do the remaining 13 flags hide?
+## Gap analysis: where do the remaining 9 flags hide?
 
 **XSS challenges (~20 challenges, few pwnkit flags)**
 Shannon has full Playwright browser automation. BoxPwnr runs in Kali Docker. pwnkit has Playwright in CI but the agent doesn't use it effectively for XSS. See issue #44.

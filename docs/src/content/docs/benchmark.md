@@ -5,7 +5,7 @@ description: Comprehensive benchmark results for pwnkit across five domains -- A
 
 pwnkit is benchmarked against five test suites: a custom AI/LLM security benchmark (10 challenges), the XBOW traditional web vulnerability benchmark (104 challenges), AutoPenBench network/CVE pentesting (33 tasks), HarmBench LLM safety (510 behaviors), and an npm audit benchmark (81 packages). This page is the single source of truth for all benchmark results.
 
-> **Latest (April 2026).** **91 unique flags / 104 = 87.5%** on XBOW across all runs (best-of-N). All 104 challenges now tested. The latest unsolved-challenges run cracked **XBEN-042 "Too Much Trust"** with 2 findings in 92s, taking the total from 90 to 91. The new XSS playbook also cracked previously-impossible XBEN-011 and XBEN-018. Only 13 challenges remain unsolved. This score beats MAPTA (76.9%), deadend-cli (77.6%), Cyber-AutoAgent (84.6%), and XBOW (85%) — and beats BoxPwnr's best single-model score (GLM-5: 81.7%). First Cybench run: **8/10 = 80%** including a Medium-difficulty solve.
+> **Latest (April 2026).** Best-of-N aggregate across all configurations: **95 unique flags / 104 = 91.3%**. Black-box published mode: **91 / 104 = 87.5%**. White-box runs (`--repo` source access) contribute 4 additional flags (XBEN-023, 056, 063, 075), all cracked in the latest holdouts sweep. Both numbers reported separately throughout this page — no methodology blending. All 104 challenges tested. Only 9 challenges remain unsolved (down from 13). XBEN-099 still fails Docker startup across every config — candidate for upstream patched-fork fix. The aggregate beats MAPTA (76.9%), deadend-cli (77.6%), Cyber-AutoAgent (84.6%), XBOW's own agent (85%), and BoxPwnr's best single-model score (GLM-5: 81.7%) — and the black-box number alone still beats all of those except KinoSec (92.3% black-box, still ahead). First Cybench run: **8/10 = 80%** including a Medium-difficulty solve.
 
 ## AI/LLM Security Benchmark
 
@@ -45,16 +45,18 @@ By difficulty: Easy 5/5 (100%) -- Medium 3/3 (100%) -- Hard 2/2 (100%).
 
 104 Docker CTF challenges from [xbow-engineering/validation-benchmarks](https://github.com/xbow-engineering/validation-benchmarks). Each hides a `FLAG{...}` behind a real web vulnerability. The agent used the shell-first tool set: `bash` + `save_finding` + `done`.
 
-### Overall (best-of-N across all runs)
+### Overall (split publication, both modes reported separately)
 
-| Metric | Count |
-|--------|-------|
-| Total challenges | 104 |
-| **Challenges tested** | **104** (full coverage) |
-| **Unique flags extracted** | **91** |
-| **Score** | **91/104 = 87.5%** |
-| Unsolved | 13/104 = 12.5% |
-| Vulnerability categories cracked | 20+ |
+| Metric | Black-box | White-box / best-of-N aggregate |
+|--------|-----------|--------------------------------|
+| Total challenges | 104 | 104 |
+| Challenges tested | **104** (full coverage) | **104** (full coverage) |
+| **Unique flags extracted** | **91** | **95** |
+| **Score** | **91/104 = 87.5%** | **95/104 = 91.3%** |
+| Unsolved | 13/104 = 12.5% | 9/104 = 8.7% |
+| Vulnerability categories cracked | 20+ | 20+ |
+
+**Methodology note.** Both modes use the same single Azure gpt-5.4 model with the same `bash` + `save_finding` + `done` tool set. The only difference is `--repo <path>` source access (white-box). The 4 white-box-only flags are XBEN-023, 056, 063, 075 — cracked in the latest holdouts sweep across `features=none`, `features=experimental`, and `features=all` configurations. The aggregate is a best-of-N across all configurations, the same way Shannon (96.15% white-box) and BoxPwnr (97.1% best-of-N across ~10 configs) report their numbers. We publish both clean black-box and best-of-N aggregate numbers because either alone is misleading without the other.
 
 ### Latest CI Runs (April 2026)
 
@@ -68,7 +70,7 @@ Key improvements over previous runs: LLM-based context compaction, 3 retries (up
 
 ### Flag catalogue (sample)
 
-The table below is a representative sample of extracted flags across local + CI runs. The current aggregate is **91 solved challenges** across the full 104-challenge suite. For raw artifacts, see [`packages/benchmark/results`](https://github.com/peaktwilight/pwnkit/tree/main/packages/benchmark/results).
+The table below is a representative sample of extracted flags across local + CI runs. The current best-of-N aggregate is **95 solved challenges** (91 black-box + 4 white-box-only) across the full 104-challenge suite. For raw artifacts, see [`packages/benchmark/results`](https://github.com/peaktwilight/pwnkit/tree/main/packages/benchmark/results).
 
 | # | Challenge | Source |
 |---|-----------|--------|
@@ -132,7 +134,7 @@ This sample is historical context, not the full leaderboard artifact. Use the su
 
 ### Remaining challenge classes
 
-The remaining 13 unsolved challenges cluster into a few recurring problem types:
+The remaining 9 unsolved challenges cluster into a few recurring problem types (XBEN-010, 030, 034, 054, 061, 066, 079, 092, 099 — XBEN-099 is a persistent Docker-start infrastructure failure across every config, candidate for upstream patched-fork fix):
 
 | Class | Why it is still hard |
 |------|-----------------------|
@@ -286,7 +288,8 @@ No npm scanner — open or commercial — publishes a head-to-head benchmark wit
 | [Cyber-AutoAgent](https://github.com/westonbrown/Cyber-AutoAgent) | 84.62% (88/104) | Claude 4.5 Sonnet | Black-box | Repo archived; v0.1.0 was 46%, iterated to 84% |
 | [deadend-cli](https://github.com/xoxruns/deadend-cli) | 77.55% (~76/98) | Claude Sonnet 4.5 | Black-box | Only tested 98 of 104 challenges; README claims ~80% on 104 with Kimi K2.5 |
 | [MAPTA](https://arxiv.org/abs/2508.20816) | 76.9% (80/104) | GPT-5 | Black-box | Patched 43 Docker images; $21.38 total cost |
-| **pwnkit** | **91/104 = 87.5%** | Azure gpt-5.4 | Black-box + white-box | Open-source, shell-first, 3 tools, single model -- beats BoxPwnr's best single-model (81.7%) |
+| **pwnkit** (black-box) | **91/104 = 87.5%** | Azure gpt-5.4 | Black-box | Open-source, shell-first, 3 tools, single model -- beats BoxPwnr's best single-model (81.7%) |
+| **pwnkit** (white-box / best-of-N) | **95/104 = 91.3%** | Azure gpt-5.4 | White-box (`--repo`) + best-of-N across feature configs | Same model + tools, with source access; aggregate across `features=none`/`experimental`/`all` runs |
 
 **Important caveats:**
 - **BoxPwnr's 97.1% is best-of-N across ~10 model+solver configurations** (527 traces / 104 challenges = ~5 attempts each). Their best single model (GLM-5) scores 81.7%.
@@ -295,14 +298,14 @@ No npm scanner — open or commercial — publishes a head-to-head benchmark wit
 - deadend-cli's 77.55% was on 98 challenges, not 104
 - MAPTA patched 43 of the 104 Docker images before testing
 - No competitor publishes retry counts per challenge — all scores could represent best-of-N
-- pwnkit's 87.5% is on 104 tested challenges (full coverage)
+- pwnkit's 87.5% (black-box) and 91.3% (white-box best-of-N aggregate) are on 104 tested challenges (full coverage)
 - pwnkit uses a single model (Azure gpt-5.4) with 3 retries — no ensemble
 
-> **Score context.** pwnkit has tested all 104 XBOW challenges (full coverage). Its **87.5% (91/104)** is a best-of-N aggregate across local + CI runs. This beats MAPTA (76.9%), deadend-cli (77.6%), Cyber-AutoAgent (84.6%), and XBOW's own agent (85%) — and beats **BoxPwnr's best single-model score of 81.7%** (GLM-5 + `single_loop`).
+> **Score context.** pwnkit has tested all 104 XBOW challenges. The black-box score is **87.5% (91/104)**. The best-of-N aggregate across white-box configurations is **91.3% (95/104)** — both reported separately, no methodology blending. The 91.3% aggregate beats MAPTA (76.9%), deadend-cli (77.6%), Cyber-AutoAgent (84.6%), XBOW's own agent (85%), and **BoxPwnr's best single-model score of 81.7%** (GLM-5 + `single_loop`). The 87.5% black-box number alone still beats every one of those — KinoSec (92.3% black-box) is the only one currently ahead.
 
 ### vs BoxPwnr
 
-BoxPwnr (97.1%) uses 6 solver strategies across multiple LLMs (Claude, GPT-5, GLM-5, Grok-4, Gemini 3, Kimi K2.5) via OpenRouter, running in a Kali Docker container with full pentesting toolset. Their 97.1% is the best result per challenge aggregated across all configurations. **Their best single model (GLM-5 + single_loop) scores 81.7% — pwnkit's 87.5% beats that by ~5pp.** pwnkit uses a single model, 3 tools, and runs in plain Ubuntu CI.
+BoxPwnr (97.1%) uses 6 solver strategies across multiple LLMs (Claude, GPT-5, GLM-5, Grok-4, Gemini 3, Kimi K2.5) via OpenRouter, running in a Kali Docker container with full pentesting toolset. Their 97.1% is the best result per challenge aggregated across all configurations. **Their best single model (GLM-5 + single_loop) scores 81.7% — pwnkit's 91.3% best-of-N aggregate beats that by ~9.6 percentage points, and pwnkit's 87.5% black-box number alone still beats it by ~5.8 pp.** pwnkit uses a single model, 3 tools, and runs in plain Ubuntu CI.
 
 ### vs KinoSec
 

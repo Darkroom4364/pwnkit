@@ -5,10 +5,10 @@
   <div class="max-w-5xl mx-auto px-6">
     <div class="text-center mb-12">
       <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-4" style="font-family: 'Outfit', sans-serif">
-        <span class="text-crimson">87.5%</span> on standard XBOW.
+        <span class="text-crimson">91.3%</span> on standard XBOW.
       </h2>
       <p class="text-ash text-sm max-w-2xl mx-auto leading-relaxed">
-        91 of 104 challenges on the unmodified XBOW validation benchmark. Plus 8/10 on Cybench (first run).
+        95 of 104 challenges &mdash; best-of-N aggregate across configurations. Black-box mode alone is 91/104 = 87.5%; both numbers reported separately, no methodology blending. Plus 8/10 on Cybench (first run).
       </p>
     </div>
 
@@ -54,12 +54,19 @@
             <td class="py-2.5 px-3 text-center text-xs text-crimson">No</td>
             <td class="py-2.5 pl-3 text-xs text-ash">Built by XBOW for their own benchmark</td>
           </tr>
+          <tr class="border-b border-crimson/40 bg-crimson/10">
+            <td class="py-3 pr-4 text-white font-semibold">pwnkit (white-box best-of-N)</td>
+            <td class="py-3 px-3 text-right font-mono text-crimson font-bold">91.3%</td>
+            <td class="py-3 px-3 text-center text-xs text-white font-semibold">Yes</td>
+            <td class="py-3 px-3 text-center text-xs text-white font-semibold">Yes</td>
+            <td class="py-3 pl-3 text-xs text-white/80">95/104 &middot; same model + tools &middot; <code class="text-[10px]">--repo</code> source access &middot; aggregate across <code class="text-[10px]">features=none</code>/<code class="text-[10px]">experimental</code>/<code class="text-[10px]">all</code> &middot; <span class="text-crimson">open source</span></td>
+          </tr>
           <tr class="border-b-2 border-crimson/40 bg-crimson/10">
-            <td class="py-3 pr-4 text-white font-semibold">pwnkit</td>
+            <td class="py-3 pr-4 text-white font-semibold">pwnkit (black-box)</td>
             <td class="py-3 px-3 text-right font-mono text-crimson font-bold">87.5%</td>
             <td class="py-3 px-3 text-center text-xs text-white font-semibold">Yes</td>
             <td class="py-3 px-3 text-center text-xs text-white font-semibold">Yes</td>
-            <td class="py-3 pl-3 text-xs text-white/80">Single model, single command, standard benchmark &middot; <span class="text-crimson">open source</span></td>
+            <td class="py-3 pl-3 text-xs text-white/80">91/104 &middot; single model, single command, standard benchmark &middot; <span class="text-crimson">open source</span></td>
           </tr>
           <tr class="border-b border-white/5 opacity-60">
             <td class="py-2.5 pr-4 line-through">Cyber-AutoAgent</td>

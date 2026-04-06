@@ -29,7 +29,7 @@ Head-to-head testing of gpt-5.4, Kimi K2.5, Qwen3 Coder, DeepSeek, GLM, and free
 
 ### [XBOW Analysis](/research/xbow-analysis/)
 
-Shannon gap analysis (why 96% vs our 87.5% aggregate), competitor verification, what moves the score, white-box vs black-box results, critical bugs found, and future benchmark targets (AutoPenBench, HarmBench, JailbreakBench).
+Shannon gap analysis (96% vs our 87.5% black-box / 91.3% white-box best-of-N aggregate), competitor verification, what moves the score, white-box vs black-box results, critical bugs found, and future benchmark targets (AutoPenBench, HarmBench, JailbreakBench).
 
 ### [Competitive Landscape](/research/competitive-landscape/)
 

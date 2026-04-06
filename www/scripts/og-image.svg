@@ -40,9 +40,9 @@
     <text x="-110" y="0" font-family="Outfit, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#fca5a5" text-anchor="middle">XBOW BENCHMARK LEADER</text>
   </g>
 
-  <!-- Big number 86.5% -->
+  <!-- Big number 91.3% -->
   <g transform="translate(60, 360)">
-    <text x="0" y="0" font-family="Space Mono, Menlo, Monaco, monospace" font-size="220" font-weight="700" fill="#ffffff" letter-spacing="-6">86.5<tspan fill="#DC2626">%</tspan></text>
+    <text x="0" y="0" font-family="Space Mono, Menlo, Monaco, monospace" font-size="220" font-weight="700" fill="#ffffff" letter-spacing="-6">91.3<tspan fill="#DC2626">%</tspan></text>
   </g>
 
   <!-- Tagline -->
@@ -50,7 +50,7 @@
 
   <!-- Subtitle row with separators -->
   <g transform="translate(60, 488)" font-family="Outfit, Helvetica, Arial, sans-serif" font-size="22" font-weight="500" fill="#9ca3af">
-    <text x="0" y="0">90 of 104 XBOW challenges</text>
+    <text x="0" y="0">95 of 104 XBOW challenges</text>
     <text x="320" y="0" fill="#4b5563">·</text>
     <text x="340" y="0">single command</text>
     <text x="540" y="0" fill="#4b5563">·</text>

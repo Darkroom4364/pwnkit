@@ -87,15 +87,39 @@ function installPackage(
       stdio: "pipe",
     });
 
-    execFileSync(
-      "npm",
-      ["install", spec, "--ignore-scripts", "--no-audit", "--no-fund"],
-      {
-        cwd: tempDir,
-        timeout: 120_000,
-        stdio: "pipe",
-      },
-    );
+    try {
+      execFileSync(
+        "npm",
+        ["install", spec, "--ignore-scripts", "--no-audit", "--no-fund"],
+        {
+          cwd: tempDir,
+          timeout: 120_000,
+          stdio: "pipe",
+        },
+      );
+    } catch (firstErr) {
+      // Retry with --legacy-peer-deps when the first install fails
+      // with what looks like a peer-dependency conflict. Modern npm
+      // (v7+) is strict about peer deps and rejects packages like
+      // nuxt that would have installed cleanly under npm 6. The
+      // retry is harmless when the original error is something else
+      // (it will fail the same way).
+      const firstMsg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      const looksLikePeerDep =
+        /ERESOLVE|peer dep|peerDep|peer dependency/i.test(firstMsg);
+      if (!looksLikePeerDep) {
+        throw firstErr;
+      }
+      execFileSync(
+        "npm",
+        ["install", spec, "--ignore-scripts", "--no-audit", "--no-fund", "--legacy-peer-deps"],
+        {
+          cwd: tempDir,
+          timeout: 120_000,
+          stdio: "pipe",
+        },
+      );
+    }
   } catch (err) {
     rmSync(tempDir, { recursive: true, force: true });
     const msg = err instanceof Error ? err.message : String(err);

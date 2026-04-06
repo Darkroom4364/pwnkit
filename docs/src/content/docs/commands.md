@@ -32,6 +32,9 @@ npx pwnkit-cli scan --target https://example.com --mode web --race
 # Evidence-Gated Attack Tree Search (EGATS)
 npx pwnkit-cli scan --target https://example.com --mode web --egats
 
+# Abort cleanly if the scan exceeds a USD ceiling
+npx pwnkit-cli scan --target https://example.com --mode web --cost-ceiling 5
+
 # Export findings to GitHub Issues
 npx pwnkit-cli scan --target https://example.com --mode web \
   --export github:myorg/myrepo
@@ -59,6 +62,7 @@ npx pwnkit-cli scan --target https://example.com --mode web \
 | `--export <target>` | Export findings to an issue tracker, e.g. `github:owner/repo` | (none) |
 | `--race` | Best-of-N: run 5 attack strategies in parallel, first-to-succeed wins | `false` |
 | `--egats` | Evidence-Gated Attack Tree Search (beam search over hypothesis tree) | `false` |
+| `--cost-ceiling <usd>` | Hard USD ceiling; aborts cleanly with partial findings preserved if exceeded | (none) |
 | `--db-path <path>` | Path to SQLite database | `~/.pwnkit/pwnkit.db` |
 | `--verbose` | Show animated attack replay and detailed agent reasoning | `false` |
 | `--replay` | Replay the last scan's results without re-running | `false` |
@@ -100,6 +104,22 @@ With `--race`, pwnkit spawns 5 attack strategies in parallel against the same ta
 
 EGATS performs a beam search over a tree of attack hypotheses, pruning branches that fail evidence checks. Slower than `--race` but much more thorough.
 
+### `--cost-ceiling` — hard spend guardrail
+
+Set a hard per-scan USD ceiling:
+
+```bash
+npx pwnkit-cli scan --target https://example.com --mode web --cost-ceiling 5
+```
+
+If cumulative estimated spend exceeds the ceiling, pwnkit:
+
+- preserves findings collected so far
+- exits with status code `4`
+- emits `exit_reason: "cost_ceiling_exceeded"` in the machine-readable result line
+
+The CLI flag overrides `PWNKIT_COST_CEILING_USD`.
+
 ### `--export github:owner/repo`
 
 Pushes every confirmed finding to a GitHub repo as an issue, with severity labels, evidence blocks, and reproduction steps. Requires `GITHUB_TOKEN` in the environment with `repo` scope.
@@ -128,6 +148,7 @@ The package is installed in a sandbox, scanned with semgrep, and then reviewed b
 | `--timeout <ms>` | AI agent timeout in milliseconds | `600000` |
 | `--api-key <key>` | API key for the LLM provider | (from env) |
 | `--model <model>` | Specific LLM model to use | provider default |
+| `--cost-ceiling <usd>` | Hard USD ceiling; aborts cleanly with partial findings preserved if exceeded | (none) |
 | `--db-path <path>` | Path to SQLite database | `~/.pwnkit/pwnkit.db` |
 | `--verbose` | Detailed agent output | `false` |
 
@@ -159,6 +180,7 @@ npx pwnkit-cli review ./my-repo --diff-base origin/main --changed-only
 | `--timeout <ms>` | AI agent timeout in milliseconds | `600000` |
 | `--api-key <key>` | API key for LLM provider | (from env) |
 | `--model <model>` | Specific LLM model to use | provider default |
+| `--cost-ceiling <usd>` | Hard USD ceiling; aborts cleanly with partial findings preserved if exceeded | (none) |
 | `--db-path <path>` | Path to SQLite database | `~/.pwnkit/pwnkit.db` |
 | `--verbose` | Detailed agent output | `false` |
 

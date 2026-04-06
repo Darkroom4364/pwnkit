@@ -33,6 +33,7 @@ For deep dives, follow the linked pages.
 | `--export <target>` | Export findings to an issue tracker, e.g. `github:owner/repo` |
 | `--race` | Best-of-N strategy racing — run multiple attack strategies in parallel |
 | `--egats` | Enable Evidence-Gated Attack Tree Search (beam search over hypotheses) |
+| `--cost-ceiling <usd>` | Hard USD ceiling — abort cleanly with partial findings preserved if exceeded |
 | `--verbose` | Animated attack replay |
 | `--replay` | Re-render the last scan's results from the local DB |
 
@@ -103,6 +104,7 @@ order.
 |---------|----------------|-------------|
 | Shell executor | default | Host `bash` with `curl`, `python3`, and standard tooling |
 | Kali Docker executor | `PWNKIT_FEATURE_DOCKER_EXECUTOR=1` | Runs bash inside a Kali container with the full pentesting toolset |
+| Cloud sink | `PWNKIT_CLOUD_SINK` + `PWNKIT_CLOUD_SCAN_ID` | Streams findings/final report to a remote orchestrator endpoint |
 | PTY sessions | `PWNKIT_FEATURE_PTY_SESSION=1` | Long-lived interactive sessions (reverse shells, DB clients, SSH) |
 | Playwright browser | auto in `web` mode | Real-browser verification for XSS, cracked XBEN-011 & XBEN-018 |
 | Web search | `PWNKIT_FEATURE_WEB_SEARCH=1` | Lets the agent look up CVE details and technique references |
@@ -116,6 +118,9 @@ order.
 | `md` / `markdown` | Human-readable Markdown |
 | `html` | HTML report |
 | `sarif` | SARIF 2.1 — drops into GitHub's Security tab |
+
+You can also ask the CLI to emit a final machine-readable `PWNKIT_RESULT=...`
+line with `PWNKIT_EMIT_RESULT_LINE=1` for wrappers and orchestration layers.
 
 ## False-positive reduction moat
 

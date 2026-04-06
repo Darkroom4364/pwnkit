@@ -85,6 +85,7 @@ npm i -g pwnkit-cli
 - `audit` installs and inspects npm packages with `npm audit`, semgrep, and AI review.
 - `review` performs deep source-code security review on a local repo or Git URL.
 - `triage-data` turns benchmark runs and verified findings into labeled JSONL for triage-model training.
+- `cloud-sink` can stream findings and final reports to an orchestrator with `PWNKIT_CLOUD_SINK` + `PWNKIT_CLOUD_SCAN_ID`.
 - `dashboard`, `history`, `findings`, and `triage` provide local persistence and review workflows.
 
 ## Why It’s Different

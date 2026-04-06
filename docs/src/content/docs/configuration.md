@@ -145,6 +145,7 @@ pwnkit ships a set of agent-improvement features behind environment-variable fla
 | `PWNKIT_FEATURE_PROGRESS_HANDOFF` | off | Injects prior-attempt findings when retrying, so retries don't restart from zero. |
 | `PWNKIT_FEATURE_WEB_SEARCH` | off | Lets the agent search the web for CVE details, vendor docs, and technique references. |
 | `PWNKIT_FEATURE_DOCKER_EXECUTOR` | off | Runs every bash command inside a Kali Linux container with the full pentesting toolchain. |
+| `PWNKIT_FEATURE_CLOUD_SINK` | on | Allows opt-in streaming of findings/final reports to a remote scan sink when the cloud env vars are set. |
 | `PWNKIT_FEATURE_PTY_SESSION` | off | Interactive PTY sessions for exploits requiring interactivity (reverse shells, DB clients, SSH). |
 | `PWNKIT_FEATURE_EGATS` | off | Evidence-Gated Attack Tree Search — beam search over a hypothesis tree. Also toggled by `--egats`. |
 | `PWNKIT_FEATURE_CONSENSUS_VERIFY` | off | Self-consistency voting: runs the verify pipeline N times and takes the majority vote. |
@@ -170,6 +171,65 @@ Bootstrap rules:
 - `kalilinux/kali-rolling` -> bootstrap tools on first start
 - `PWNKIT_DOCKER_BOOTSTRAP_TOOLS=1` -> always bootstrap
 - `PWNKIT_DOCKER_BOOTSTRAP_TOOLS=0` -> never bootstrap
+
+### Cost ceiling
+
+You can bound API spend per scan, audit, or review:
+
+```bash
+export PWNKIT_COST_CEILING_USD=5
+npx pwnkit-cli scan --target https://example.com --mode web
+```
+
+Or override it per command:
+
+```bash
+npx pwnkit-cli audit lodash --cost-ceiling 2
+npx pwnkit-cli review ./my-repo --cost-ceiling 10
+```
+
+If the ceiling is exceeded, pwnkit preserves partial findings and exits with code `4`.
+
+### Cloud sink
+
+If you want to stream findings and the final report to an orchestration layer:
+
+```bash
+export PWNKIT_CLOUD_SINK=https://api.example.com
+export PWNKIT_CLOUD_SCAN_ID=scan_123
+export PWNKIT_CLOUD_TOKEN=secret-token
+```
+
+When set, pwnkit posts:
+
+- each finding as `{ "finding": ... }`
+- the final report as `{ "report": ..., "final": true }`
+
+to:
+
+```text
+${PWNKIT_CLOUD_SINK}/scans/${PWNKIT_CLOUD_SCAN_ID}/findings
+```
+
+Set `PWNKIT_FEATURE_CLOUD_SINK=0` to disable this behavior even when the env vars are present.
+
+### Machine-readable result line
+
+Set:
+
+```bash
+export PWNKIT_EMIT_RESULT_LINE=1
+```
+
+to make the CLI print one final `PWNKIT_RESULT=...` JSON line summarizing:
+
+- success/failure
+- exit code and exit reason
+- target type
+- finding counts
+- estimated cost and token usage when available
+
+This is useful for wrappers, CI parsers, and the cloud orchestration path.
 
 ### Example: maximum-accuracy pentest
 

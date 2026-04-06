@@ -14,7 +14,8 @@
 import { execSync, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const KALI_IMAGE = "kalilinux/kali-rolling";
+const PREBUILT_IMAGE = "ghcr.io/peaktwilight/pwnkit:latest";
+const LEGACY_KALI_IMAGE = "kalilinux/kali-rolling";
 const CONTAINER_PREFIX = "pwnkit-kali";
 
 /** Packages to install inside the Kali container on first boot. */
@@ -51,9 +52,11 @@ export class DockerExecutor {
   private containerName: string;
   private ready = false;
   private targetEnv: string = "";
+  private image: string;
 
   private constructor() {
     this.containerName = `${CONTAINER_PREFIX}-${randomUUID().slice(0, 8)}`;
+    this.image = process.env.PWNKIT_DOCKER_IMAGE || PREBUILT_IMAGE;
   }
 
   /** Singleton — one container per process. */
@@ -84,12 +87,12 @@ export class DockerExecutor {
 
     // Pull image if not present (best-effort, may already be cached)
     try {
-      execSync(`docker image inspect ${KALI_IMAGE} > /dev/null 2>&1`, {
+      execSync(`docker image inspect ${this.image} > /dev/null 2>&1`, {
         timeout: 5_000,
       });
     } catch {
       // Image not found locally — pull it
-      execSync(`docker pull ${KALI_IMAGE}`, {
+      execSync(`docker pull ${this.image}`, {
         timeout: 300_000, // 5 min for pull
         stdio: "pipe",
       });
@@ -111,8 +114,9 @@ export class DockerExecutor {
       "/tmp/pwnkit-shared:/shared",
       "-e",
       `TARGET=${this.targetEnv}`,
-      KALI_IMAGE,
+      "--entrypoint",
       "sleep",
+      this.image,
       "infinity",
     ];
 
@@ -124,9 +128,12 @@ export class DockerExecutor {
 
     this.containerId = id;
 
-    // Install pentest tools
-    const installCmd = `apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ${PENTEST_PACKAGES.join(" ")}`;
-    this.dockerExecSync(installCmd, 600_000); // 10 min for install
+    // The GHCR image is pre-baked with the standard toolchain.
+    // Keep the legacy Kali bootstrap path for raw-image fallback.
+    if (this.shouldBootstrapTools()) {
+      const installCmd = `apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ${PENTEST_PACKAGES.join(" ")}`;
+      this.dockerExecSync(installCmd, 600_000); // 10 min for install
+    }
 
     this.ready = true;
   }
@@ -234,6 +241,12 @@ export class DockerExecutor {
         "Docker is not available. Install Docker and ensure the daemon is running to use --docker mode.",
       );
     }
+  }
+
+  private shouldBootstrapTools(): boolean {
+    if (process.env.PWNKIT_DOCKER_BOOTSTRAP_TOOLS === "1") return true;
+    if (process.env.PWNKIT_DOCKER_BOOTSTRAP_TOOLS === "0") return false;
+    return this.image === LEGACY_KALI_IMAGE;
   }
 }
 

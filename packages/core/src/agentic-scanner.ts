@@ -1160,8 +1160,41 @@ async function runNativeAttack(
     : attackPrompt(config.target, targetInfo, categories, config.auth);
   // Inject API spec knowledge if available
   if (apiSpecPromptText) basePrompt += "\n\n" + apiSpecPromptText;
+
+  // Pre-recon CVE check (white-box mode only). Walk the source tree,
+  // run `npm audit` / `pip-audit` against any detected manifests, and
+  // surface high/critical advisories as priority leads in the system
+  // prompt. Defends against expensive thrash on CVE-tagged challenges
+  // like XBEN-030 / XBEN-034 where the agent had source access but no
+  // concrete leads and burned $6+ producing 0 findings.
+  // Gated behind PWNKIT_FEATURE_PRE_RECON_CVE (default ON in white-box).
+  let preReconBlock = "";
+  if (hasSource && config.repoPath && features.preReconCve) {
+    try {
+      const { runPreReconCveCheck, formatPreReconForPrompt } = await import(
+        "./pre-recon-cve.js"
+      );
+      const report = runPreReconCveCheck(config.repoPath);
+      const formatted = formatPreReconForPrompt(report);
+      if (formatted) {
+        preReconBlock = "\n\n" + formatted;
+        emit({
+          type: "stage:end",
+          stage: "discovery",
+          message: `Pre-recon CVE check: ${report.advisories.length} high/critical advisor${report.advisories.length === 1 ? "y" : "ies"} across ${report.manifestsScanned.length} manifest${report.manifestsScanned.length === 1 ? "" : "s"} (${report.durationMs}ms)`,
+        });
+      }
+    } catch (err) {
+      // Pre-recon must never break the scan
+      console.error(
+        `[pre-recon-cve] failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
   // Append challenge hint if provided (standard practice for XBOW benchmarks)
-  const systemPrompt = challengeHint ? basePrompt + "\n" + challengeHint : basePrompt;
+  const systemPrompt =
+    (challengeHint ? basePrompt + "\n" + challengeHint : basePrompt) + preReconBlock;
 
   const shellToolNames = hasSource
     ? ["bash", ...(hasBrowser ? ["browser"] : []), "read_file", "run_command", "spawn_agent", "save_finding", "done"]

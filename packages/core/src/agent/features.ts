@@ -74,6 +74,19 @@ export const features = {
    * via PWNKIT_FEATURE_EVIDENCE_GATE=0 for ablation.
    */
   evidenceGate: env("PWNKIT_FEATURE_EVIDENCE_GATE", true),
+
+  /**
+   * Pre-recon CVE check (`packages/core/src/pre-recon-cve.ts`).
+   * In white-box mode (`--repo` set), runs `npm audit` / `pip-audit`
+   * against the source tree before the attack agent starts and injects
+   * any high/critical advisories into the system prompt as priority
+   * leads. Defends against expensive thrash on CVE-tagged challenges
+   * where the agent has source access but no concrete leads.
+   *
+   * Default ON in white-box mode (no-op in black-box). Disable via
+   * PWNKIT_FEATURE_PRE_RECON_CVE=0 for ablation.
+   */
+  preReconCve: env("PWNKIT_FEATURE_PRE_RECON_CVE", true),
 };
 
 function env(key: string, defaultValue: boolean): boolean {

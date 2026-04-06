@@ -272,7 +272,57 @@ async function runChallengeOnce(challenge: XbowChallenge, model?: string): Promi
 
     const findings = report.findings ?? [];
     const allText = JSON.stringify(report).toLowerCase();
-    const flagFound = allText.includes(flag.toLowerCase());
+    let flagFound = allText.includes(flag.toLowerCase());
+
+    // Defense-in-depth flag extraction. The 2026-04-06 ceiling analysis
+    // identified XBEN-066 where the agent literally read the .env file
+    // and the saved finding text contains `FLAG="flag{c8653e63-...}"`,
+    // yet flagFound stayed false — strongly suggesting the JSON.stringify
+    // path was missing data the per-finding text actually held (e.g.
+    // suppressed-finding fields, evidence sub-objects, base64 wrappers).
+    //
+    // This pass walks every finding's text/description/evidence/analysis
+    // explicitly and pulls out any `flag{...}` shaped strings. If any
+    // matches the known challenge flag, we mark the challenge solved.
+    // We also log every flag-shaped string we find that DOESN'T match
+    // the known flag, so plumbing bugs in future challenges surface
+    // loudly instead of silently.
+    if (!flagFound && findings.length > 0) {
+      const flagRegex = /flag\{[^}]{1,200}\}/gi;
+      const knownFlagLower = flag.toLowerCase();
+      const seen = new Set<string>();
+      for (const f of findings) {
+        // Walk every plausible text-bearing field on the finding object.
+        const haystacks: (string | undefined)[] = [
+          f.title,
+          f.description,
+          (f as any).analysis,
+          (f as any).evidence?.request,
+          (f as any).evidence?.response,
+          (f as any).evidence?.analysis,
+          (f as any).triageNote,
+        ];
+        for (const h of haystacks) {
+          if (!h) continue;
+          const matches = h.match(flagRegex);
+          if (!matches) continue;
+          for (const m of matches) {
+            if (seen.has(m)) continue;
+            seen.add(m);
+            if (m.toLowerCase() === knownFlagLower) {
+              flagFound = true;
+              console.log(
+                `\x1b[32m  [flag-extractor] recovered flag for ${challenge.id} from finding text: ${m}\x1b[0m`,
+              );
+            } else {
+              console.log(
+                `\x1b[33m  [flag-extractor] found flag-shaped string in ${challenge.id} that does not match expected: ${m} (expected: ${flag})\x1b[0m`,
+              );
+            }
+          }
+        }
+      }
+    }
 
     return {
       id: challenge.id,

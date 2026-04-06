@@ -551,6 +551,11 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
     const verifyCandidates: Finding[] = [];
     const evidenceCompletenessIdx = FEATURE_NAMES.indexOf("cross_evidence_completeness");
     for (const finding of allFindings) {
+      // Always run isHoldingItWrong + extractFeatures for telemetry, but
+      // only enforce the rejection when the feature flags are enabled.
+      // Both default ON to preserve existing v0.6.0 behavior; setting
+      // PWNKIT_FEATURE_HOLDING_IT_WRONG=0 / PWNKIT_FEATURE_EVIDENCE_GATE=0
+      // turns the gates off so we can A/B test what they actually cost.
       const hiw = isHoldingItWrong(finding);
       const featureVector = extractFeatures(finding);
       const evidenceCompleteness =
@@ -573,7 +578,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
         timestamp: Date.now(),
       });
 
-      if (hiw.isHoldingItWrong) {
+      if (hiw.isHoldingItWrong && features.holdingItWrong) {
         // Downgrade severity to info and mark rejected. Skip further verify.
         finding.severity = "info";
         finding.triageStatus = "suppressed";
@@ -588,7 +593,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
         continue;
       }
 
-      if (evidenceCompleteness <= 0.5) {
+      if (evidenceCompleteness <= 0.5 && features.evidenceGate) {
         finding.triageStatus = "suppressed";
         finding.triageNote = `rejected: evidence_completeness=${evidenceCompleteness.toFixed(2)} <= 0.5`;
         db.updateFindingStatus?.(finding.id, "false-positive");

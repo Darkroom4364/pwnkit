@@ -108,7 +108,28 @@ jobs:
 
       - name: Configure feature flags
         run: |
-          FEATURES="${{ inputs.features || 'all' }}"
+          # Profiles:
+          #   none          → all flags forced off (true baseline; both
+          #                   "stable" features and the always-on triage
+          #                   filters are disabled)
+          #   default       → no env vars; uses features.ts defaults
+          #                   (stable ON, experimental OFF, moat OFF)
+          #   experimental  → "default" + the 4 experimental flags ON
+          #   moat          → "default" + every v0.6.0 FP-moat layer
+          #                   ON (povGate, reachabilityGate, multiModal,
+          #                   adversarialDebate, triageMemories,
+          #                   egatsTreeSearch, selfConsistencyVerify)
+          #   moat-only     → "none" + ONLY the moat layers ON.
+          #                   This is the right profile for "does the
+          #                   moat help?" because it isolates the moat
+          #                   layers from the stable improvements.
+          #   no-triage     → "default" but the always-on triage gates
+          #                   (holding-it-wrong + evidence_completeness)
+          #                   forced OFF. Used to identify which always-on
+          #                   filter is suppressing real signal.
+          #   all           → DEPRECATED alias for "default"; kept for
+          #                   compat with prior dispatches. Logs a warning.
+          FEATURES="${{ inputs.features || 'default' }}"
           if [ "$FEATURES" = "none" ]; then
             echo "PWNKIT_FEATURE_EARLY_STOP=0" >> "$GITHUB_ENV"
             echo "PWNKIT_FEATURE_LOOP_DETECTION=0" >> "$GITHUB_ENV"
@@ -116,15 +137,48 @@ jobs:
             echo "PWNKIT_FEATURE_SCRIPT_TEMPLATES=0" >> "$GITHUB_ENV"
             echo "PWNKIT_FEATURE_DYNAMIC_PLAYBOOKS=0" >> "$GITHUB_ENV"
             echo "PWNKIT_FEATURE_EXTERNAL_MEMORY=0" >> "$GITHUB_ENV"
-            echo "Running with ALL features DISABLED (baseline)"
-          elif [ "$FEATURES" = "all" ]; then
-            echo "Running with default features (stable improvements ON, experimental OFF)"
+            echo "PWNKIT_FEATURE_HOLDING_IT_WRONG=0" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_EVIDENCE_GATE=0" >> "$GITHUB_ENV"
+            echo "Running with ALL features DISABLED (true baseline, no triage gates)"
+          elif [ "$FEATURES" = "default" ] || [ "$FEATURES" = "all" ]; then
+            if [ "$FEATURES" = "all" ]; then
+              echo "::warning::'features=all' is deprecated; use 'default' or 'moat'. Running with features.ts defaults."
+            fi
+            echo "Running with features.ts defaults (stable ON, experimental OFF, moat OFF)"
           elif [ "$FEATURES" = "experimental" ]; then
             echo "PWNKIT_FEATURE_DYNAMIC_PLAYBOOKS=1" >> "$GITHUB_ENV"
             echo "PWNKIT_FEATURE_EXTERNAL_MEMORY=1" >> "$GITHUB_ENV"
             echo "PWNKIT_FEATURE_PROGRESS_HANDOFF=1" >> "$GITHUB_ENV"
             echo "PWNKIT_FEATURE_WEB_SEARCH=1" >> "$GITHUB_ENV"
-            echo "Running with ALL features including experimental"
+            echo "Running with default + experimental features"
+          elif [ "$FEATURES" = "moat" ]; then
+            echo "PWNKIT_FEATURE_POV_GATE=1" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_REACHABILITY_GATE=1" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_MULTIMODAL=1" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_DEBATE=1" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_TRIAGE_MEMORIES=1" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_EGATS=1" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_CONSENSUS_VERIFY=1" >> "$GITHUB_ENV"
+            echo "Running with default features + ALL v0.6.0 FP moat layers ON"
+          elif [ "$FEATURES" = "moat-only" ]; then
+            # Stable features OFF (matches "none")
+            echo "PWNKIT_FEATURE_EARLY_STOP=0" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_LOOP_DETECTION=0" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_CONTEXT_COMPACTION=0" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_SCRIPT_TEMPLATES=0" >> "$GITHUB_ENV"
+            # Moat layers ON
+            echo "PWNKIT_FEATURE_POV_GATE=1" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_REACHABILITY_GATE=1" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_MULTIMODAL=1" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_DEBATE=1" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_TRIAGE_MEMORIES=1" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_EGATS=1" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_CONSENSUS_VERIFY=1" >> "$GITHUB_ENV"
+            echo "Running with ONLY the v0.6.0 FP moat layers (isolation test)"
+          elif [ "$FEATURES" = "no-triage" ]; then
+            echo "PWNKIT_FEATURE_HOLDING_IT_WRONG=0" >> "$GITHUB_ENV"
+            echo "PWNKIT_FEATURE_EVIDENCE_GATE=0" >> "$GITHUB_ENV"
+            echo "Running with default features but always-on triage gates DISABLED"
           else
             for f in $(echo "$FEATURES" | tr ',' ' '); do
               case "$f" in
@@ -132,6 +186,15 @@ jobs:
                 memory) echo "PWNKIT_FEATURE_EXTERNAL_MEMORY=1" >> "$GITHUB_ENV" ;;
                 web_search) echo "PWNKIT_FEATURE_WEB_SEARCH=1" >> "$GITHUB_ENV" ;;
                 handoff) echo "PWNKIT_FEATURE_PROGRESS_HANDOFF=1" >> "$GITHUB_ENV" ;;
+                pov) echo "PWNKIT_FEATURE_POV_GATE=1" >> "$GITHUB_ENV" ;;
+                reachability) echo "PWNKIT_FEATURE_REACHABILITY_GATE=1" >> "$GITHUB_ENV" ;;
+                multimodal) echo "PWNKIT_FEATURE_MULTIMODAL=1" >> "$GITHUB_ENV" ;;
+                debate) echo "PWNKIT_FEATURE_DEBATE=1" >> "$GITHUB_ENV" ;;
+                memories) echo "PWNKIT_FEATURE_TRIAGE_MEMORIES=1" >> "$GITHUB_ENV" ;;
+                egats) echo "PWNKIT_FEATURE_EGATS=1" >> "$GITHUB_ENV" ;;
+                consensus) echo "PWNKIT_FEATURE_CONSENSUS_VERIFY=1" >> "$GITHUB_ENV" ;;
+                no-hiw) echo "PWNKIT_FEATURE_HOLDING_IT_WRONG=0" >> "$GITHUB_ENV" ;;
+                no-evidence) echo "PWNKIT_FEATURE_EVIDENCE_GATE=0" >> "$GITHUB_ENV" ;;
               esac
             done
             echo "Running with features: $FEATURES"

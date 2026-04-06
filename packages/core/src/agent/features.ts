@@ -1,7 +1,18 @@
 /**
  * Feature flags for A/B testing agent improvements.
  * Set via environment variables: PWNKIT_FEATURE_<NAME>=0 to disable.
- * All features are ON by default.
+ *
+ * NOTE on defaults:
+ *   - "stable" features (early stop, loop detection, context compaction,
+ *     script templates) default ON.
+ *   - "experimental" features (playbooks, memory, handoff, web search) default OFF.
+ *   - "v0.6.0 FP moat layers" (povGate, reachabilityGate, multiModal,
+ *     adversarialDebate, triageMemories, egatsTreeSearch,
+ *     selfConsistencyVerify) ALSO default OFF — they need explicit enablement
+ *     in CI before any FP-moat A/B claim can be made.
+ *   - "always-on triage filters" (`holdingItWrong`, `evidenceGate`) default
+ *     ON — they're the only filters that ran in every v0.6.0 ablation, so
+ *     they need to be ablatable.
  */
 export const features = {
   /** Early-stop at 50% budget if no findings, retry with different strategy */
@@ -38,6 +49,31 @@ export const features = {
   povGate: env("PWNKIT_FEATURE_POV_GATE", false),
   /** Semgrep-style per-target persistent FP memories injected into the verify pipeline */
   triageMemories: env("PWNKIT_FEATURE_TRIAGE_MEMORIES", false),
+
+  // ── Always-on triage filters (default ON, ablatable for A/B testing) ──
+
+  /**
+   * `holding-it-wrong` regex blocklist (`packages/core/src/triage/holding-it-wrong.ts`).
+   * Matches finding text against documented I/O / eval / compile / persistence
+   * sink names and rejects findings that look like "the function did its job".
+   *
+   * Default ON because that's the existing v0.6.0 behavior. Can be disabled
+   * via PWNKIT_FEATURE_HOLDING_IT_WRONG=0 to test whether this filter is
+   * suppressing real signal — the ceiling-analysis from 2026-04-06 identified
+   * this as the strongest candidate for the unexplained XBOW finding-density
+   * collapse from 14 → 4 between `features=none` and `features=all`.
+   */
+  holdingItWrong: env("PWNKIT_FEATURE_HOLDING_IT_WRONG", true),
+
+  /**
+   * `evidence_completeness <= 0.5` reject (`packages/core/src/agentic-scanner.ts:591`).
+   * Drops findings whose extracted feature vector says the agent didn't
+   * gather enough cross-source evidence (request + response + analysis + ...).
+   *
+   * Default ON because that's the existing v0.6.0 behavior. Can be disabled
+   * via PWNKIT_FEATURE_EVIDENCE_GATE=0 for ablation.
+   */
+  evidenceGate: env("PWNKIT_FEATURE_EVIDENCE_GATE", true),
 };
 
 function env(key: string, defaultValue: boolean): boolean {

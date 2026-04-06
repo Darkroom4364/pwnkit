@@ -7,7 +7,7 @@ export function registerDoctorCommand(program: Command): void {
     .command("doctor")
     .description("Check local runtime prerequisites and suggest the next command")
     .action(async () => {
-      const { hasApiKey, availableRuntimes } = await getRuntimeAvailability();
+      const { hasApiKey, availableRuntimes, apiRuntime } = await getRuntimeAvailability();
       const nodeMajor = Number.parseInt(process.versions.node.split(".")[0] ?? "0", 10);
       const hasSupportedNode = nodeMajor >= 20;
 
@@ -15,12 +15,20 @@ export function registerDoctorCommand(program: Command): void {
       console.log(chalk.red.bold("  ◆ pwnkit") + chalk.gray(" doctor"));
       console.log("");
       console.log(`  Node.js       ${hasSupportedNode ? chalk.green("ok") : chalk.red("bad")}  ${process.version}`);
-      console.log(`  API keys      ${hasApiKey ? chalk.green("ok") : chalk.yellow("missing")}  ${hasApiKey ? "detected" : "not configured"}`);
+      const apiStatus = hasApiKey
+        ? `${chalk.green("ok")}  ${apiRuntime.providerLabel}`
+        : apiRuntime.configured
+          ? `${chalk.red("bad")}  ${apiRuntime.providerLabel}`
+          : `${chalk.yellow("missing")}  not configured`;
+      console.log(`  API runtime   ${apiStatus}`);
       console.log(`  CLI runtimes  ${availableRuntimes.length > 0 ? chalk.green("ok") : chalk.yellow("missing")}  ${availableRuntimes.join(", ") || "none"}`);
       console.log("");
 
       if (!hasSupportedNode) {
         console.log(chalk.red("  Upgrade to Node 20+ before running pwnkit."));
+      } else if (apiRuntime.configured && !apiRuntime.valid && apiRuntime.error) {
+        console.log(chalk.red("  API runtime is configured but unusable."));
+        console.log(chalk.gray(`  ${apiRuntime.error.split("\n").join("\n  ")}`));
       } else if (hasApiKey || availableRuntimes.length > 0) {
         console.log(chalk.green("  Ready to scan."));
         console.log(chalk.gray("  Try one of:"));

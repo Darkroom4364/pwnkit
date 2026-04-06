@@ -2,23 +2,35 @@ import { gzipSync } from "zlib";
 import chalk from "chalk";
 import type { ScanReport, AuditReport, ReviewReport, ScanDepth, RuntimeMode } from "@pwnkit/shared";
 
+export interface ApiRuntimeAvailability {
+  configured: boolean;
+  valid: boolean;
+  providerLabel: string;
+  error?: string;
+}
+
 export interface RuntimeAvailability {
   hasApiKey: boolean;
   availableRuntimes: string[];
+  apiRuntime: ApiRuntimeAvailability;
 }
 
 export async function getRuntimeAvailability(): Promise<RuntimeAvailability> {
-  const hasApiKey = !!(
-    process.env.OPENROUTER_API_KEY ||
-    process.env.ANTHROPIC_API_KEY ||
-    process.env.AZURE_OPENAI_API_KEY ||
-    process.env.OPENAI_API_KEY
-  );
-
-  const { detectAvailableRuntimes } = await import("@pwnkit/core");
+  const { detectAvailableRuntimes, LlmApiRuntime } = await import("@pwnkit/core");
+  const apiRuntimeDiagnostics = new LlmApiRuntime({ type: "api", timeout: 5_000 }).getConfigurationDiagnostics();
+  const hasApiKey = apiRuntimeDiagnostics.valid;
   const availableRuntimes = [...(await detectAvailableRuntimes())];
 
-  return { hasApiKey, availableRuntimes };
+  return {
+    hasApiKey,
+    availableRuntimes,
+    apiRuntime: {
+      configured: apiRuntimeDiagnostics.reason !== "missing_key",
+      valid: apiRuntimeDiagnostics.valid,
+      providerLabel: apiRuntimeDiagnostics.providerLabel,
+      error: apiRuntimeDiagnostics.fatalError,
+    },
+  };
 }
 
 /**
@@ -27,13 +39,20 @@ export async function getRuntimeAvailability(): Promise<RuntimeAvailability> {
  */
 export async function checkRuntimeAvailability(runtime: RuntimeMode): Promise<void> {
   const availability = await getRuntimeAvailability();
-  const { hasApiKey, availableRuntimes } = availability;
+  const { hasApiKey, availableRuntimes, apiRuntime } = availability;
 
   if (hasApiKey) return;
 
   console.log("");
+  if ((runtime === "api" || runtime === "auto") && apiRuntime.configured && apiRuntime.error) {
+    console.log(chalk.red(`  ${apiRuntime.providerLabel} config error: ${apiRuntime.error.split("\n")[0]}`));
+  }
   if (runtime === "api") {
-    console.log(chalk.yellow("  Warning: `--runtime api` needs an API key. AI analysis may be skipped."));
+    console.log(chalk.yellow(
+      apiRuntime.configured
+        ? "  Warning: `--runtime api` needs a valid provider configuration. AI analysis will fail until this is fixed."
+        : "  Warning: `--runtime api` needs an API key. AI analysis may be skipped.",
+    ));
   } else if (availableRuntimes.length > 0) {
     console.log(chalk.cyan(`  Using local runtime(s): ${availableRuntimes.join(", ")}`));
   } else {

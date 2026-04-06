@@ -57,6 +57,27 @@ describe("LlmApiRuntime provider detection", () => {
     expect(await rt.isAvailable()).toBe(false);
   });
 
+  it("reports Azure config as invalid when only the key is set", () => {
+    process.env.HOME = "/tmp/pwnkit-no-codex-config";
+    process.env.AZURE_OPENAI_API_KEY = "azure-key-123";
+    const rt = new LlmApiRuntime({ type: "api", timeout: 5000 });
+    const diagnostics = rt.getConfigurationDiagnostics();
+    expect(diagnostics.valid).toBe(false);
+    expect(diagnostics.reason).toBe("invalid_config");
+    expect(diagnostics.fatalError).toContain("AZURE_OPENAI_BASE_URL");
+    expect(diagnostics.fatalError).toContain("AZURE_OPENAI_MODEL");
+  });
+
+  it("accepts Azure config when base URL and model are provided via env", () => {
+    process.env.AZURE_OPENAI_API_KEY = "azure-key-123";
+    process.env.AZURE_OPENAI_BASE_URL = "https://example-resource.openai.azure.com/openai/v1";
+    process.env.AZURE_OPENAI_MODEL = "gpt-5-deployment";
+    const rt = new LlmApiRuntime({ type: "api", timeout: 5000 });
+    const diagnostics = rt.getConfigurationDiagnostics();
+    expect(diagnostics.valid).toBe(true);
+    expect(diagnostics.reason).toBeUndefined();
+  });
+
   it("detects provider from explicit config key prefix", () => {
     const rt1 = new LlmApiRuntime({ type: "api", timeout: 5000, apiKey: "sk-or-cfg" });
     expect((rt1 as any).provider).toBe("openrouter");
@@ -182,9 +203,9 @@ describe("LlmApiRuntime Responses API message format", () => {
     expect(input[1].role).toBe("user");
     expect(input[1].content[0].type).toBe("input_text");
 
-    // Assistant text should be flushed before function_call (output_text for assistant)
+    // Assistant history should be serialized as input_text when sent back in input
     expect(input[2].role).toBe("assistant");
-    expect(input[2].content[0].type).toBe("output_text");
+    expect(input[2].content[0].type).toBe("input_text");
     expect(input[2].content[0].text).toBe("I'll call a tool");
 
     // function_call should be a top-level item, NOT nested in content

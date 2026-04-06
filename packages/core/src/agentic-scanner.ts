@@ -2,6 +2,7 @@ import type { ScanConfig, ScanReport, Finding } from "@pwnkit/shared";
 import { loadTemplates } from "@pwnkit/templates";
 import { createRuntime } from "./runtime/index.js";
 import { LlmApiRuntime } from "./runtime/llm-api.js";
+import type { ApiRuntimeDiagnostics } from "./runtime/llm-api.js";
 import { detectAvailableRuntimes } from "./runtime/registry.js";
 // DB lazy-loaded to avoid native module issues
 import { runAgentLoop } from "./agent/loop.js";
@@ -48,6 +49,19 @@ export interface AgenticScanOptions {
   challengeHint?: string;
   /** Resume from a previous scan (uses persisted sessions) */
   resumeScanId?: string;
+}
+
+function assertApiRuntimeSelection(
+  requestedRuntime: ScanConfig["runtime"] | undefined,
+  diagnostics: ApiRuntimeDiagnostics,
+): void {
+  if (requestedRuntime === "api" && !diagnostics.valid) {
+    throw new Error(diagnostics.fatalError ?? `${diagnostics.providerLabel} runtime is not available.`);
+  }
+
+  if ((requestedRuntime === "auto" || requestedRuntime === undefined) && diagnostics.reason === "invalid_config") {
+    throw new Error(diagnostics.fatalError ?? `${diagnostics.providerLabel} runtime is misconfigured.`);
+  }
 }
 
 /**
@@ -176,7 +190,9 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
     model: config.model,
     apiKey: config.apiKey,
   });
-  const nativeApiAvailable = await nativeApiRuntime.isAvailable();
+  const nativeApiDiagnostics = nativeApiRuntime.getConfigurationDiagnostics();
+  assertApiRuntimeSelection(config.runtime, nativeApiDiagnostics);
+  const nativeApiAvailable = nativeApiDiagnostics.valid;
 
   let selectedRuntimeType: "api" | "claude" | "codex" | "gemini" = "api";
   let useNative = false;

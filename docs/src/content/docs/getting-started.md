@@ -30,7 +30,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-..."
 ```
 
-pwnkit checks for keys in this order: **OpenRouter > Anthropic > Azure OpenAI > OpenAI**. For Azure, you can also set `AZURE_OPENAI_BASE_URL`, `AZURE_OPENAI_MODEL`, and `AZURE_OPENAI_WIRE_API` for full control. If no API keys are set, the `api` runtime will not work, but you can still use `--runtime claude`, `--runtime codex`, or `--runtime gemini` if those CLIs are installed and authenticated.
+pwnkit checks for keys in this order: **OpenRouter > Anthropic > Azure OpenAI > OpenAI**. For Azure, pwnkit needs both a base URL and a deployment/model name in addition to the key. You can set `AZURE_OPENAI_BASE_URL`, `AZURE_OPENAI_MODEL`, and `AZURE_OPENAI_WIRE_API` explicitly, or let pwnkit reuse a valid Azure-backed `~/.codex/config.toml`. For the Responses API, the Azure base URL should include `/openai/v1`. If the selected API runtime is incomplete, pwnkit now stops with a configuration error instead of running a broken scan. If no API keys are set, the `api` runtime will not work, but you can still use `--runtime claude`, `--runtime codex`, or `--runtime gemini` if those CLIs are installed and authenticated.
 
 See [API Keys](/api-keys/) for full details on supported providers.
 

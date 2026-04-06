@@ -43,9 +43,11 @@ This README is the fast path. The detailed command reference, configuration, arc
 ### Docker
 
 ```bash
-docker run --rm -e AZURE_OPENAI_API_KEY=$KEY \
+docker run --rm -e OPENROUTER_API_KEY=$KEY \
   ghcr.io/peaktwilight/pwnkit:latest scan --target https://example.com
 ```
+
+If you use Azure OpenAI instead, also pass `AZURE_OPENAI_BASE_URL` and `AZURE_OPENAI_MODEL`. For the Responses API, the Azure base URL should include `/openai/v1`.
 
 The image ships with Node 20, Playwright/Chromium, and the standard pentest toolbox (sqlmap, nmap, nikto, gobuster, ffuf, hydra, john, …) preinstalled.
 

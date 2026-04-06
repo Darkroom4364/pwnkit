@@ -30,6 +30,8 @@ export OPENAI_API_KEY="sk-..."
 
 See [API Keys](/api-keys/) for the full priority order and provider details.
 
+If you use Azure, also set `AZURE_OPENAI_BASE_URL` and `AZURE_OPENAI_MODEL` unless pwnkit can read them from a valid Azure-backed `~/.codex/config.toml`. For the Responses API, the base URL should include `/openai/v1`. pwnkit fails fast on incomplete Azure config instead of attempting a scan with guessed defaults.
+
 ### CLI runtimes (claude, codex, gemini)
 
 These runtimes spawn the respective CLI tool as a subprocess. You must have the CLI installed and authenticated:

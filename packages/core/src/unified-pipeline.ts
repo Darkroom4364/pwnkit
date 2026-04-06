@@ -20,6 +20,8 @@ import { researchPrompt, blindVerifyPrompt } from "./agent/prompts.js";
 import { runSemgrepScan, bufferToString } from "./shared-analysis.js";
 import { detectAvailableRuntimes } from "./runtime/registry.js";
 import type { RuntimeType } from "./runtime/types.js";
+import { LlmApiRuntime } from "./runtime/llm-api.js";
+import type { ApiRuntimeDiagnostics } from "./runtime/llm-api.js";
 
 // ── Public types ──
 
@@ -498,6 +500,19 @@ function hasRequestedAnalysisRuntime(
   return hasApiKey || availableRuntimes.size > 0;
 }
 
+function assertApiRuntimeSelection(
+  preferredRuntime: RuntimeMode | undefined,
+  diagnostics: ApiRuntimeDiagnostics,
+): void {
+  if (preferredRuntime === "api" && !diagnostics.valid) {
+    throw new Error(diagnostics.fatalError ?? `${diagnostics.providerLabel} runtime is not available.`);
+  }
+
+  if ((preferredRuntime === "auto" || preferredRuntime === undefined) && diagnostics.reason === "invalid_config") {
+    throw new Error(diagnostics.fatalError ?? `${diagnostics.providerLabel} runtime is misconfigured.`);
+  }
+}
+
 // ── Main entry point ──
 
 /**
@@ -681,7 +696,15 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
 
     // ── PHASE 3: RESEARCH (single agent: discover + attack + PoC) ──
     // Check if AI analysis is available
-    const hasApiKey = !!(opts.apiKey || process.env.OPENROUTER_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.AZURE_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
+    const apiRuntime = new LlmApiRuntime({
+      type: "api",
+      timeout: opts.timeout ?? 120_000,
+      apiKey: opts.apiKey,
+      model: opts.model,
+    });
+    const apiDiagnostics = apiRuntime.getConfigurationDiagnostics();
+    assertApiRuntimeSelection(opts.runtime, apiDiagnostics);
+    const hasApiKey = apiDiagnostics.valid;
     const availableRuntimes = await detectAvailableRuntimes();
     const hasCliRuntime = availableRuntimes.size > 0;
     const canUseAiRuntime = hasRequestedAnalysisRuntime(
@@ -693,7 +716,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
 
     // Log pipeline decisions to stderr for CI visibility
     if (process.env.CI || process.env.PWNKIT_DEBUG) {
-      process.stderr.write(`[pwnkit] Research: apiKey=${hasApiKey}, runtimes=[${[...availableRuntimes].join(",")}], config=${opts.runtime ?? "auto"}\n`);
+      process.stderr.write(`[pwnkit] Research: apiKey=${hasApiKey}, apiReason=${apiDiagnostics.reason ?? "ok"}, runtimes=[${[...availableRuntimes].join(",")}], config=${opts.runtime ?? "auto"}\n`);
     }
 
     if (!canUseAiRuntime) {

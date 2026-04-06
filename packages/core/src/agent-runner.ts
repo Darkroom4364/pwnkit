@@ -226,6 +226,10 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Anal
       apiKey: config.apiKey,
       model: config.model,
     });
+    const apiDiagnostics = apiRuntime.getConfigurationDiagnostics();
+    if (!apiDiagnostics.valid) {
+      throw new Error(apiDiagnostics.fatalError ?? `${apiDiagnostics.providerLabel} runtime is not available.`);
+    }
 
     // Check if runtime supports native tool_use (multi-turn agentic loop)
     const supportsNative = typeof (apiRuntime as NativeRuntime).executeNative === "function";

@@ -30,6 +30,14 @@ const DEFAULT_OPENAI_MODEL = "gpt-4o";
 type ApiProvider = "openrouter" | "anthropic" | "openai" | "azure";
 type WireApi = "chat_completions" | "responses";
 
+export interface ApiRuntimeDiagnostics {
+  valid: boolean;
+  provider: ApiProvider;
+  providerLabel: string;
+  reason?: "missing_key" | "invalid_config";
+  fatalError?: string;
+}
+
 function parseCodexAzureConfig(): {
   baseUrl?: string;
   model?: string;
@@ -42,14 +50,16 @@ function parseCodexAzureConfig(): {
   try {
     const content = readFileSync(configPath, "utf8");
     const azureSectionMatch = content.match(/\[model_providers\.azure\]([\s\S]*?)(?:\n\[|$)/);
+    const activeProviderMatch = content.match(/^\s*model_provider\s*=\s*"([^"]+)"/m);
     const baseUrlMatch = azureSectionMatch?.[1]?.match(/base_url\s*=\s*"([^"]+)"/);
     const wireApiMatch = azureSectionMatch?.[1]?.match(/wire_api\s*=\s*"([^"]+)"/);
-    const modelMatch = content.match(/\nmodel\s*=\s*"([^"]+)"/);
+    const azureModelMatch = azureSectionMatch?.[1]?.match(/model\s*=\s*"([^"]+)"/);
+    const topLevelModelMatch = content.match(/^\s*model\s*=\s*"([^"]+)"/m);
     const reasoningMatch = content.match(/model_reasoning_effort\s*=\s*"([^"]+)"/);
 
     return {
       baseUrl: baseUrlMatch?.[1],
-      model: modelMatch?.[1],
+      model: azureModelMatch?.[1] ?? (activeProviderMatch?.[1] === "azure" ? topLevelModelMatch?.[1] : undefined),
       wireApi: wireApiMatch?.[1] === "responses" ? "responses" : "chat_completions",
       reasoningEffort: reasoningMatch?.[1],
     };
@@ -182,9 +192,11 @@ export class LlmApiRuntime implements Runtime, NativeRuntime {
   private model: string;
   private wireApi: WireApi;
   private reasoningEffort?: string;
+  private azureConfig: ReturnType<typeof parseCodexAzureConfig>;
 
   constructor(config: RuntimeConfig) {
     this.config = config;
+    this.azureConfig = parseCodexAzureConfig();
     const detected = detectProvider(config.apiKey);
     this.provider = detected.provider;
     this.apiKey = detected.apiKey;
@@ -257,6 +269,65 @@ export class LlmApiRuntime implements Runtime, NativeRuntime {
       "  export AZURE_OPENAI_API_KEY=...        (Azure OpenAI — reuse your Codex Azure provider)\n" +
       "  export OPENAI_API_KEY=sk-...           (OpenAI — direct GPT access)"
     );
+  }
+
+  getConfigurationDiagnostics(): ApiRuntimeDiagnostics {
+    if (!this.apiKey) {
+      return {
+        valid: false,
+        provider: this.provider,
+        providerLabel: this.providerLabel,
+        reason: "missing_key",
+        fatalError: this.noKeyError(),
+      };
+    }
+
+    if (this.provider !== "azure") {
+      return {
+        valid: true,
+        provider: this.provider,
+        providerLabel: this.providerLabel,
+      };
+    }
+
+    const hasConfiguredBaseUrl = !!(
+      process.env.AZURE_OPENAI_BASE_URL ||
+      process.env.OPENAI_BASE_URL ||
+      this.azureConfig.baseUrl
+    );
+    const hasConfiguredModel = !!(
+      this.config.model ||
+      process.env.PWNKIT_MODEL ||
+      process.env.AZURE_OPENAI_MODEL ||
+      this.azureConfig.model
+    );
+
+    const missing: string[] = [];
+    if (!hasConfiguredBaseUrl) {
+      missing.push("AZURE_OPENAI_BASE_URL (or [model_providers.azure].base_url in ~/.codex/config.toml)");
+    }
+    if (!hasConfiguredModel) {
+      missing.push("AZURE_OPENAI_MODEL or an Azure-backed `model = \"...\"` in ~/.codex/config.toml");
+    }
+
+    if (missing.length > 0) {
+      return {
+        valid: false,
+        provider: this.provider,
+        providerLabel: this.providerLabel,
+        reason: "invalid_config",
+        fatalError:
+          "Azure OpenAI runtime is selected, but the configuration is incomplete.\n" +
+          `Missing: ${missing.join("; ")}\n` +
+          "pwnkit will not guess Azure defaults because that can silently route to the wrong endpoint or deployment.",
+      };
+    }
+
+    return {
+      valid: true,
+      provider: this.provider,
+      providerLabel: this.providerLabel,
+    };
   }
 
   // ── Legacy Runtime interface (single-prompt) ──
@@ -503,9 +574,7 @@ export class LlmApiRuntime implements Runtime, NativeRuntime {
           const textBlocks: Array<Record<string, unknown>> = [];
           for (const block of m.content) {
             if (block.type === "text") {
-              // User messages use input_text, assistant messages use output_text
-              const textType = m.role === "assistant" ? "output_text" : "input_text";
-              textBlocks.push({ type: textType, text: block.text });
+              textBlocks.push({ type: "input_text", text: block.text });
             } else if (block.type === "tool_use") {
               // Flush any pending text blocks first
               if (textBlocks.length > 0) {

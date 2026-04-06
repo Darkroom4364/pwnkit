@@ -60,23 +60,28 @@ OpenRouter acts as a unified gateway to many LLM providers. Benefits:
 
 ## Azure OpenAI configuration
 
-Azure OpenAI requires additional environment variables beyond the API key:
+Azure OpenAI is stricter than the other providers. The API key alone is not enough. pwnkit needs:
+
+- an Azure base URL
+- an Azure deployment/model name
+
+You can provide those explicitly via env vars, or let pwnkit reuse them from `~/.codex/config.toml` when Codex is already configured against Azure.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `AZURE_OPENAI_API_KEY` | Yes | Your Azure OpenAI API key |
-| `AZURE_OPENAI_BASE_URL` | No | Base URL for your Azure deployment (defaults to `https://api.openai.com/v1`) |
-| `AZURE_OPENAI_MODEL` | No | Model deployment name (e.g., `gpt-4o`, `gpt-5.4`) |
+| `AZURE_OPENAI_BASE_URL` | Yes, unless pwnkit can read it from Codex config | Base URL for your Azure deployment. For the Responses API this should include `/openai/v1`. |
+| `AZURE_OPENAI_MODEL` | Yes, unless pwnkit can read it from Codex config | Azure deployment/model name (not just a generic model family string) |
 | `AZURE_OPENAI_WIRE_API` | No | Wire API format: `chat_completions` (default) or `responses` |
 
 ```bash
 export AZURE_OPENAI_API_KEY="your-azure-key"
-export AZURE_OPENAI_BASE_URL="https://your-resource.openai.azure.com"
+export AZURE_OPENAI_BASE_URL="https://your-resource.openai.azure.com/openai/v1"
 export AZURE_OPENAI_MODEL="gpt-4o"
 export AZURE_OPENAI_WIRE_API="responses"
 ```
 
-This is particularly useful if you already have an Azure OpenAI deployment (e.g., from Codex) and want to reuse it with pwnkit.
+If you rely on Codex config instead of env vars, make sure `~/.codex/config.toml` points at Azure and contains a usable Azure base URL plus model/deployment. If the selected Azure runtime is incomplete, pwnkit stops immediately with a configuration error instead of silently falling through to a broken scan.
 
 ## Alternative: CLI runtimes
 

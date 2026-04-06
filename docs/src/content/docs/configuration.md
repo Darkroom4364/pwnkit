@@ -152,6 +152,23 @@ pwnkit ships a set of agent-improvement features behind environment-variable fla
 | `PWNKIT_FEATURE_POV_GATE` | off | Requires a working executable PoC per finding, otherwise downgrades to `info`. |
 | `PWNKIT_FEATURE_TRIAGE_MEMORIES` | off | Injects Semgrep-style per-target persistent FP memories into the verify pipeline. Pairs with `pwnkit-cli triage`. |
 
+### Docker executor overrides
+
+When `PWNKIT_FEATURE_DOCKER_EXECUTOR=1` is enabled, these extra env vars
+control the container image and bootstrap behavior:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PWNKIT_DOCKER_IMAGE` | `ghcr.io/peaktwilight/pwnkit:latest` | Override the executor image |
+| `PWNKIT_DOCKER_BOOTSTRAP_TOOLS` | auto | Force or disable apt-based tool bootstrap inside the container |
+
+Bootstrap rules:
+
+- default GHCR image -> no bootstrap, use the pre-baked toolchain
+- `kalilinux/kali-rolling` -> bootstrap tools on first start
+- `PWNKIT_DOCKER_BOOTSTRAP_TOOLS=1` -> always bootstrap
+- `PWNKIT_DOCKER_BOOTSTRAP_TOOLS=0` -> never bootstrap
+
 ### Example: maximum-accuracy pentest
 
 Turn on every false-positive reduction feature for a client-ready scan:
@@ -171,6 +188,16 @@ npx pwnkit-cli scan --target https://example.com --mode web --depth deep
 ```bash
 export PWNKIT_FEATURE_DOCKER_EXECUTOR=1
 export PWNKIT_FEATURE_WEB_SEARCH=1
+
+npx pwnkit-cli scan --target https://example.com --mode web
+```
+
+### Example: raw Kali fallback
+
+```bash
+export PWNKIT_FEATURE_DOCKER_EXECUTOR=1
+export PWNKIT_DOCKER_IMAGE=kalilinux/kali-rolling
+export PWNKIT_DOCKER_BOOTSTRAP_TOOLS=1
 
 npx pwnkit-cli scan --target https://example.com --mode web
 ```

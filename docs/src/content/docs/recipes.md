@@ -21,7 +21,7 @@ If your API requires authentication, add `--auth` (see [Scan authenticated APIs]
 
 ## Scan a WordPress site for CVEs
 
-Enable the Kali Docker executor so the agent has `wpscan`, `nmap`, and friends available, and turn on web search so it can look up plugin CVEs as it goes.
+Enable the Docker executor so the agent has `wpscan`, `nmap`, and friends available, and turn on web search so it can look up plugin CVEs as it goes. By default this uses the prebuilt GHCR image; only force raw Kali if you are debugging tool parity.
 
 ```bash
 export PWNKIT_FEATURE_DOCKER_EXECUTOR=1
@@ -33,6 +33,14 @@ npx pwnkit-cli scan \
   --mode web \
   --depth deep \
   --verbose
+```
+
+Raw Kali fallback:
+
+```bash
+export PWNKIT_FEATURE_DOCKER_EXECUTOR=1
+export PWNKIT_DOCKER_IMAGE=kalilinux/kali-rolling
+export PWNKIT_DOCKER_BOOTSTRAP_TOOLS=1
 ```
 
 ## Audit an npm package for security issues

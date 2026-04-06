@@ -160,11 +160,29 @@ npx pwnkit-cli scan --target https://example.com --mode web --race
 
 ### Kali Docker executor
 
-Enable `PWNKIT_FEATURE_DOCKER_EXECUTOR=1` to run every bash command inside a Kali Linux container with the full pentesting toolset (nmap, sqlmap, nikto, gobuster, ffuf, hydra, etc.) already installed. No host pollution, reproducible tool versions.
+Enable `PWNKIT_FEATURE_DOCKER_EXECUTOR=1` to run every bash command inside a containerized pentest environment. By default, pwnkit now pulls the prebuilt GHCR image `ghcr.io/peaktwilight/pwnkit:latest`, which already includes Node, Playwright/Chromium, and the standard pentest toolset. No host pollution, reproducible tool versions, and much faster startup than bootstrapping raw Kali on every run.
 
 ```bash
 export PWNKIT_FEATURE_DOCKER_EXECUTOR=1
 npx pwnkit-cli scan --target https://example.com --mode web --verbose
+```
+
+Advanced overrides:
+
+```bash
+# Force a specific image
+export PWNKIT_DOCKER_IMAGE=ghcr.io/peaktwilight/pwnkit:latest
+
+# Force apt-based tool bootstrap even on a custom image
+export PWNKIT_DOCKER_BOOTSTRAP_TOOLS=1
+```
+
+Use the raw Kali path only when you explicitly want to debug parity:
+
+```bash
+export PWNKIT_FEATURE_DOCKER_EXECUTOR=1
+export PWNKIT_DOCKER_IMAGE=kalilinux/kali-rolling
+export PWNKIT_DOCKER_BOOTSTRAP_TOOLS=1
 ```
 
 ### Export findings to GitHub Issues

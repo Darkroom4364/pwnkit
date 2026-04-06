@@ -149,6 +149,9 @@ interface CaseResult {
   durationMs: number;
   error?: string;
   infrastructureError: boolean;
+  usage: { inputTokens: number; outputTokens: number } | null;
+  tokenUsage: { inputTokens: number; outputTokens: number } | null;
+  estimatedCostUsd: number | null;
   /**
    * Raw finding objects produced by the audit. Preserved here so the
    * triage data collector can pull (finding, ground_truth) rows from
@@ -181,7 +184,12 @@ interface NpmBenchReport {
 
 // ── Runner ──
 
-async function auditPackage(pkg: string): Promise<{ findings: any[]; raw: string }> {
+async function auditPackage(pkg: string): Promise<{
+  findings: any[];
+  raw: string;
+  usage: { inputTokens: number; outputTokens: number } | null;
+  estimatedCostUsd: number | null;
+}> {
   // Parse package specifier into name and optional version
   let packageName: string;
   let version: string | undefined;
@@ -214,8 +222,17 @@ async function auditPackage(pkg: string): Promise<{ findings: any[]; raw: string
       runtime: runtimeArg as RuntimeMode,
     },
   });
+  const reportWithUsage = report as typeof report & {
+    usage?: { inputTokens: number; outputTokens: number };
+    estimatedCostUsd?: number;
+  };
 
-  return { findings: report.findings ?? [], raw: JSON.stringify(report) };
+  return {
+    findings: report.findings ?? [],
+    raw: JSON.stringify(report),
+    usage: reportWithUsage.usage ?? null,
+    estimatedCostUsd: reportWithUsage.estimatedCostUsd ?? null,
+  };
 }
 
 function shouldHaveFindings(verdict: Verdict): boolean {
@@ -262,7 +279,7 @@ async function runNpmBench(): Promise<NpmBenchReport> {
   for (const tc of TEST_CASES) {
     const caseStart = Date.now();
     try {
-      const { findings } = await auditPackage(tc.pkg);
+      const { findings, usage, estimatedCostUsd } = await auditPackage(tc.pkg);
       const hasFindings = findings.length > 0;
       const expectFindings = shouldHaveFindings(tc.verdict);
       const correct = hasFindings === expectFindings;
@@ -276,6 +293,9 @@ async function runNpmBench(): Promise<NpmBenchReport> {
         correct,
         durationMs: Date.now() - caseStart,
         infrastructureError: false,
+        usage,
+        tokenUsage: usage,
+        estimatedCostUsd,
         findings,
       });
     } catch (err) {
@@ -290,6 +310,9 @@ async function runNpmBench(): Promise<NpmBenchReport> {
         durationMs: Date.now() - caseStart,
         error,
         infrastructureError: isInfrastructureError(error),
+        usage: null,
+        tokenUsage: null,
+        estimatedCostUsd: null,
         findings: [],
       });
     }

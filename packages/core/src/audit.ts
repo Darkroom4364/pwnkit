@@ -406,7 +406,7 @@ async function runAuditAgent(
   scanId: string,
   config: AuditConfig,
   emit: ScanListener,
-): Promise<Finding[]> {
+): Promise<{ findings: Finding[]; usage?: { inputTokens: number; outputTokens: number }; estimatedCostUsd?: number }> {
   return runAnalysisAgent({
     role: "audit",
     scopePath: pkg.path,
@@ -440,7 +440,7 @@ async function runAuditAgent(
  */
 export async function packageAudit(
   opts: PackageAuditOptions,
-): Promise<AuditReport> {
+): Promise<AuditReport & { usage?: { inputTokens: number; outputTokens: number }; estimatedCostUsd?: number }> {
   const { config, onEvent } = opts;
   const emit: ScanListener = onEvent ?? (() => {});
   const startTime = Date.now();
@@ -485,7 +485,7 @@ export async function packageAudit(
     });
 
     // Step 3: AI agent analysis
-    const llmFindings = await runAuditAgent(
+    const agentResult = await runAuditAgent(
       pkg,
       semgrepFindings,
       npmAuditFindings,
@@ -498,7 +498,7 @@ export async function packageAudit(
     // Combine deterministic + LLM findings into the final report set.
     // Deterministic findings come FIRST so they're prominent in the
     // report ordering — they're higher confidence than LLM output.
-    const findings = [...maliciousFindings, ...llmFindings];
+    const findings = [...maliciousFindings, ...agentResult.findings];
 
     // Step 4: Build report
     const durationMs = Date.now() - startTime;
@@ -520,7 +520,7 @@ export async function packageAudit(
       message: `Audit complete: ${summary.totalFindings} findings (${npmAuditFindings.length} npm advisories, ${semgrepFindings.length} semgrep findings)`,
     });
 
-    const report: AuditReport = {
+    const report: AuditReport & { usage?: { inputTokens: number; outputTokens: number }; estimatedCostUsd?: number } = {
       package: pkg.name,
       version: pkg.version,
       startedAt: new Date(startTime).toISOString(),
@@ -530,6 +530,8 @@ export async function packageAudit(
       npmAuditFindings,
       summary,
       findings,
+      usage: agentResult.usage,
+      estimatedCostUsd: agentResult.estimatedCostUsd,
     };
 
     return report;

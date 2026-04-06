@@ -384,6 +384,15 @@ export interface NpmAuditFinding {
   fixAvailable: boolean | string;
 }
 
+/**
+ * Token usage from an LLM-driven scan / audit / review. Optional because
+ * non-LLM runtimes (semgrep-only, deterministic-only) won't populate it.
+ */
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface AuditReport {
   package: string;
   version: string;
@@ -394,6 +403,10 @@ export interface AuditReport {
   npmAuditFindings: NpmAuditFinding[];
   summary: ReportSummary;
   findings: Finding[];
+  /** LLM token usage (input + output). Undefined when no LLM agent ran. */
+  usage?: TokenUsage;
+  /** Estimated USD cost from token usage at the configured model rates. */
+  estimatedCostUsd?: number;
 }
 
 // ── Source Code Review (pwnkit review) ──

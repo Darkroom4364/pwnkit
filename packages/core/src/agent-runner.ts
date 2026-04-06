@@ -1,6 +1,4 @@
-import type {
-  Finding,
-} from "@pwnkit/shared";
+import type { Finding } from "@pwnkit/shared";
 import type { ScanListener } from "./scanner.js";
 import { createRuntime } from "./runtime/index.js";
 import type { RuntimeType } from "./runtime/index.js";
@@ -12,6 +10,7 @@ import { getToolsForRole } from "./agent/tools.js";
 import type { NativeRuntime } from "./runtime/types.js";
 import { CLI_RUNTIME_TYPES } from "./shared-analysis.js";
 import { parseFindingsFromCliOutput } from "./findings-parser.js";
+import { estimateCost } from "./agent/cost.js";
 
 // ── Types ──
 
@@ -32,6 +31,19 @@ export interface AnalysisAgentOptions {
   cliSystemPrompt: string;
   /** Optional: direct API prompt with embedded source code for single-shot fallback */
   directApiPrompt?: string;
+}
+
+/**
+ * Re-export of the canonical TokenUsage shape from @pwnkit/shared so
+ * call sites that imported AnalysisTokenUsage from this module continue
+ * to work without churn.
+ */
+export type AnalysisTokenUsage = import("@pwnkit/shared").TokenUsage;
+
+export interface AnalysisAgentResult {
+  findings: Finding[];
+  usage?: AnalysisTokenUsage;
+  estimatedCostUsd?: number;
 }
 
 // ── Depth → maxTurns mapping ──
@@ -62,7 +74,7 @@ function getMaxTurns(role: "audit" | "review", depth: string | undefined, branch
  * 2. API runtime with native tool_use (runNativeAgentLoop)
  * 3. Legacy fallback (runAgentLoop)
  */
-export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Finding[]> {
+export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<AnalysisAgentResult> {
   const { role, scopePath, target, scanId, sessionId, config, db, emit, cliPrompt, agentSystemPrompt, cliSystemPrompt, directApiPrompt } = opts;
 
   const templatePrefix = `cli-${role}`;
@@ -166,7 +178,7 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Find
           stage: "attack",
           message: `Explicit runtime '${runtimeType}' failed; API fallback disabled.`,
         });
-        return [];
+        return { findings: [], usage: undefined, estimatedCostUsd: undefined };
       }
       // Fall through to API / legacy branches below only for auto/api modes.
     } else {
@@ -186,7 +198,7 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Find
         message: `CLI agent complete: ${findings.length} findings (${result.durationMs}ms)`,
       });
 
-      return findings;
+      return { findings };
     }
   }
 
@@ -198,7 +210,7 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Find
         stage: "attack",
         message: `Runtime '${runtimeType}' is unavailable and API fallback is disabled for explicit runtime selection.`,
       });
-      return [];
+      return { findings: [], usage: undefined, estimatedCostUsd: undefined };
     }
 
     emit({
@@ -276,7 +288,11 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Find
         message: `${role === "audit" ? "Agent" : "Review"} complete: ${agentState.findings.length} findings in ${agentState.turnCount} turns (${agentState.totalUsage.inputTokens + agentState.totalUsage.outputTokens} tokens)`,
       });
 
-      return agentState.findings;
+      return {
+        findings: agentState.findings,
+        usage: agentState.totalUsage,
+        estimatedCostUsd: agentState.estimatedCostUsd,
+      };
     }
 
     // ── Single-shot fallback for API runtimes without native tool_use ──
@@ -291,7 +307,7 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Find
           stage: "attack",
           message: `API analysis error: ${result.error}`,
         });
-        return [];
+        return { findings: [], usage: undefined, estimatedCostUsd: undefined };
       }
 
       const findings = parseFindingsFromCliOutput(result.output, { templatePrefix });
@@ -310,7 +326,13 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Find
         message: `API analysis complete: ${findings.length} findings (${result.durationMs}ms)`,
       });
 
-      return findings;
+      return {
+        findings,
+        usage: result.usage,
+        estimatedCostUsd: result.usage
+          ? estimateCost(result.usage, config.model)
+          : undefined,
+      };
     }
   }
 
@@ -360,5 +382,7 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Find
     message: `${role === "audit" ? "Agent" : "Review"} complete: ${agentState.findings.length} findings${agentState.summary ? `, ${agentState.summary}` : ""}`,
   });
 
-  return agentState.findings;
+  // Legacy loop doesn't track token usage / cost — those are populated
+  // only by the native API loop branch above.
+  return { findings: agentState.findings, usage: undefined, estimatedCostUsd: undefined };
 }

@@ -3,31 +3,43 @@
 /**
  * Triage Training Data Collector
  *
- * Extracts (finding, ground_truth) pairs from XBOW benchmark results.
- * Ground truth comes from flag extraction: if the challenge flag was found,
- * findings from that scan are "true positive" (the vulnerability was real
- * and exploitable). If no flag was found, findings are "false positive"
- * (the agent thought it found something but couldn't prove it).
+ * Extracts (finding, ground_truth) pairs from pwnkit benchmark results.
  *
- * Output: JSONL file suitable for fine-tuning a classifier.
+ * Sources:
+ *   - XBOW results (ground truth = flag extraction)
+ *   - Cybench results (ground truth = flag extraction)
+ *   - npm-bench results (ground truth = package verdict: malicious/vulnerable/safe)
+ *   - pwnkit SQLite DB (ground truth = blind verify status)
+ *
+ * For every sample we emit BOTH the raw text and the 45-element handcrafted
+ * feature vector from `@pwnkit/core`'s `extractFeatures`. The feature vector
+ * was inspired by the VulnBERT hybrid architecture (handcrafted features
+ * fused with neural embeddings) and makes the dataset drop-in compatible
+ * with either a pure-text classifier or a hybrid model.
+ *
+ * Output: JSONL file with one sample per line, fields:
+ *   { text, features, label, label_text, source, confidence }
  *
  * Usage:
  *   tsx src/triage-data-collector.ts --db <path-to-pwnkit.db>
  *   tsx src/triage-data-collector.ts --results <xbow-latest.json>
+ *   tsx src/triage-data-collector.ts --npm-bench <npm-bench-latest.json>
  *   tsx src/triage-data-collector.ts --scan-dir <dir-of-scan-dbs>
  *   tsx src/triage-data-collector.ts --results <xbow-latest.json> --output <dataset.jsonl>
  */
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
+import { extractFeatures, FEATURE_NAMES } from "@pwnkit/core";
+import type { Finding } from "@pwnkit/shared";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const args = process.argv.slice(2);
 
-interface TriageSample {
+export interface TriageSample {
   /** Unique ID for dedup */
   id: string;
   /** The finding title */
@@ -51,7 +63,48 @@ interface TriageSample {
   /** Source: which challenge / scan produced this */
   source: string;
   /** How we determined ground truth */
-  label_source: "flag_extraction" | "blind_verify" | "manual";
+  label_source: "flag_extraction" | "blind_verify" | "manual" | "package_verdict";
+  /**
+   * 45-element handcrafted feature vector (per FEATURE_NAMES order).
+   * Computed via extractFeatures() — pure regex/string ops, no LLM, no network.
+   * Inspired by the VulnBERT hybrid architecture: drop-in for either a
+   * pure-text classifier or a fused features-plus-embeddings model.
+   *
+   * May be a 45-zero vector if the source row was missing the fields
+   * extractFeatures() needs (typically: legacy XBOW dumps without evidence).
+   */
+  features: number[];
+}
+
+/**
+ * Compute the 45-feature vector for a finding-shaped object. Tolerates
+ * partially-populated rows (legacy results files, npm audit findings
+ * without an HTTP request/response, etc.) by defaulting missing fields
+ * and falling back to a 45-zero vector if extraction throws.
+ */
+export function safeExtractFeatures(raw: any): number[] {
+  try {
+    const finding: Finding = {
+      id: raw.id ?? "",
+      templateId: raw.templateId ?? raw.template_id ?? "",
+      title: raw.title ?? "",
+      description: raw.description ?? "",
+      severity: raw.severity ?? "medium",
+      category: raw.category ?? "unknown",
+      status: raw.status ?? "open",
+      evidence: {
+        request: raw.evidence?.request ?? raw.request ?? "",
+        response: raw.evidence?.response ?? raw.response ?? "",
+        analysis: raw.evidence?.analysis ?? raw.analysis ?? "",
+        ...(raw.evidence ?? {}),
+      },
+      confidence: raw.confidence ?? 0.5,
+      timestamp: raw.timestamp ?? Date.now(),
+    } as Finding;
+    return extractFeatures(finding);
+  } catch {
+    return new Array(FEATURE_NAMES.length).fill(0);
+  }
 }
 
 function resolveInputPath(path: string): string {
@@ -83,7 +136,7 @@ function resolveOutputPath(path: string): string {
 
 // ── Collect from XBOW results JSON ──
 
-function collectFromXbowResults(resultsPath: string): TriageSample[] {
+export function collectFromXbowResults(resultsPath: string): TriageSample[] {
   const resolved = resolveInputPath(resultsPath);
   const data = JSON.parse(readFileSync(resolved, "utf8"));
   const samples: TriageSample[] = [];
@@ -107,6 +160,61 @@ function collectFromXbowResults(resultsPath: string): TriageSample[] {
         label: flagFound ? "true_positive" : "false_positive",
         source: challengeId,
         label_source: "flag_extraction",
+        features: safeExtractFeatures(finding),
+      });
+    }
+  }
+
+  return samples;
+}
+
+// ── Collect from npm-bench results JSON ──
+
+/**
+ * Pull (finding, ground_truth) rows from an npm-bench-latest.json file.
+ *
+ * Ground truth comes from the package's verdict in the benchmark's
+ * curated test cases:
+ *   - malicious / vulnerable → true_positive (the package is bad,
+ *     so any finding the agent produced was meant to fire)
+ *   - safe → false_positive (the package is clean, so any finding
+ *     is by definition a false alarm)
+ *
+ * This is coarser than per-finding labels, but it gives us a real
+ * supervised signal at zero labeling cost — and it's the same labeling
+ * approximation that NVD/Socket/Phylum use to seed their training sets.
+ */
+export function collectFromNpmBench(resultsPath: string): TriageSample[] {
+  const resolved = resolveInputPath(resultsPath);
+  const data = JSON.parse(readFileSync(resolved, "utf8"));
+  const samples: TriageSample[] = [];
+
+  for (const result of data.results ?? []) {
+    const verdict = result.verdict;
+    const isBadPackage = verdict === "malicious" || verdict === "vulnerable";
+    const label: "true_positive" | "false_positive" = isBadPackage
+      ? "true_positive"
+      : "false_positive";
+    const pkg = result.pkg ?? "unknown";
+
+    // npm-bench preserves the raw findings array on each case result.
+    // Older runs (before this column was added) will have undefined here
+    // and silently produce zero rows for that case.
+    for (const finding of result.findings ?? []) {
+      samples.push({
+        id: `npm-${pkg}-${finding.id ?? finding.templateId ?? Math.random().toString(36).slice(2)}`,
+        title: finding.title ?? "",
+        description: finding.description ?? "",
+        severity: finding.severity ?? "medium",
+        category: finding.category ?? "unknown",
+        request: finding.evidence?.request ?? "",
+        response: finding.evidence?.response ?? "",
+        analysis: finding.evidence?.analysis ?? "",
+        confidence: finding.confidence ?? 0.5,
+        label,
+        source: `npm-bench:${pkg}:${verdict}`,
+        label_source: "package_verdict",
+        features: safeExtractFeatures(finding),
       });
     }
   }
@@ -163,6 +271,20 @@ function collectFromDb(dbPath: string): TriageSample[] {
         label: isVerified ? "true_positive" : "false_positive",
         source: `${row.target}-${row.scan_id}`,
         label_source: "blind_verify",
+        features: safeExtractFeatures({
+          id: row.finding_id,
+          templateId: row.template_id,
+          title: row.title,
+          description: row.description,
+          severity: row.severity,
+          category: row.category,
+          confidence: row.confidence,
+          evidence: {
+            request: row.evidence_request,
+            response: row.evidence_response,
+            analysis: row.evidence_analysis,
+          },
+        }),
       });
     }
   } catch (err) {
@@ -192,7 +314,7 @@ function collectFromScanDir(dirPath: string): TriageSample[] {
 
 // ── Format for ML training ──
 
-function toTrainingFormat(sample: TriageSample): string {
+export function toTrainingFormat(sample: TriageSample): string {
   // Format as a text classification input
   // The model sees: [title] [description] [category] [severity] [request] [response]
   // and predicts: true_positive or false_positive
@@ -210,9 +332,11 @@ function toTrainingFormat(sample: TriageSample): string {
 
   return JSON.stringify({
     text: input,
+    features: sample.features,
     label: sample.label === "true_positive" ? 1 : 0,
     label_text: sample.label,
     source: sample.source,
+    label_source: sample.label_source,
     confidence: sample.confidence,
   });
 }
@@ -228,6 +352,14 @@ async function main() {
     const path = args[resultsIdx + 1];
     console.error(`Collecting from XBOW results: ${path}`);
     allSamples.push(...collectFromXbowResults(path));
+  }
+
+  // Collect from npm-bench results
+  const npmBenchIdx = args.indexOf("--npm-bench");
+  if (npmBenchIdx !== -1) {
+    const path = args[npmBenchIdx + 1];
+    console.error(`Collecting from npm-bench results: ${path}`);
+    allSamples.push(...collectFromNpmBench(path));
   }
 
   // Collect from DB
@@ -246,13 +378,22 @@ async function main() {
     allSamples.push(...collectFromScanDir(path));
   }
 
-  // Also auto-collect from any XBOW results in the results directory
+  // Also auto-collect from any benchmark results in the results directory.
+  // Routed by filename so we use the right ground-truth source for each shape:
+  //   *npm-bench*.json     → collectFromNpmBench (label by package verdict)
+  //   anything else *.json → collectFromXbowResults (label by flagFound)
   const resultsDir = join(__dirname, "..", "results");
-  if (existsSync(resultsDir) && resultsIdx === -1) {
+  if (existsSync(resultsDir) && resultsIdx === -1 && npmBenchIdx === -1) {
     const jsonFiles = readdirSync(resultsDir).filter((f) => f.endsWith(".json"));
     for (const file of jsonFiles) {
-      console.error(`  Auto-collecting from ${file}...`);
-      allSamples.push(...collectFromXbowResults(join(resultsDir, file)));
+      const fullPath = join(resultsDir, file);
+      if (file.includes("npm-bench")) {
+        console.error(`  Auto-collecting from ${file} (npm-bench)...`);
+        allSamples.push(...collectFromNpmBench(fullPath));
+      } else {
+        console.error(`  Auto-collecting from ${file} (xbow-shape)...`);
+        allSamples.push(...collectFromXbowResults(fullPath));
+      }
     }
   }
 
@@ -294,7 +435,14 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error("Triage data collection failed:", err);
-  process.exit(1);
-});
+// Only run main() when invoked as a script, not when imported as a module
+// (e.g. by the vitest test file). Guards against the test runner executing
+// the CLI side-effects on import.
+const isScript =
+  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isScript) {
+  main().catch((err) => {
+    console.error("Triage data collection failed:", err);
+    process.exit(1);
+  });
+}

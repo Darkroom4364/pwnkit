@@ -149,6 +149,12 @@ interface CaseResult {
   durationMs: number;
   error?: string;
   infrastructureError: boolean;
+  /**
+   * Raw finding objects produced by the audit. Preserved here so the
+   * triage data collector can pull (finding, ground_truth) rows from
+   * npm-bench runs without re-running the agent.
+   */
+  findings: any[];
 }
 
 interface NpmBenchReport {
@@ -257,6 +263,7 @@ async function runNpmBench(): Promise<NpmBenchReport> {
         correct,
         durationMs: Date.now() - caseStart,
         infrastructureError: false,
+        findings,
       });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
@@ -270,6 +277,7 @@ async function runNpmBench(): Promise<NpmBenchReport> {
         durationMs: Date.now() - caseStart,
         error,
         infrastructureError: isInfrastructureError(error),
+        findings: [],
       });
     }
 

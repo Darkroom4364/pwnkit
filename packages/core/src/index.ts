@@ -93,6 +93,9 @@ export type {
 export { generatePov, judgePovEvidence } from "./triage/pov-gate.js";
 export type { PovResult, PovArtifactType, GeneratePovOptions } from "./triage/pov-gate.js";
 
+// Handcrafted feature extractor (45-element vector for triage classifiers)
+export { extractFeatures, FEATURE_NAMES } from "./triage/feature-extractor.js";
+
 // Remediation guidance
 export { generateRemediation, generateRemediationWithLLM } from "./remediation.js";
 export type { Remediation, RemediationCodeExample } from "./remediation.js";

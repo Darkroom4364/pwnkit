@@ -6,7 +6,10 @@ on:
 jobs:
   npm-bench:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Job ceiling has to exceed the per-step ceiling. The 81-package set
+    # observed ~30s-2min per package in run #24025320432, so the worst-case
+    # serial runtime is north of 90 minutes once retries kick in.
+    timeout-minutes: 180
 
     env:
       AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
@@ -28,8 +31,11 @@ jobs:
       - run: pnpm build
 
       - name: Run npm-bench benchmark
+        # Bumped 45m → 150m after run #24025320432 hit the wall mid-run on
+        # the expanded 81-package set. The 81-package set is the new baseline;
+        # this needs to comfortably accommodate the worst-case serial runtime.
         run: pnpm --filter @pwnkit/benchmark npm-bench
-        timeout-minutes: 45
+        timeout-minutes: 150
 
       - name: Upload results artifact
         if: always()

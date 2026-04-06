@@ -30,6 +30,22 @@ interface InstalledPackage {
   tempDir: string;
 }
 
+interface OsvVulnerability {
+  id?: string;
+  aliases?: string[];
+  summary?: string;
+  details?: string;
+  severity?: Array<{ type?: string; score?: string }>;
+  database_specific?: { severity?: string };
+  references?: Array<{ type?: string; url?: string }>;
+  affected?: Array<{
+    ranges?: Array<{
+      type?: string;
+      events?: Array<{ introduced?: string; fixed?: string; last_affected?: string }>;
+    }>;
+  }>;
+}
+
 /**
  * Install an npm package in a temporary directory and return its path.
  */
@@ -227,6 +243,158 @@ function formatFixAvailable(
   }
 
   return false;
+}
+
+function parseCvssSeverity(score: string | undefined): Severity | undefined {
+  if (!score) return undefined;
+  const match = score.match(/CVSS:\d\.\d\/[^/]*\/[^/]*\/[^/]*\/[^/]*\/[^/]*\/[^/]*\/[^/]*\/[^/]*\/([^/]+)/i);
+  if (match) {
+    const label = match[1]?.toUpperCase();
+    if (label === "CRITICAL") return "critical";
+    if (label === "HIGH") return "high";
+    if (label === "MEDIUM") return "medium";
+    if (label === "LOW") return "low";
+  }
+  return undefined;
+}
+
+function extractOsvSeverity(vuln: OsvVulnerability): Severity {
+  const dbSeverity = vuln.database_specific?.severity;
+  if (typeof dbSeverity === "string" && dbSeverity.length > 0) {
+    return normalizeSeverity(dbSeverity);
+  }
+  for (const sev of vuln.severity ?? []) {
+    const parsed = parseCvssSeverity(sev.score);
+    if (parsed) return parsed;
+  }
+  return "medium";
+}
+
+function extractOsvRange(vuln: OsvVulnerability): string | undefined {
+  const segments: string[] = [];
+  for (const affected of vuln.affected ?? []) {
+    for (const range of affected.ranges ?? []) {
+      if (range.type !== "SEMVER") continue;
+      const parts = (range.events ?? []).flatMap((event) => {
+        const items: string[] = [];
+        if (event.introduced) items.push(`introduced:${event.introduced}`);
+        if (event.fixed) items.push(`fixed:${event.fixed}`);
+        if (event.last_affected) items.push(`last_affected:${event.last_affected}`);
+        return items;
+      });
+      if (parts.length > 0) {
+        segments.push(parts.join(","));
+      }
+    }
+  }
+  return segments.length > 0 ? segments.join(" | ") : undefined;
+}
+
+function extractOsvFix(vuln: OsvVulnerability): boolean | string {
+  for (const affected of vuln.affected ?? []) {
+    for (const range of affected.ranges ?? []) {
+      for (const event of range.events ?? []) {
+        if (event.fixed) return event.fixed;
+      }
+    }
+  }
+  return false;
+}
+
+export function parseOsvAdvisories(
+  packageName: string,
+  raw: unknown,
+): NpmAuditFinding[] {
+  const vulns = Array.isArray((raw as { vulns?: unknown[] })?.vulns)
+    ? ((raw as { vulns?: unknown[] }).vulns as OsvVulnerability[])
+    : [];
+
+  return vulns.map((vuln) => {
+    const aliases = [...new Set([vuln.id, ...(vuln.aliases ?? [])].filter(Boolean) as string[])];
+    const source = aliases[0];
+    const url = vuln.references?.find((ref) => typeof ref.url === "string")?.url;
+    const title =
+      (typeof vuln.summary === "string" && vuln.summary.trim()) ||
+      (typeof vuln.details === "string" && vuln.details.trim().slice(0, 120)) ||
+      source ||
+      "OSV advisory";
+
+    return {
+      name: packageName,
+      severity: extractOsvSeverity(vuln),
+      title,
+      range: extractOsvRange(vuln),
+      source,
+      url,
+      via: aliases.length > 0 ? aliases : ["OSV"],
+      fixAvailable: extractOsvFix(vuln),
+    };
+  });
+}
+
+export async function queryOsvAdvisories(
+  packageName: string,
+  version: string,
+  emit?: ScanListener,
+): Promise<NpmAuditFinding[]> {
+  emit?.({
+    type: "stage:start",
+    stage: "discovery",
+    message: `Querying OSV for ${packageName}@${version}...`,
+  });
+
+  try {
+    const res = await fetch("https://api.osv.dev/v1/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        package: { ecosystem: "npm", name: packageName },
+        version,
+      }),
+    });
+
+    if (!res.ok) {
+      emit?.({
+        type: "stage:end",
+        stage: "discovery",
+        message: `OSV lookup failed: ${res.status}`,
+      });
+      return [];
+    }
+
+    const json = await res.json();
+    const findings = parseOsvAdvisories(packageName, json);
+    emit?.({
+      type: "stage:end",
+      stage: "discovery",
+      message: `OSV: ${findings.length} advisories`,
+    });
+    return findings;
+  } catch {
+    emit?.({
+      type: "stage:end",
+      stage: "discovery",
+      message: "OSV lookup unavailable",
+    });
+    return [];
+  }
+}
+
+function mergeAdvisories(
+  primary: NpmAuditFinding[],
+  extra: NpmAuditFinding[],
+): NpmAuditFinding[] {
+  const seen = new Set(
+    primary.map((finding) => `${finding.name}|${finding.title}|${finding.source ?? ""}`),
+  );
+  const merged = [...primary];
+  for (const finding of extra) {
+    const key = `${finding.name}|${finding.title}|${finding.source ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(finding);
+  }
+  return merged;
 }
 
 function buildCliAuditPrompt(
@@ -461,7 +629,10 @@ export async function packageAudit(
 
   try {
     // Step 2: npm audit + Semgrep scan
-    const npmAuditFindings = runNpmAudit(pkg.tempDir, emit);
+    const npmAuditFindings = mergeAdvisories(
+      runNpmAudit(pkg.tempDir, emit),
+      await queryOsvAdvisories(pkg.name, pkg.version, emit),
+    );
     const semgrepFindings = runSemgrepScan(pkg.path, emit, { noGitIgnore: true });
 
     // Step 2.5: Deterministic malicious-package oracles. These run before

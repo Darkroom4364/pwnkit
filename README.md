@@ -28,19 +28,19 @@
  <a href="https://docs.pwnkit.com">Docs</a> &middot;
  <a href="https://pwnkit.com">Website</a> &middot;
  <a href="https://pwnkit.com/blog">Blog</a> &middot;
- <a href="#benchmark">Benchmark</a> &middot;
- <a href="#the-false-positive-reduction-moat">FP Moat</a>
+ <a href="https://docs.pwnkit.com/benchmark">Benchmark</a> &middot;
+ <a href="https://docs.pwnkit.com/triage">Triage</a>
 </p>
 
 ---
 
-> **The leading open-source agentic AI pentest framework.** 87.5% on XBOW (91/104). Single command, single configuration, 11-layer FP reduction pipeline.
+> Fully autonomous agentic pentesting for web apps, AI/LLM apps, npm packages, and source code.
 
-Autonomous AI agents that pentest **web apps**, **AI/LLM apps**, **npm packages**, and **source code**. The agent gets a `bash` tool and works like a real pentester — writing curl commands, Python exploit scripts, and chaining vulnerabilities. Every finding walks through an 11-layer triage pipeline, then gets independently re-exploited by a blind verify agent that never sees the original reasoning.
+This README is the fast path. The detailed command reference, configuration, architecture notes, recipes, and benchmark breakdowns live in the docs site.
 
 ## Quick Start
 
-### Docker (no install needed)
+### Docker
 
 ```bash
 docker run --rm -e AZURE_OPENAI_API_KEY=$KEY \
@@ -49,9 +49,12 @@ docker run --rm -e AZURE_OPENAI_API_KEY=$KEY \
 
 The image ships with Node 20, Playwright/Chromium, and the standard pentest toolbox (sqlmap, nmap, nikto, gobuster, ffuf, hydra, john, …) preinstalled.
 
-### npx
+### npx / npm
 
 ```bash
+# Scan an AI / LLM endpoint
+npx pwnkit-cli scan --target https://example.com/api/chat
+
 # Pentest a web app
 npx pwnkit-cli scan --target https://example.com --mode web
 
@@ -68,123 +71,42 @@ npx pwnkit-cli review ./my-app
 npx pwnkit-cli https://example.com
 ```
 
-See the [documentation](https://docs.pwnkit.com) for configuration, runtimes, and CI/CD setup.
+Global install:
 
-## How It Works
-
-```mermaid
-flowchart LR
-    T[Target] --> P[Plan]
-    P --> D[Discover]
-    D --> A[Attack]
-    A --> TR[Triage<br/>11 layers]
-    TR --> V[Blind Verify]
-    V --> R[Report]
-
-    style P fill:#1a1a2e,stroke:#e63946,color:#fff
-    style D fill:#1a1a2e,stroke:#e63946,color:#fff
-    style A fill:#1a1a2e,stroke:#e63946,color:#fff
-    style TR fill:#533483,stroke:#e63946,color:#fff
-    style V fill:#1a1a2e,stroke:#457b9d,color:#fff
-    style R fill:#1a1a2e,stroke:#2a9d8f,color:#fff
+```bash
+npm i -g pwnkit-cli
 ```
 
-**Shell-first agent.** The research agent gets 3 tools: `bash`, `save_finding`, `done`. It runs curl, writes Python scripts, and chains exploits the same way a human pentester does — no templates, no static rules.
+## What It Does
 
-**Blind PoC verification.** The verify agent receives *only* the PoC and the target path. Zero access to the research agent's reasoning or findings description. If it can't independently reproduce the exploit, the finding is killed. This eliminates confirmation bias and drives false positives toward zero.
+- `scan` targets AI / LLM apps, web apps, REST / OpenAPI APIs, and MCP servers.
+- `audit` installs and inspects npm packages with `npm audit`, semgrep, and AI review.
+- `review` performs deep source-code security review on a local repo or Git URL.
+- `dashboard`, `history`, `findings`, and `triage` provide local persistence and review workflows.
 
-## Features
+## Why It’s Different
 
-### Detection
+- Shell-first web pentesting. The agent uses `bash`, writes scripts, and chains tools like a human pentester instead of being trapped in a small HTTP-tool DSL.
+- Blind verification. Findings are independently re-exploited before they are reported.
+- Docs-backed benchmark transparency. The current benchmark details live in the docs and raw artifacts under [`packages/benchmark/results`](/Users/peak/coding/tools/pwnkit/packages/benchmark/results).
 
-| Capability | Description |
-|------------|-------------|
-| **Shell-first agent** | `bash` + `save_finding` + `done` — the same three tools BoxPwnr uses to hit 97% |
-| **White-box mode** | `--repo <path>` lets the agent read source before attacking |
-| **MCP server** | `pwnkit mcp-server` exposes pwnkit as a Model Context Protocol tool |
-| **npm audit** | Malicious-code and supply-chain analysis for any npm package |
-| **OpenAPI import** | `--api-spec <path>` pre-loads endpoint knowledge from OpenAPI 3.x / Swagger 2.0 |
-| **Authenticated scanning** | `--auth <json\|file>` supports `bearer`, `cookie`, `basic`, `header` |
-| **Kali Docker executor** | Run agent commands inside a Kali container with the full toolset (`PWNKIT_FEATURE_DOCKER_EXECUTOR=1`) |
-| **PTY sessions** | Long-lived interactive sessions for reverse shells, DB clients, SSH (`PWNKIT_FEATURE_PTY_SESSION=1`) |
-| **Playwright browser** | Real-browser XSS oracle that cracked XBEN-011 and XBEN-018 |
-| **Best-of-N racing** | `--race` runs multiple attack strategies in parallel and keeps whichever lands first |
-| **EGATS tree search** | `--egats` enables Evidence-Gated Attack Tree Search (beam-search over a hypothesis tree) |
+## Docs
 
-### The False-Positive Reduction Moat
+- [Getting Started](https://docs.pwnkit.com/getting-started)
+- [Commands](https://docs.pwnkit.com/commands)
+- [Configuration](https://docs.pwnkit.com/configuration)
+- [Recipes](https://docs.pwnkit.com/recipes)
+- [Architecture](https://docs.pwnkit.com/architecture)
+- [Triage Pipeline](https://docs.pwnkit.com/triage)
+- [Benchmark](https://docs.pwnkit.com/benchmark)
 
-pwnkit ships an 11-layer triage pipeline between the research and verify agents. Each layer is an independent filter that can kill or downgrade a finding. The overall effect matches the neural-plus-symbolic agreement Endor Labs uses to reach ~95% FP elimination — except it's open source and runs on your laptop. Full detail at [docs.pwnkit.com/triage](https://docs.pwnkit.com/triage).
+## Snapshot
 
-| # | Layer | What it kills |
-|---|-------|---------------|
-| 1 | Holding-it-wrong filter | Findings whose "vuln" is the documented behavior of the sink (`fs.writeFile`, `vm.compileFunction`) |
-| 2 | 45-feature extractor | Numeric feature vector per finding for downstream ML models |
-| 3 | Per-class oracles | Category-specific deterministic checks (SQLi timing, XSS token, `/etc/passwd` signature, IDOR) |
-| 4 | Reachability gate | Findings whose sink is not reachable from an HTTP handler or CLI entry point |
-| 5 | Multi-modal agreement | Requires agreement with [foxguard](https://github.com/peaktwilight/foxguard) on the same source tree |
-| 6 | PoV generation gate | No working PoC in N turns → downgrade to info (arXiv:2509.07225) |
-| 7 | Structured 4-step verify | Decomposes blind verify into Reachability → Payload → Impact → Exploit |
-| 8 | Self-consistency voting | Runs the structured pipeline N times and takes a majority vote |
-| 9 | Adversarial debate | Prosecutor vs defender agents debate the finding, skeptical judge decides |
-| 10 | Assistant memories | Semgrep-style per-target FP memories — human triage decisions injected as few-shot examples |
-| 11 | EGATS tree search | Beam-search over a hypothesis tree, expanding only evidence-backed branches |
+- XBOW: 91/104 = 87.5%
+- Cybench: 8/10 = 80%
+- AI / LLM regression set: 10/10
 
-Every layer is independently toggleable via `PWNKIT_FEATURE_*` environment variables. See [docs.pwnkit.com/features](https://docs.pwnkit.com/features) for the full matrix.
-
-### Output
-
-| Format | Flag | Use case |
-|--------|------|----------|
-| Terminal | *(default)* | Human-readable report with colored severity |
-| JSON | `--format json` | Programmatic consumption, CI pipelines |
-| HTML | `--format html` | Rich shareable report |
-| Markdown | `--format md` | GitHub issues, PR comments |
-| SARIF | `--format sarif` | GitHub code scanning, Azure DevOps |
-| PDF | `--format pdf` | Formal pentest reports for clients |
-
-### Integrations
-
-| Integration | How |
-|-------------|-----|
-| **GitHub Issues export** | `--export github:owner/repo` opens one issue per confirmed finding |
-| **GitHub Action** | `peaktwilight/pwnkit@main` — drop-in CI/CD |
-| **OpenAPI / Swagger** | `--api-spec openapi.yaml` to pre-seed endpoint knowledge |
-| **Authenticated scanning** | `--auth auth.json` (bearer / cookie / basic / header) |
-| **foxguard cross-validation** | `PWNKIT_FEATURE_MULTIMODAL=1` when a source tree is available |
-| **MCP** | `pwnkit mcp-server` — expose pwnkit to any MCP-aware client |
-| **Triage CLI** | `pwnkit triage memory add/list/remove/mark-fp` for FP memory management |
-
-## Benchmark
-
-Validated across 5 benchmark suites. Full breakdowns at [docs.pwnkit.com/benchmark](https://docs.pwnkit.com/benchmark).
-
-### XBOW — 104 Docker CTF challenges
-
-[XBOW](https://github.com/xbow-engineering/validation-benchmarks) is the standard benchmark for autonomous web pentesters: SQLi, IDOR, SSTI, RCE, SSRF, and more. Each challenge hides a `FLAG{...}` behind a real vulnerability.
-
-| Tool | Score | Maintained? | Comparable? |
-|------|-------|-------------|-------------|
-| [BoxPwnr ensemble](https://github.com/0ca/BoxPwnr) | 97.1% (101/104) | Yes | ❌ Best-of-N across 10+ configs, not a single command |
-| [Shannon](https://github.com/KeygraphHQ/shannon) | 96.15% (100/104) | Yes | ❌ Modified hint-free fork + white-box mode |
-| [KinoSec](https://kinosec.ai) | 92.3% (96/104) | Yes | ❌ Proprietary, closed source |
-| **pwnkit** | **87.5% (91/104)** | **✓ Active** | **✓ Single command, single config** |
-| [XBOW](https://xbow.com) | 85% (88/104) | Yes | ❌ Built by XBOW for their own benchmark |
-| [Cyber-AutoAgent](https://github.com/westonbrown/Cyber-AutoAgent) | 85% (88/104) | **❌ Archived Nov 2025** | ✓ |
-| [BoxPwnr (best single config)](https://github.com/0ca/BoxPwnr) | ~80-82% | Yes | ✓ |
-| [deadend-cli](https://github.com/xoxruns/deadend-cli) | ~80% | Yes | ✓ |
-| [MAPTA](https://arxiv.org/abs/2508.20816) | 76.9% (80/104) | — | ✓ Academic |
-
-**The honest leadership claim:** pwnkit is the only **maintained** open-source agent above 85% on the **standard** XBOW benchmark with a **single reproducible configuration**. All five qualifiers are load-bearing. White-box mode (`--repo`) is available but the 87.5% score is from black-box and white-box runs combined on the unmodified benchmark.
-
-### Other suites
-
-| Suite | Description | Status |
-|-------|-------------|--------|
-| AI/LLM regression | Prompt injection, jailbreaks, system-prompt extraction, MCP SSRF | **10/10** |
-| [Cybench](https://github.com/andyzorigin/cybench) | 40 real CTF challenges (web, crypto, pwn, reverse, forensics) | **8/10 = 80%** (first run, 10-challenge subset) |
-| [AutoPenBench](https://github.com/lucagioacchini/auto-pen-bench) | 33 network/CVE pentesting tasks | Runner built, needs Linux Docker |
-| [HarmBench](https://www.harmbench.org/) | 510 LLM safety behaviors | Harness built, needs target LLM |
-| npm audit | 30 packages (malicious + CVE + safe) | Runner built |
+For the full benchmark methodology, caveats, and historical runs, use the benchmark docs page instead of the README.
 
 ## GitHub Action
 
@@ -198,33 +120,17 @@ Validated across 5 benchmark suites. Full breakdowns at [docs.pwnkit.com/benchma
     OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 ```
 
-## Contributing
+## Development
 
 ```bash
 git clone https://github.com/peaktwilight/pwnkit.git
-cd pwnkit && pnpm install && pnpm test
+cd pwnkit
+pnpm install
+pnpm lint
+pnpm test
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Created by a security researcher with [7 published CVEs](https://doruk.ch/blog).
-
-## Part of the open-source modern SOC
-
-pwnkit is one piece of a three-part open-source security stack — the **opensoar-hq trinity**:
-
-| Project | Role | Stack |
-|---------|------|-------|
-| **[pwnkit](https://github.com/peaktwilight/pwnkit)** | Detect — AI agent pentester | TypeScript |
-| **[foxguard](https://github.com/peaktwilight/foxguard)** | Prevent — security scanner | Rust |
-| **[opensoar](https://github.com/opensoar-hq/opensoar-core)** | Respond — SOAR platform | Python |
-
-When both a source tree and `foxguard` are available, pwnkit runs foxguard against the same code and requires agreement before auto-accepting findings. This is the same neural-plus-symbolic pattern Endor Labs uses for ~95% FP elimination — except open-source and running on two tools anyone can install:
-
-```bash
-export PWNKIT_FEATURE_MULTIMODAL=1
-npx pwnkit-cli scan --target https://example.com --repo ./source
-```
-
-No other open-source project ships this neural-plus-symbolic agreement pattern today.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

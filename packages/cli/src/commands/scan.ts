@@ -50,7 +50,7 @@ export function registerScanCommand(program: Command): void {
     .description("Run autonomous pentest against a URL, web app, or MCP server")
     .requiredOption("--target <target>", "Target URL or mcp:// endpoint")
     .option("--depth <depth>", "Scan depth: quick, default, deep", "default")
-    .option("--format <format>", "Output format: terminal, json, md, html, sarif", "terminal")
+    .option("--format <format>", "Output format: terminal, json, md, html, sarif, pdf", "terminal")
     .option("--runtime <runtime>", "Runtime: auto (default), api, claude, codex, gemini", "auto")
     .option("--mode <mode>", "Scan mode: probe, deep, mcp, web")
     .option("--timeout <ms>", "Request timeout in milliseconds", "30000")

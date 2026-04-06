@@ -7,7 +7,8 @@ import { detectAndRoute } from "../../packages/cli/src/routing.js";
 import { ToolExecutor } from "../../packages/core/src/agent/tools.js";
 
 const thisDir = fileURLToPath(new URL(".", import.meta.url));
-const cliPath = join(thisDir, "../../packages/cli/dist/index.js");
+const cliPath = join(thisDir, "../../packages/cli/src/index.ts");
+const tsxPath = join(thisDir, "../node_modules/.bin/tsx");
 const testDbPath = join(tmpdir(), `pwnkit-cli-test-${Date.now()}.db`);
 
 const projectRoot = join(thisDir, "../..");
@@ -23,7 +24,7 @@ const run = (args: string[], timeout = 30_000, extraEnv: Record<string, string |
     if (k.startsWith("pnpm_") || k === "PNPM_PACKAGE_NAME") continue;
     if (v !== undefined) cleanEnv[k] = v;
   }
-  return spawnSync("node", [cliPath, ...args], {
+  return spawnSync(tsxPath, [cliPath, ...args], {
     cwd: projectRoot,
     encoding: "utf-8",
     timeout,
@@ -88,7 +89,7 @@ describe("CLI E2E", () => {
     const result = run(
       ["audit", "is-odd", "--runtime", "api", "--format", "json", "--db-path", testDbPath],
       60_000,
-      { OPENROUTER_API_KEY: "", ANTHROPIC_API_KEY: "", OPENAI_API_KEY: "" },
+      { OPENROUTER_API_KEY: "", ANTHROPIC_API_KEY: "", AZURE_OPENAI_API_KEY: "", OPENAI_API_KEY: "" },
     );
     expect(result.status).toBe(0);
     const json = JSON.parse(result.stdout);
@@ -119,7 +120,7 @@ describe("CLI E2E", () => {
     const result = run(
       ["audit", "is-odd", "--runtime", "api", "--format", "terminal", "--db-path", testDbPath + "-share"],
       60_000,
-      { OPENROUTER_API_KEY: "", ANTHROPIC_API_KEY: "", OPENAI_API_KEY: "" },
+      { OPENROUTER_API_KEY: "", ANTHROPIC_API_KEY: "", AZURE_OPENAI_API_KEY: "", OPENAI_API_KEY: "" },
     );
     const output = result.stdout + result.stderr;
     expect(output).toContain("pwnkit.com/r#");

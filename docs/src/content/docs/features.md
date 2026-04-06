@@ -26,7 +26,7 @@ For deep dives, follow the linked pages.
 | `--mode <m>` | `probe`, `deep`, `mcp`, or `web` |
 | `--depth <d>` | `quick`, `default`, or `deep` |
 | `--runtime <rt>` | `api`, `claude`, `codex`, `gemini`, or `auto` |
-| `--format <f>` | `terminal`, `json`, `md`, `html`, `sarif` |
+| `--format <f>` | `terminal`, `json`, `md`, `html`, `sarif`, `pdf` |
 | `--repo <path>` | Source code path for white-box scanning |
 | `--auth <json\|file>` | Authenticated scanning. JSON string or file path; supports `bearer`, `cookie`, `basic`, `header` |
 | `--api-spec <path>` | Pre-load endpoints from OpenAPI 3.x / Swagger 2.0 (JSON or YAML) |

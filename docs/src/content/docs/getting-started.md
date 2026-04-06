@@ -177,7 +177,7 @@ npx pwnkit-cli scan --target https://example.com --mode web \
   --export github:myorg/myrepo
 ```
 
-### Generate an HTML or Markdown report
+### Generate an HTML, Markdown, or PDF report
 
 ```bash
 # HTML (auto-opens in browser)
@@ -189,6 +189,11 @@ npx pwnkit-cli scan --target https://example.com --mode web \
 npx pwnkit-cli scan --target https://example.com --mode web \
   --depth deep \
   --format md > example-pentest.md
+
+# PDF (auto-opens in your default viewer and saves to a temp file)
+npx pwnkit-cli scan --target https://example.com --mode web \
+  --depth deep \
+  --format pdf
 ```
 
 ## Next steps

@@ -462,7 +462,11 @@ function selectVerificationRuntime(
   hasApiKey: boolean,
   availableRuntimes: Set<RuntimeType>,
 ): RuntimeMode | null {
-  if (preferredRuntime && preferredRuntime !== "api" && preferredRuntime !== "auto") {
+  if (preferredRuntime === "api") {
+    return hasApiKey ? "api" : null;
+  }
+
+  if (preferredRuntime && preferredRuntime !== "auto") {
     return availableRuntimes.has(preferredRuntime) ? preferredRuntime : null;
   }
 
@@ -475,6 +479,22 @@ function selectVerificationRuntime(
   }
 
   return null;
+}
+
+function hasRequestedAnalysisRuntime(
+  preferredRuntime: RuntimeMode | undefined,
+  hasApiKey: boolean,
+  availableRuntimes: Set<RuntimeType>,
+): boolean {
+  if (preferredRuntime === "api") {
+    return hasApiKey;
+  }
+
+  if (preferredRuntime && preferredRuntime !== "auto") {
+    return availableRuntimes.has(preferredRuntime);
+  }
+
+  return hasApiKey || availableRuntimes.size > 0;
 }
 
 // ── Main entry point ──
@@ -663,6 +683,11 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
     const hasApiKey = !!(opts.apiKey || process.env.OPENROUTER_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.AZURE_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
     const availableRuntimes = await detectAvailableRuntimes();
     const hasCliRuntime = availableRuntimes.size > 0;
+    const canUseAiRuntime = hasRequestedAnalysisRuntime(
+      opts.runtime,
+      hasApiKey,
+      availableRuntimes,
+    );
     const verificationRuntime = selectVerificationRuntime(opts.runtime, hasApiKey, availableRuntimes);
 
     // Log pipeline decisions to stderr for CI visibility
@@ -670,18 +695,23 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
       process.stderr.write(`[pwnkit] Research: apiKey=${hasApiKey}, runtimes=[${[...availableRuntimes].join(",")}], config=${opts.runtime ?? "auto"}\n`);
     }
 
-    if (!hasApiKey && !hasCliRuntime) {
-      warnings.push({ stage: "research", message: "No API key or CLI runtime available. AI analysis skipped. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY, AZURE_OPENAI_API_KEY, or OPENAI_API_KEY." });
-      emit({ type: "stage:end", stage: "research", message: "Skipped — no API key or CLI runtime" });
+    if (!canUseAiRuntime) {
+      const skipMessage = opts.runtime === "api"
+        ? "Explicit runtime 'api' requested without an API key. AI analysis skipped."
+        : opts.runtime && opts.runtime !== "auto"
+          ? `Requested runtime '${opts.runtime}' is not available. AI analysis skipped.`
+          : "No API key or CLI runtime available. AI analysis skipped. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY, AZURE_OPENAI_API_KEY, or OPENAI_API_KEY.";
+      warnings.push({ stage: "research", message: skipMessage });
+      emit({ type: "stage:end", stage: "research", message: "Skipped — no compatible AI runtime" });
       emit({ type: "stage:end", stage: "verify", message: "Skipped" });
-      logPipelineEvent("research", "stage_skipped", { reason: "no_runtime" });
-      logPipelineEvent("verify", "stage_skipped", { reason: "no_runtime" });
+      logPipelineEvent("research", "stage_skipped", { reason: "no_runtime", requestedRuntime: opts.runtime ?? "auto" });
+      logPipelineEvent("verify", "stage_skipped", { reason: "no_runtime", requestedRuntime: opts.runtime ?? "auto" });
       // Skip research + verify, go straight to report
     }
 
     let findings: Finding[] = [];
 
-    if (hasApiKey || hasCliRuntime) {
+    if (canUseAiRuntime) {
     const existingResearchSession = opts.resumeScanId ? db?.getSession(persistedScanId, prepared.resolvedType === "npm-package" ? "audit" : "review") : null;
     const existingPersistedFindings = opts.resumeScanId
       ? ((db?.getFindings(persistedScanId) ?? []).map((row: any) => restorePersistedFinding(row)) as Finding[])

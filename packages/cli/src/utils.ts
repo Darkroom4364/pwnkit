@@ -11,6 +11,7 @@ export async function getRuntimeAvailability(): Promise<RuntimeAvailability> {
   const hasApiKey = !!(
     process.env.OPENROUTER_API_KEY ||
     process.env.ANTHROPIC_API_KEY ||
+    process.env.AZURE_OPENAI_API_KEY ||
     process.env.OPENAI_API_KEY
   );
 
@@ -38,7 +39,7 @@ export async function checkRuntimeAvailability(runtime: RuntimeMode): Promise<vo
   } else {
     console.log(chalk.yellow("  Warning: No API key or local agent runtime detected. AI analysis will be skipped."));
   }
-  console.log(chalk.gray("  API keys: OPENROUTER_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY"));
+  console.log(chalk.gray("  API keys: OPENROUTER_API_KEY, ANTHROPIC_API_KEY, AZURE_OPENAI_API_KEY, OPENAI_API_KEY"));
   console.log("");
 }
 

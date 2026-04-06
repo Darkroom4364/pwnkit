@@ -152,7 +152,7 @@ Common patterns to watch for:
 Every tool call, error, and stage transition is logged to SQLite via `db.logEvent`. You can query the event log for a scan to reconstruct exactly what happened:
 
 ```bash
-pwnkit history <scan-id> --events
+npx pwnkit-cli history <scan-id> --events
 ```
 
 Session state is persisted every 2 turns, so interrupted scans can be resumed with `--resume <scan-id>`.

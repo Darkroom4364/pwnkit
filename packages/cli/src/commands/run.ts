@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import chalk from "chalk";
 import { VERSION } from "@pwnkit/shared";
-import type { ScanDepth, OutputFormat, RuntimeMode, ScanMode, AuthConfig } from "@pwnkit/shared";
+import type { ScanDepth, OutputFormat, RuntimeMode, ScanMode, AuthConfig, ScanReport } from "@pwnkit/shared";
 import { agenticScan, runPipeline, createRuntime } from "@pwnkit/core";
-import { formatAuditReport, formatReviewReport, formatReport } from "../formatters/index.js";
+import { formatAuditReport, formatReviewReport, formatReport, generatePdfReport } from "../formatters/index.js";
 import { buildShareUrl, checkRuntimeAvailability } from "../utils.js";
 
 export interface RunOptions {
@@ -32,6 +32,36 @@ export interface RunOptions {
   exportTarget?: string;
   race?: boolean;
   egats?: boolean;
+}
+
+function toScanReport(report: any): ScanReport {
+  if (report.targetType === "npm-package") {
+    return {
+      target: `${report.package}@${report.version}`,
+      scanDepth: "deep",
+      startedAt: report.startedAt,
+      completedAt: report.completedAt,
+      durationMs: report.durationMs,
+      summary: report.summary,
+      findings: report.findings,
+      warnings: [],
+    };
+  }
+
+  if (report.targetType === "source-code") {
+    return {
+      target: report.repo,
+      scanDepth: "deep",
+      startedAt: report.startedAt,
+      completedAt: report.completedAt,
+      durationMs: report.durationMs,
+      summary: report.summary,
+      findings: report.findings,
+      warnings: [],
+    };
+  }
+
+  return report as ScanReport;
 }
 
 export async function runUnified(opts: RunOptions): Promise<void> {
@@ -113,21 +143,30 @@ export async function runUnified(opts: RunOptions): Promise<void> {
       await inkUI.waitForExit();
     } else {
       const reportAny = report as any;
-      const output = reportAny.targetType === "npm-package"
-        ? formatAuditReport(reportAny, format)
-        : reportAny.targetType === "source-code"
-          ? formatReviewReport(reportAny, format)
-          : formatReport(reportAny, format);
-
-      if (format === "html") {
+      if (format === "html" || format === "pdf") {
+        const extension = format === "pdf" ? "pdf" : "html";
         const filePath = opts.reportPath
           ? resolve(opts.reportPath)
-          : join(tmpdir(), `pwnkit-report-${Date.now()}.html`);
-        await writeFile(filePath, output, "utf-8");
+          : join(tmpdir(), `pwnkit-report-${Date.now()}.${extension}`);
+        if (format === "pdf") {
+          await generatePdfReport(toScanReport(reportAny), filePath);
+        } else {
+          const output = reportAny.targetType === "npm-package"
+            ? formatAuditReport(reportAny, format)
+            : reportAny.targetType === "source-code"
+              ? formatReviewReport(reportAny, format)
+              : formatReport(reportAny, format);
+          await writeFile(filePath, output, "utf-8");
+        }
         console.log(chalk.green(`Report saved to: ${filePath}`));
         const openCmd = process.platform === "darwin" ? "open" : "xdg-open";
         execFile(openCmd, [filePath], () => {});
       } else {
+        const output = reportAny.targetType === "npm-package"
+          ? formatAuditReport(reportAny, format)
+          : reportAny.targetType === "source-code"
+            ? formatReviewReport(reportAny, format)
+            : formatReport(reportAny, format);
         console.log(output);
       }
     }

@@ -80,7 +80,7 @@ export function registerResumeCommand(program: Command): void {
     .description("Resume a previous scan from persisted state")
     .argument("<scanId>", "Scan ID to resume")
     .option("--db-path <path>", "Path to SQLite database")
-    .option("--format <format>", "Output format override: terminal, json, md, html, sarif")
+    .option("--format <format>", "Output format override: terminal, json, md, html, sarif, pdf")
     .option("--runtime <runtime>", "Runtime override: auto, claude, codex, gemini, api")
     .option("--timeout <ms>", "AI agent timeout override in milliseconds")
     .option("--api-key <key>", "API key for LLM provider")

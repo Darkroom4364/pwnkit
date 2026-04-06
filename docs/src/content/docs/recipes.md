@@ -99,7 +99,7 @@ npx pwnkit-cli scan \
 
 Each finding becomes an issue labelled by severity (`sev:critical`, `sev:high`, …) and category (`cat:xss`, `cat:ssrf`, …) so you can triage from the GitHub UI.
 
-## Generate an HTML or Markdown report
+## Generate an HTML, Markdown, or PDF report
 
 ```bash
 # HTML (auto-opens in browser and saves to a temp file)
@@ -115,6 +115,13 @@ npx pwnkit-cli scan \
   --mode web \
   --depth deep \
   --format md > example-pentest.md
+
+# PDF (auto-opens in your default viewer and saves to a temp file)
+npx pwnkit-cli scan \
+  --target https://example.com \
+  --mode web \
+  --depth deep \
+  --format pdf
 ```
 
 Both formats include an executive summary, a severity breakdown, per-finding evidence blocks with request/response pairs, and reproduction steps. Works for `audit` and `review` too.

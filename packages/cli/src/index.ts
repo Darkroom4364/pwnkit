@@ -27,7 +27,7 @@ void preloadBanner();
 const program = new Command();
 
 program
-  .name("pwnkit")
+  .name("pwnkit-cli")
   .description("Fully autonomous agentic pentesting framework")
   .version(VERSION);
 

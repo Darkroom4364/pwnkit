@@ -197,7 +197,7 @@ ambiguous findings where a single verify pass is noisy.
 ## 9. Assistant memories
 
 **Module:** `triage/memories.ts`
-**CLI:** `pwnkit triage ...`
+**CLI:** `pwnkit-cli triage ...`
 **Flag:** `PWNKIT_FEATURE_TRIAGE_MEMORIES=1`
 
 Semgrep-style per-target persistent FP context that learns from human
@@ -218,18 +218,18 @@ Relevance is currently a lightweight token-overlap heuristic; an
 embedding-backed ranker can replace `scoreMemory` without touching the
 public API.
 
-### `pwnkit triage` commands
+### `pwnkit-cli triage` commands
 
 ```bash
 # Mark a finding as a false positive and remember why
-pwnkit triage mark-fp <finding-id> --reason "test fixture, not prod"
+pwnkit-cli triage mark-fp <finding-id> --reason "test fixture, not prod"
 
 # Add a standalone memory (without a backing finding)
-pwnkit triage memory add --finding <id> --reason "sink is harmless helper" \
+pwnkit-cli triage memory add --finding <id> --reason "sink is harmless helper" \
   --scope package --scope-value my-pkg
 
 # List memories
-pwnkit triage memory list --scope target
+pwnkit-cli triage memory list --scope target
 ```
 
 ## 10. Adversarial debate

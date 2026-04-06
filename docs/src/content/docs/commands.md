@@ -49,7 +49,7 @@ npx pwnkit-cli scan --target https://example.com --mode web \
 | `--mode <mode>` | Scan mode: `probe`, `deep`, `mcp`, `web` | auto |
 | `--depth <depth>` | Scan depth: `quick`, `default`, `deep` | `default` |
 | `--runtime <rt>` | Runtime: `auto`, `api`, `claude`, `codex`, `gemini` | `auto` |
-| `--format <fmt>` | Output format: `terminal`, `json`, `md`, `html`, `sarif` | `terminal` |
+| `--format <fmt>` | Output format: `terminal`, `json`, `md`, `html`, `sarif`, `pdf` | `terminal` |
 | `--timeout <ms>` | Request timeout in milliseconds | `30000` |
 | `--api-key <key>` | API key for the LLM provider | (from env) |
 | `--model <model>` | Specific LLM model to use | provider default |
@@ -124,7 +124,7 @@ The package is installed in a sandbox, scanned with semgrep, and then reviewed b
 | `--version <v>` | Specific version to audit | `latest` |
 | `--depth <d>` | Audit depth: `quick`, `default`, `deep` | `default` |
 | `--runtime <rt>` | Runtime: `auto`, `api`, `claude`, `codex`, `gemini` | `auto` |
-| `--format <fmt>` | Output format: `terminal`, `json`, `md`, `html`, `sarif` | `terminal` |
+| `--format <fmt>` | Output format: `terminal`, `json`, `md`, `html`, `sarif`, `pdf` | `terminal` |
 | `--timeout <ms>` | AI agent timeout in milliseconds | `600000` |
 | `--api-key <key>` | API key for the LLM provider | (from env) |
 | `--model <model>` | Specific LLM model to use | provider default |
@@ -152,7 +152,7 @@ npx pwnkit-cli review ./my-repo --diff-base origin/main --changed-only
 |------|-------------|---------|
 | `<repo>` | Local path or git URL | (required) |
 | `--depth <d>` | Review depth: `quick`, `default`, `deep` | `default` |
-| `--format <fmt>` | Output format: `terminal`, `json`, `md`, `html`, `sarif` | `terminal` |
+| `--format <fmt>` | Output format: `terminal`, `json`, `md`, `html`, `sarif`, `pdf` | `terminal` |
 | `--runtime <rt>` | Runtime: `auto`, `api`, `claude`, `codex`, `gemini` | `auto` |
 | `--diff-base <ref>` | Git base ref for diff-aware review | (none) |
 | `--changed-only` | Restrict semgrep + prioritization to changed files | `false` |

@@ -93,6 +93,9 @@ pwnkit supports multiple output formats:
 
 | Format | Description |
 |--------|-------------|
+| `terminal` | Human-readable terminal summary with share URL |
+| `html` | Rich browser report saved to a temporary file |
+| `pdf` | Printable report saved to a temporary file |
 | `json` | Machine-readable JSON output for pipelines |
 | `sarif` | SARIF format for the GitHub Security tab |
 | `markdown` | Human-readable Markdown report |

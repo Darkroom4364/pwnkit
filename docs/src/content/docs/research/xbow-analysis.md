@@ -117,7 +117,7 @@ The vulnerability was hardcoded SSH credentials (base64 encoded in app.py). No w
 
 **This is the strongest evidence that white-box access dramatically changes the score ceiling.** Shannon's 96.15% advantage over KinoSec's 92.3% is largely explained by source access.
 
-Usage: `pwnkit scan --target http://target --repo ./source`
+Usage: `npx pwnkit-cli scan --target http://target --repo ./source`
 
 ## White-box vs black-box: head-to-head on impossible challenges
 
@@ -131,7 +131,7 @@ Usage: `pwnkit scan --target http://target --repo ./source`
 
 **White-box flips 3/5 impossible challenges.** The ones it cracks have vulnerabilities hidden in the code (hardcoded credentials, server-side logic) that are invisible over HTTP. The ones that still fail (061, 092) have exploitation chains too complex for the current turn budget.
 
-Usage: `pwnkit scan --target http://target --repo ./source`
+Usage: `npx pwnkit-cli scan --target http://target --repo ./source`
 
 CI runs both modes independently with a dropdown selector.
 
@@ -148,8 +148,8 @@ Beyond XBOW, these benchmarks are relevant to pwnkit's capabilities:
 
 | Benchmark | Domain | Scale | Best autonomous score | pwnkit relevance |
 |-----------|--------|-------|----------------------|------------------|
-| [SastBench](https://arxiv.org/abs/2601.02941) | Code review | Real CVEs + FP triage | Not published | `pwnkit review` -- TP/FP classification |
-| [HarmBench](https://github.com/centerforaisafety/HarmBench) | LLM red teaming | 510 behaviors | Varies by method | `pwnkit scan` on LLM targets |
+| [SastBench](https://arxiv.org/abs/2601.02941) | Code review | Real CVEs + FP triage | Not published | `pwnkit-cli review` -- TP/FP classification |
+| [HarmBench](https://github.com/centerforaisafety/HarmBench) | LLM red teaming | 510 behaviors | Varies by method | `pwnkit-cli scan` on LLM targets |
 | [JailbreakBench](https://github.com/JailbreakBench/jailbreakbench) | Jailbreak detection | 200 behaviors | Leaderboard | Prompt injection + jailbreak detection |
 | [AutoPenBench](https://github.com/lucagioacchini/auto-pen-bench) | Web pentesting | 33 Docker tasks | 21% autonomous | Shell-first should beat this |
 | [CyberSecEval 4](https://github.com/meta-llama/PurpleLlama) | Multi-domain | Prompt injection, offensive ops | Varies | Meta brand, cherry-pick subsets |

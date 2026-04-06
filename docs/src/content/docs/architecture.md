@@ -170,6 +170,9 @@ If the verify agent cannot reproduce the vulnerability, it is killed as a false 
 
 Only confirmed findings (those that survived blind verification) are included in the final report. Output formats:
 
+- **Terminal** — default interactive summary with share URL
+- **HTML** — rich browser report
+- **PDF** — printable report
 - **SARIF** — for the GitHub Security tab
 - **Markdown** — human-readable report
 - **JSON** — machine-readable for pipelines

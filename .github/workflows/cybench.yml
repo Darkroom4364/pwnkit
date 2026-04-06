@@ -56,8 +56,12 @@ jobs:
 
       - run: corepack enable && corepack prepare pnpm@9 --activate
 
-      - name: Clone Cybench repo (with submodules — required for all 40 tasks)
-        run: git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/andyzorigin/cybench "$CYBENCH_PATH"
+      - name: Clone Cybench (0ca/cybench-patched fork)
+        run: |
+          # Use 0ca/cybench-patched (same maintainer as our XBOW patched fork).
+          # Fixes deprecated Debian Buster repos in Dockerfiles + adds 9 missing
+          # LosFuzzys/GlacierCTF2023 challenges that upstream lost.
+          git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/0ca/cybench-patched "$CYBENCH_PATH"
 
       - run: pnpm install --frozen-lockfile
 

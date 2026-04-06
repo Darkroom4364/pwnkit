@@ -76,6 +76,19 @@ export const features = {
   evidenceGate: env("PWNKIT_FEATURE_EVIDENCE_GATE", true),
 
   /**
+   * Opt-in cloud-sink webhook integration (`packages/core/src/cloud-sink.ts`).
+   * When enabled AND the user has set PWNKIT_CLOUD_SINK + PWNKIT_CLOUD_SCAN_ID,
+   * every finding and the final scan report are POSTed to the configured
+   * remote endpoint in real time.
+   *
+   * Default ON so the env-var trio is sufficient to enable streaming, but the
+   * flag exists so operators can force-disable the integration in environments
+   * where outbound HTTP from the scanner is not desired (e.g. air-gapped CI).
+   * Disable via PWNKIT_FEATURE_CLOUD_SINK=0.
+   */
+  cloudSink: env("PWNKIT_FEATURE_CLOUD_SINK", true),
+
+  /**
    * Pre-recon CVE check (`packages/core/src/pre-recon-cve.ts`).
    * In white-box mode (`--repo` set), runs `npm audit` / `pip-audit`
    * against the source tree before the attack agent starts and injects

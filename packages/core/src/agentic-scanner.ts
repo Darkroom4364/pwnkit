@@ -38,6 +38,7 @@ import {
 } from "./triage/index.js";
 import { runSelfConsistencyVerify } from "./triage/verify-pipeline.js";
 import { generatePov } from "./triage/pov-gate.js";
+import { getCloudSinkConfig, postFinding, postFinalReport } from "./cloud-sink.js";
 
 export interface AgenticScanOptions {
   config: ScanConfig;
@@ -342,6 +343,8 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
       }
 
       emit({ type: "stage:end", stage: "report", message: `Report: ${summary.totalFindings} findings` });
+      // Stream final report to the opt-in webhook sink (no-op when unset).
+      await postFinalReport(report);
       return report;
     }
 
@@ -1053,6 +1056,9 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
       message: `Report: ${summary.totalFindings} findings (${confirmed} confirmed)`,
     });
 
+    // Stream final report to the opt-in webhook sink (no-op when unset).
+    await postFinalReport(report);
+
     return report;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1207,6 +1213,7 @@ async function runNativeAttack(
 
   const effectiveMaxTurns = isWeb ? Math.max(maxTurns, 15) : maxTurns;
 
+  const cloudSinkCfg = getCloudSinkConfig();
   const onTurnHandler = (_turn: number, toolCalls: import("./agent/types.js").ToolCall[]) => {
     for (const call of toolCalls) {
       if (call.name === "save_finding") {
@@ -1215,6 +1222,9 @@ async function runNativeAttack(
           message: `[${call.arguments.severity}] ${call.arguments.title}`,
           data: call.arguments,
         });
+        // Fire-and-forget: stream finding to opt-in webhook sink.
+        // Failures are logged in postFinding and never abort the scan.
+        void postFinding(call.arguments, cloudSinkCfg);
       }
     }
   };
@@ -1581,6 +1591,7 @@ async function runLegacyAttack(
     db,
     onTurn: (turn, msg) => {
       const calls = msg.toolCalls ?? [];
+      const cloudSinkCfg = getCloudSinkConfig();
       for (const call of calls) {
         if (call.name === "save_finding") {
           emit({
@@ -1588,6 +1599,7 @@ async function runLegacyAttack(
             message: `[${call.arguments.severity}] ${call.arguments.title}`,
             data: call.arguments,
           });
+          void postFinding(call.arguments, cloudSinkCfg);
         }
       }
     },

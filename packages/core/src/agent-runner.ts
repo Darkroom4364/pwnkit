@@ -11,6 +11,7 @@ import type { NativeRuntime } from "./runtime/types.js";
 import { CLI_RUNTIME_TYPES } from "./shared-analysis.js";
 import { parseFindingsFromCliOutput } from "./findings-parser.js";
 import { estimateCost } from "./agent/cost.js";
+import { getCloudSinkConfig, postFinding } from "./cloud-sink.js";
 
 // ── Types ──
 
@@ -249,6 +250,7 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Anal
         runtime: apiRuntime as NativeRuntime,
         db,
         onTurn: (_turn, toolCalls, _results) => {
+          const cloudSinkCfg = getCloudSinkConfig();
           for (const call of toolCalls) {
             if (call.name === "save_finding") {
               emit({
@@ -256,6 +258,7 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Anal
                 message: `[${call.arguments.severity}] ${call.arguments.title}`,
                 data: call.arguments,
               });
+              void postFinding(call.arguments, cloudSinkCfg);
             } else if (call.name === "read_file") {
               emit({
                 type: "stage:start",
@@ -364,6 +367,7 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Anal
     db,
     onTurn: (_turn, msg) => {
       const calls = msg.toolCalls ?? [];
+      const cloudSinkCfg = getCloudSinkConfig();
       for (const call of calls) {
         if (call.name === "save_finding") {
           emit({
@@ -371,6 +375,7 @@ export async function runAnalysisAgent(opts: AnalysisAgentOptions): Promise<Anal
             message: `[${call.arguments.severity}] ${call.arguments.title}`,
             data: call.arguments,
           });
+          void postFinding(call.arguments, cloudSinkCfg);
         }
       }
     },

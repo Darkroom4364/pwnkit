@@ -7,13 +7,23 @@ This page is the single source of truth for "why we made these decisions and wha
 
 ## Topics
 
+### [Triage Dataset](/research/triage-dataset/)
+
+How benchmark runs and verified findings are converted into labeled JSONL
+for triage-model training.
+
+### [Feature Extractor](/research/feature-extractor/)
+
+The 45 handcrafted features exposed by `extractFeatures()` and how they fit
+into the hybrid triage direction.
+
 ### [Agent Techniques](/research/agent-techniques/)
 
 What shipped in the agent loop: planning, reflection checkpoints, context compaction, dynamic playbooks, progress handoff, and EGATS.
 
 ### [FP Reduction Moat](/research/fp-reduction-moat/)
 
-The full false-positive reduction stack, why the layers are ordered the way they are, and which parts are inspired by Endor, Semgrep Assistant, or newer triage papers.
+The full false-positive reduction stack, why the layers are ordered the way they are, and how the dataset / feature foundation supports the shipped runtime layers.
 
 ### [Finding Triage ML](/research/finding-triage-ml/)
 

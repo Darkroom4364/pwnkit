@@ -82,6 +82,7 @@ npm i -g pwnkit-cli
 - `scan` targets AI / LLM apps, web apps, REST / OpenAPI APIs, and MCP servers.
 - `audit` installs and inspects npm packages with `npm audit`, semgrep, and AI review.
 - `review` performs deep source-code security review on a local repo or Git URL.
+- `triage-data` turns benchmark runs and verified findings into labeled JSONL for triage-model training.
 - `dashboard`, `history`, `findings`, and `triage` provide local persistence and review workflows.
 
 ## Why It’s Different

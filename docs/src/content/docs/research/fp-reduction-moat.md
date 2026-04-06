@@ -5,7 +5,7 @@ description: The full stack of false-positive reduction techniques shipped in pw
 
 pwnkit's triage pipeline is designed so every finding passes through a stack of independent filters, each trained or tuned against a different failure mode. The stack mirrors the disclosed architectures of Endor Labs and Semgrep Assistant — except every layer is open-source. This page documents what we shipped, why each layer exists, and the FP reduction we expect from it based on published numbers.
 
-> **Where to read next:** the [Finding Triage ML](/research/finding-triage-ml/) page is the design doc with the feature-list, datasets, and planned Layer-2 CodeBERT fine-tune. The [Architecture](/architecture/) page shows how the triage stage slots into the overall pipeline.
+> **Where to read next:** the [Finding Triage ML](/research/finding-triage-ml/) page is the design doc with the feature-list, datasets, and planned Layer-2 CodeBERT fine-tune. The [Triage Dataset](/research/triage-dataset/) and [Feature Extractor](/research/feature-extractor/) pages document the new data foundation directly. The [Architecture](/architecture/) page shows how the triage stage slots into the overall pipeline.
 
 ## Research synthesis
 
@@ -18,6 +18,7 @@ Every disclosed production triage system converges on the same shape: **rules + 
 | Snyk DeepCode AI | 84% MTTR reduction | Symbolic AI + multiple fine-tuned models in an ensemble. |
 | GitHub Security Lab taskflow-agent | ~30 real vulns surfaced (open-source reference) | GPT-4.1 with 7+ YAML subtasks per alert — the reference architecture for structured decomposition. |
 | VulnBERT (Guanni Qu, Pebblebed) | 92.2% recall / 1.2% FPR on kernel commits | Hybrid: CodeBERT + 51 handcrafted features fused via cross-attention. Ablation: features alone 76.8%/15.9%, CodeBERT alone 84.3%/4.2%, hybrid 92.2%/1.2%. |
+| pwnkit triage stack | Open-source and auditable by construction | Dataset pipeline + handcrafted features + reachability + oracles + structured verify + memories + debate, all visible in code and toggleable per layer. |
 
 ### Research papers we implemented directly
 
@@ -30,7 +31,26 @@ Every disclosed production triage system converges on the same shape: **rules + 
 | IBM D2A | [arXiv:2102.07995](https://arxiv.org/abs/2102.07995) | TP/FP labels for static analysis findings derived from differential analysis across commit boundaries. Training corpus target for the Layer-2 CodeBERT fine-tune. |
 | VulnBERT | [Pebblebed blog](https://pebblebed.com/blog/kernel-bugs) | Hybrid handcrafted + neural + cross-attention. Basis for the Layer 1 feature extractor and planned Layer 3 fusion head. |
 
-## The stack (50% -> under 5%)
+## Data foundation
+
+Before the live runtime layers even matter, pwnkit now has a reproducible
+training-data pipeline:
+
+- [Triage Dataset](/research/triage-dataset/) — JSONL generation from XBOW,
+  npm-bench, and verified local scans
+- [Feature Extractor](/research/feature-extractor/) — the 45 handcrafted
+  features carried in every row
+
+That gives us a 12-part story that is accurate:
+
+1. dataset pipeline
+2. 11 shipped runtime triage layers
+
+This matters because the moat is not only the online verification stack.
+It is also the offline ability to build, label, ablate, and retrain with
+fully auditable data.
+
+## The runtime stack (11 shipped layers, 50% -> under 5%)
 
 ```mermaid
 flowchart TD
@@ -100,6 +120,20 @@ Layers 6-10 spend LLM tokens, but only on findings that survived the free layers
 - **Layer 9 (memories)** recycles prior human triage decisions so known FP patterns auto-reject without any verify cost.
 - **Layer 10 (debate)** is the final tie-breaker, reserved for cases the rest of the stack couldn't resolve.
 
+## Why this is auditable
+
+Every part of the moat is inspectable:
+
+- the dataset collector is in `packages/benchmark/src/triage-data-collector.ts`
+- the feature layer is in `packages/core/src/triage/feature-extractor.ts`
+- the runtime layers live under `packages/core/src/triage/`
+- the stack has dedicated tests
+- the LLM-backed layers are independently toggleable with `PWNKIT_FEATURE_*`
+  flags
+
+This is materially different from commercial systems where the reachability
+engine, feedback store, or model pipeline is invisible.
+
 ## Our implementation notes
 
 ### Every layer ships as a feature flag
@@ -114,6 +148,19 @@ See `packages/core/src/agent/features.ts`. Flags:
 - `PWNKIT_FEATURE_DEBATE`
 
 This lets us A/B test each layer independently in CI against the XBOW benchmark and measure its marginal FP reduction.
+
+### Dataset pipeline
+
+The moat now has an offline data-generation surface in addition to the live
+runtime filters. The collector can emit labeled rows from:
+
+- benchmark flag extraction
+- npm-bench package verdicts
+- blind-verify statuses in the local SQLite DB
+
+See [Triage Dataset](/research/triage-dataset/) for the JSONL schema and
+[issue #67](https://github.com/peaktwilight/pwnkit/issues/67) for the
+paper-plan that uses it.
 
 ### Conservative by default
 
@@ -136,6 +183,8 @@ Everything here can run on a developer laptop, in CI, or in an air-gapped enviro
 ## Related
 
 - [Finding Triage ML](/research/finding-triage-ml/) — the design doc, feature list, datasets, and planned Layer 2/3 neural components.
+- [Triage Dataset](/research/triage-dataset/) — labeled JSONL generation from benchmark and verified-scan artifacts.
+- [Feature Extractor](/research/feature-extractor/) — the 45-feature reference and group-by-group rationale.
 - [Agent Techniques](/research/agent-techniques/) — attack-phase techniques (early-stop, playbooks, EGATS, racing, handoff).
 - [Architecture](/architecture/) — how the triage stage fits into the overall plan-discover-attack-verify-report pipeline.
 - [Competitive Landscape](/research/competitive-landscape/) — how pwnkit's stack compares to BoxPwnr, Shannon, KinoSec, and the academic agents.

@@ -93,6 +93,10 @@ embeddings for downstream ML.
 
 See `FEATURE_NAMES` in the module for the full ordered feature list.
 
+For a complete reference, use [Feature Extractor](/research/feature-extractor/).
+For the labeled JSONL pipeline that carries this vector into model training,
+use [Triage Dataset](/research/triage-dataset/).
+
 ## 3. Per-class oracles
 
 **Module:** `triage/oracles.ts` (always on for supported categories)

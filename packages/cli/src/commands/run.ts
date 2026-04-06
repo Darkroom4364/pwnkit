@@ -32,6 +32,8 @@ export interface RunOptions {
   exportTarget?: string;
   race?: boolean;
   egats?: boolean;
+  /** Hard per-scan USD cost ceiling. Aborts cleanly with partial findings if exceeded. */
+  costCeilingUsd?: number;
 }
 
 function toScanReport(report: any): ScanReport {
@@ -116,6 +118,7 @@ export async function runUnified(opts: RunOptions): Promise<void> {
             apiSpecPath: opts.apiSpecPath,
             race: opts.race,
             egats: opts.egats,
+            costCeilingUsd: opts.costCeilingUsd,
           },
           dbPath: opts.dbPath,
           onEvent: eventHandler,
@@ -193,6 +196,17 @@ export async function runUnified(opts: RunOptions): Promise<void> {
           chalk.green(`Export complete: ${result.created} created, ${result.skipped} skipped (duplicates).`),
         );
       }
+    }
+
+    // Cost ceiling abort: exit code 4 so operators (CI, schedulers) can
+    // distinguish a clean budget abort from a normal completion or failure.
+    if ((report as ScanReport).costCeilingExceeded) {
+      console.error(
+        chalk.yellow(
+          `Scan aborted: cost ceiling exceeded. ${report.summary.totalFindings} partial finding(s) preserved.`,
+        ),
+      );
+      process.exit(4);
     }
 
     if (report.summary.critical > 0 || report.summary.high > 0) {

@@ -610,3 +610,120 @@ describe("PLAYBOOKS registry", () => {
     }
   });
 });
+
+describe("runNativeAgentLoop cost ceiling", () => {
+  // Build a runtime that always returns a benign tool call (so it would
+  // otherwise loop until maxTurns) and reports usage on each turn so the
+  // running cost grows.
+  function createCostBurningRuntime(perTurnInput: number, perTurnOutput: number): NativeRuntime {
+    let turn = 0;
+    return {
+      type: "api" as const,
+      async executeNative() {
+        turn++;
+        return {
+          content: [
+            { type: "tool_use", id: `tc${turn}`, name: "update_target", input: { type: "api" } },
+          ],
+          stopReason: "tool_use",
+          durationMs: 10,
+          usage: { inputTokens: perTurnInput, outputTokens: perTurnOutput },
+        };
+      },
+      async isAvailable() {
+        return true;
+      },
+    };
+  }
+
+  it("aborts the loop when running cost exceeds the ceiling", async () => {
+    // Default pricing is $3/M input + $15/M output.
+    // 200k input + 50k output per turn ≈ $0.0006 + $0.00075 = $0.00135/turn.
+    // Ceiling $0.001 → exceeded after the first turn.
+    const runtime = createCostBurningRuntime(200_000, 50_000);
+    const state = await runNativeAgentLoop({
+      config: {
+        role: "attack",
+        systemPrompt: "test",
+        tools: [],
+        maxTurns: 50,
+        target: "https://example.com",
+        scanId: "ceiling-test",
+        costCeilingUsd: 0.001,
+      },
+      runtime,
+      db: null,
+    });
+
+    expect(state.costCeilingExceeded).toBe(true);
+    expect(state.done).toBe(false);
+    expect(state.turnCount).toBeLessThanOrEqual(2);
+    expect(state.summary).toContain("Cost ceiling exceeded");
+    expect(state.estimatedCostUsd).toBeGreaterThanOrEqual(0.001);
+  });
+
+  it("does NOT abort when ceiling is not configured (default behavior preserved)", async () => {
+    const runtime = createCostBurningRuntime(200_000, 50_000);
+    const state = await runNativeAgentLoop({
+      config: {
+        role: "attack",
+        systemPrompt: "test",
+        tools: [],
+        maxTurns: 3,
+        target: "https://example.com",
+        scanId: "no-ceiling-test",
+      },
+      runtime,
+      db: null,
+    });
+
+    expect(state.costCeilingExceeded).toBe(false);
+    expect(state.turnCount).toBe(3);
+  });
+
+  it("does NOT abort when running cost is well below the ceiling", async () => {
+    // Tiny per-turn cost; $100 ceiling → never hit.
+    const runtime = createCostBurningRuntime(100, 100);
+    const state = await runNativeAgentLoop({
+      config: {
+        role: "attack",
+        systemPrompt: "test",
+        tools: [],
+        maxTurns: 3,
+        target: "https://example.com",
+        scanId: "high-ceiling-test",
+        costCeilingUsd: 100,
+      },
+      runtime,
+      db: null,
+    });
+
+    expect(state.costCeilingExceeded).toBe(false);
+    expect(state.turnCount).toBe(3);
+    expect(state.estimatedCostUsd).toBeLessThan(0.01);
+  });
+
+  it("emits a cost_ceiling_exceeded event when triggered", async () => {
+    const events: Array<{ type: string; payload: Record<string, unknown> }> = [];
+    const runtime = createCostBurningRuntime(200_000, 50_000);
+    await runNativeAgentLoop({
+      config: {
+        role: "attack",
+        systemPrompt: "test",
+        tools: [],
+        maxTurns: 50,
+        target: "https://example.com",
+        scanId: "event-test",
+        costCeilingUsd: 0.001,
+      },
+      runtime,
+      db: null,
+      onEvent: (type, payload) => events.push({ type, payload }),
+    });
+
+    const ceilingEvent = events.find((e) => e.type === "cost_ceiling_exceeded");
+    expect(ceilingEvent).toBeDefined();
+    expect(ceilingEvent!.payload.ceilingUsd).toBe(0.001);
+    expect(ceilingEvent!.payload.runningCostUsd).toBeGreaterThanOrEqual(0.001);
+  });
+});

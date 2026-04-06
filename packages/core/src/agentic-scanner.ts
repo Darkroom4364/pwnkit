@@ -543,6 +543,76 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
       message: `Attack complete: ${attackState.findings.length} findings, ${attackState.summary}`,
     });
 
+    // ── Cost ceiling short-circuit ──
+    // If the attack stage was aborted because the per-scan cost ceiling was
+    // exceeded, skip triage/verify/remediation and emit a partial report
+    // immediately. Findings collected so far are preserved in the DB and
+    // returned on the report. Callers (CLI) can detect this via the
+    // `costCeilingExceeded` flag on the returned report.
+    if (attackState.costCeilingExceeded) {
+      // Persist any findings collected so far so they're not lost.
+      for (const f of allFindings) {
+        try { db.saveFinding(scanId, f); } catch { /* may already be persisted */ }
+      }
+
+      const summary = {
+        totalAttacks: attackState.turnCount,
+        totalFindings: allFindings.length,
+        critical: allFindings.filter((f) => f.severity === "critical").length,
+        high: allFindings.filter((f) => f.severity === "high").length,
+        medium: allFindings.filter((f) => f.severity === "medium").length,
+        low: allFindings.filter((f) => f.severity === "low").length,
+        info: allFindings.filter((f) => f.severity === "info").length,
+      };
+      try { db.completeScan(scanId, summary); } catch { /* best effort */ }
+
+      const partialReport: ScanReport = {
+        target: config.target,
+        scanDepth: config.depth,
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        durationMs: 0,
+        summary,
+        findings: allFindings,
+        warnings: [
+          {
+            stage: "attack",
+            message: `Scan aborted: cost ceiling of $${(config.costCeilingUsd ?? 0).toFixed(4)} exceeded after ${attackState.turnCount} turns. Partial findings preserved.`,
+          },
+        ],
+        benchmarkMeta: {
+          attackTurns: attackState.turnCount,
+          estimatedCostUsd: attackState.estimatedCostUsd,
+          model: config.model,
+        },
+        exitReason: "cost_ceiling_exceeded",
+        costCeilingExceeded: true,
+      };
+
+      const dbScan = db.getScan(scanId);
+      if (dbScan) {
+        partialReport.startedAt = dbScan.startedAt;
+        partialReport.completedAt = dbScan.completedAt ?? partialReport.completedAt;
+        partialReport.durationMs = dbScan.durationMs ?? 0;
+      }
+
+      emit({
+        type: "stage:end",
+        stage: "report",
+        message: `cost_ceiling_exceeded: aborted with ${allFindings.length} partial finding(s)`,
+      });
+
+      db.logEvent({
+        scanId,
+        stage: "report",
+        eventType: "scan_aborted",
+        payload: { reason: "cost_ceiling_exceeded", ...summary },
+        timestamp: Date.now(),
+      });
+
+      return partialReport;
+    }
+
     // ── Stage 2.5: Triage (holding-it-wrong + feature extraction) ──
     // For every finding saved by the attack agent:
     //   1. Run `isHoldingItWrong` — if true, downgrade severity to `info`,
@@ -1090,6 +1160,8 @@ interface AgentOutput {
   summary: string;
   turnCount: number;
   estimatedCostUsd: number;
+  /** True when this stage terminated because the cost ceiling was hit. */
+  costCeilingExceeded?: boolean;
 }
 
 // ── Native (Claude API) stage runners ──
@@ -1123,6 +1195,8 @@ async function runNativeDiscovery(
       scanId,
       sessionId: db.getSession(scanId, "discovery")?.id,
       authConfig: config.auth,
+      costCeilingUsd: config.costCeilingUsd,
+      costModel: config.model,
     },
     runtime,
     db,
@@ -1243,6 +1317,8 @@ async function runNativeAttack(
       sessionId: db.getSession(scanId, "attack")?.id,
       retryCount: 0,
       authConfig: config.auth,
+      costCeilingUsd: config.costCeilingUsd,
+      costModel: config.model,
     },
     runtime,
     db,
@@ -1290,6 +1366,8 @@ async function runNativeAttack(
         scopePath: config.repoPath,
         retryCount: 1,
         authConfig: config.auth,
+        costCeilingUsd: config.costCeilingUsd,
+        costModel: config.model,
       },
       runtime,
       db,
@@ -1309,6 +1387,7 @@ async function runNativeAttack(
       summary: combinedSummary,
       turnCount: totalTurns,
       estimatedCostUsd: state.estimatedCostUsd + retryState.estimatedCostUsd,
+      costCeilingExceeded: state.costCeilingExceeded || retryState.costCeilingExceeded,
     };
   }
 
@@ -1320,6 +1399,7 @@ async function runNativeAttack(
     summary: state.summary,
     turnCount: state.turnCount,
     estimatedCostUsd: state.estimatedCostUsd,
+    costCeilingExceeded: state.costCeilingExceeded,
   };
 }
 
@@ -1486,6 +1566,8 @@ async function runNativeVerify(
       scanId,
       sessionId: db.getSession(scanId, "verify")?.id,
       authConfig: config.auth,
+      costCeilingUsd: config.costCeilingUsd,
+      costModel: config.model,
     },
     runtime,
     db,

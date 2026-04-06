@@ -63,6 +63,7 @@ export function registerScanCommand(program: Command): void {
     .option("--export <target>", "Export findings to issue tracker (e.g. github:owner/repo)")
     .option("--race", "Enable best-of-N strategy racing: run multiple attack strategies in parallel", false)
     .option("--egats", "Enable EGATS (Evidence-Gated Attack Tree Search): beam-search over a hypothesis tree", false)
+    .option("--cost-ceiling <usd>", "Hard per-scan USD cost ceiling. Aborts cleanly with partial findings if exceeded. Overrides PWNKIT_COST_CEILING_USD.")
     .option("--verbose", "Show detailed output", false)
     .option("--replay", "Replay the last scan's results", false)
     .action(async (opts) => {
@@ -124,6 +125,23 @@ export function registerScanCommand(program: Command): void {
         }
       }
 
+      // Resolve cost ceiling: --cost-ceiling flag wins over PWNKIT_COST_CEILING_USD env.
+      let costCeilingUsd: number | undefined;
+      const ceilingSource =
+        (opts.costCeiling as string | undefined) ?? process.env.PWNKIT_COST_CEILING_USD;
+      if (ceilingSource !== undefined && ceilingSource !== "") {
+        const parsed = Number(ceilingSource);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          console.error(
+            chalk.red(
+              `Invalid cost ceiling '${ceilingSource}': must be a positive number (USD).`,
+            ),
+          );
+          process.exit(2);
+        }
+        costCeilingUsd = parsed;
+      }
+
       await runUnified({
         target: opts.target,
         targetType: "url",
@@ -142,6 +160,7 @@ export function registerScanCommand(program: Command): void {
         exportTarget: opts.export as string | undefined,
         race: opts.race as boolean | undefined,
         egats: opts.egats as boolean | undefined,
+        costCeilingUsd,
       });
     });
 }

@@ -38,6 +38,15 @@ export interface NativeAgentConfig {
   retryCount?: number;
   /** Authentication credentials to inject into tool context */
   authConfig?: AuthConfig;
+  /**
+   * Hard cost ceiling in USD. When set, the loop checks the running
+   * estimated cost after every tool-call turn and aborts cleanly when
+   * the ceiling is exceeded. Partial findings collected so far are
+   * preserved on the returned state.
+   */
+  costCeilingUsd?: number;
+  /** Optional model id used to price token usage against the ceiling. */
+  costModel?: string;
 }
 
 export interface NativeAgentLoopOptions {
@@ -64,6 +73,12 @@ export interface NativeAgentState {
   attemptSummary: string;
   /** Approximate USD cost based on token usage and model pricing. */
   estimatedCostUsd: number;
+  /**
+   * Set to true when the loop terminated because the running cost
+   * exceeded the configured `costCeilingUsd`. Partial findings on
+   * `state.findings` are preserved.
+   */
+  costCeilingExceeded: boolean;
 }
 
 /**
@@ -145,6 +160,7 @@ export async function runNativeAgentLoop(
     earlyStopNoProgress: false,
     attemptSummary: "",
     estimatedCostUsd: 0,
+    costCeilingExceeded: false,
   };
 
   // Early-stop tracking: has the agent called save_finding at least once?
@@ -451,6 +467,42 @@ export async function runNativeAgentLoop(
     if (db && state.turnCount % 2 === 0) {
       persistSession(db, state, config, "running");
     }
+
+    // ── Cost ceiling check ──
+    // After every tool-call turn, recompute the running cost estimate from
+    // the cumulative token usage. If the user configured a hard ceiling and
+    // we've exceeded it, break out of the loop. Findings collected so far
+    // are preserved on `state.findings`.
+    if (config.costCeilingUsd !== undefined && config.costCeilingUsd > 0) {
+      const runningCost = estimateCost(state.totalUsage, config.costModel);
+      if (runningCost >= config.costCeilingUsd) {
+        state.costCeilingExceeded = true;
+        state.estimatedCostUsd = runningCost;
+        state.summary = `Cost ceiling exceeded at turn ${state.turnCount}: $${runningCost.toFixed(4)} >= $${config.costCeilingUsd.toFixed(4)} ceiling. Aborting with ${toolCtx.findings.length} partial finding(s).`;
+        onEvent?.("cost_ceiling_exceeded", {
+          turn: state.turnCount,
+          runningCostUsd: runningCost,
+          ceilingUsd: config.costCeilingUsd,
+          findingCount: toolCtx.findings.length,
+        });
+        if (db) {
+          db.logEvent({
+            scanId: config.scanId,
+            stage: config.role,
+            eventType: "cost_ceiling_exceeded",
+            agentRole: config.role,
+            payload: {
+              turn: state.turnCount,
+              runningCostUsd: runningCost,
+              ceilingUsd: config.costCeilingUsd,
+              findingCount: toolCtx.findings.length,
+            },
+            timestamp: Date.now(),
+          });
+        }
+        break;
+      }
+    }
   }
 
   // Sync final state
@@ -461,7 +513,7 @@ export async function runNativeAgentLoop(
   // Compute estimated cost
   state.estimatedCostUsd = estimateCost(state.totalUsage);
 
-  if (!state.done && !state.earlyStopNoProgress) {
+  if (!state.done && !state.earlyStopNoProgress && !state.costCeilingExceeded) {
     state.summary = `Agent reached max turns (${config.maxTurns}) without completing.`;
   }
 

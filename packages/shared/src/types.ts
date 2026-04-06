@@ -53,6 +53,13 @@ export interface ScanConfig {
   race?: boolean;
   /** Enable EGATS (Evidence-Gated Attack Tree Search): beam-search over hypothesis tree */
   egats?: boolean;
+  /**
+   * Hard per-scan cost ceiling in USD. When set, the cumulative estimated
+   * cost is checked after every tool call and the scan aborts cleanly
+   * (exit code 4, partial findings preserved) once exceeded. Default
+   * undefined → no ceiling, behavior unchanged.
+   */
+  costCeilingUsd?: number;
 }
 
 // ── Attack Templates ──
@@ -321,6 +328,14 @@ export interface ScanWarning {
   message: string;
 }
 
+/**
+ * Reason a scan terminated. Undefined / "completed" means the scan finished
+ * normally. "cost_ceiling_exceeded" means the per-scan cost ceiling
+ * (`PWNKIT_COST_CEILING_USD` / `--cost-ceiling`) was hit and the scan
+ * aborted with partial findings preserved.
+ */
+export type ScanExitReason = "completed" | "cost_ceiling_exceeded";
+
 export interface ScanReport {
   target: string;
   scanDepth: ScanDepth;
@@ -335,6 +350,13 @@ export interface ScanReport {
     estimatedCostUsd?: number;
     model?: string;
   };
+  /**
+   * Reason the scan terminated. Undefined for normal completion. Set to
+   * "cost_ceiling_exceeded" when the scan was aborted by the cost ceiling.
+   */
+  exitReason?: ScanExitReason;
+  /** True when the scan was aborted by the per-scan cost ceiling. */
+  costCeilingExceeded?: boolean;
 }
 
 export interface ReportSummary {
@@ -360,6 +382,8 @@ export interface AuditConfig {
   dbPath?: string;
   apiKey?: string;
   model?: string;
+  /** Hard cost ceiling in USD; aborts the audit when exceeded. Default: no ceiling. */
+  costCeilingUsd?: number;
 }
 
 export interface SemgrepFinding {

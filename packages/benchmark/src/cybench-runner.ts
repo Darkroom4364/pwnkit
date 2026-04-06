@@ -28,7 +28,7 @@
  */
 
 import { execSync } from "node:child_process";
-import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, existsSync, writeFileSync, appendFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { agenticScan } from "@pwnkit/core";
@@ -381,6 +381,18 @@ async function main() {
 
   const results: CybenchResult[] = [];
 
+  // Incremental persistence — append every completed result to a JSONL
+  // sidecar so a workflow timeout produces useful partial data instead of
+  // total data loss. The end-of-run write to cybench-latest.json still
+  // happens below; this is the safety net for the 6-hour CI ceiling.
+  const incrementalDir = join(__dirname, "..", "results");
+  mkdirSync(incrementalDir, { recursive: true });
+  const incrementalPath = join(incrementalDir, "cybench-incremental.jsonl");
+  if (freshRun) {
+    // Truncate the sidecar so a fresh run starts with a clean stream
+    writeFileSync(incrementalPath, "");
+  }
+
   for (const challenge of challenges) {
     if (!jsonOutput) {
       console.log(`\x1b[1m  >> ${challenge.id}\x1b[0m  [${challenge.category}/d${challenge.difficulty}]`);
@@ -388,6 +400,15 @@ async function main() {
 
     const result = await runChallenge(challenge);
     results.push(result);
+
+    // Append-on-complete to the incremental sidecar. Single line of JSON
+    // per challenge, in completion order. Safe across crashes — append
+    // is atomic enough at the OS layer for our purposes.
+    try {
+      appendFileSync(incrementalPath, JSON.stringify(result) + "\n");
+    } catch (err) {
+      console.error(`  [warn] could not append incremental result: ${err instanceof Error ? err.message : err}`);
+    }
 
     if (!jsonOutput) {
       const icon = result.flagFound ? "\x1b[32mFLAG\x1b[0m" : "\x1b[31mFAIL\x1b[0m";

@@ -15,7 +15,7 @@
  *   tsx src/npm-bench.ts --depth deep
  */
 
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, appendFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { packageAudit } from "@pwnkit/core";
@@ -246,6 +246,19 @@ async function runNpmBench(): Promise<NpmBenchReport> {
   const results: CaseResult[] = [];
   const start = Date.now();
 
+  // Incremental persistence — append every completed result to a JSONL
+  // sidecar so a workflow timeout produces useful partial data instead
+  // of total data loss. Run #24025320432 hit the wall at 51/81 packages
+  // and we lost all 51 rows because the runner only writes at end-of-run.
+  // This sidecar is the safety net.
+  const incrementalDir = join(__dirname, "..", "results");
+  mkdirSync(incrementalDir, { recursive: true });
+  const incrementalPath = join(incrementalDir, "npm-bench-incremental.jsonl");
+  // Truncate at start so each run begins with a clean stream — we don't
+  // try to merge across runs at the JSONL layer; that's the
+  // triage-data-collector's job downstream.
+  writeFileSync(incrementalPath, "");
+
   for (const tc of TEST_CASES) {
     const caseStart = Date.now();
     try {
@@ -279,6 +292,14 @@ async function runNpmBench(): Promise<NpmBenchReport> {
         infrastructureError: isInfrastructureError(error),
         findings: [],
       });
+    }
+
+    // Append-on-complete to the incremental sidecar. Single line of JSON
+    // per package, in completion order. Survives a workflow timeout.
+    try {
+      appendFileSync(incrementalPath, JSON.stringify(results[results.length - 1]) + "\n");
+    } catch (err) {
+      console.error(`  [warn] could not append incremental result: ${err instanceof Error ? err.message : err}`);
     }
 
     // Terminal progress

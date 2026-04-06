@@ -42,4 +42,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: npm-bench-results
-          path: packages/benchmark/results/npm-bench-latest.json
+          # Both files are uploaded so a workflow timeout still produces
+          # useful partial data via the JSONL incremental sidecar even
+          # when the end-of-run summary file (npm-bench-latest.json) was
+          # never written. Run #24025320432 hit the wall at 51/81 with
+          # zero artifact data because of this exact gap.
+          path: |
+            packages/benchmark/results/npm-bench-latest.json
+            packages/benchmark/results/npm-bench-incremental.jsonl

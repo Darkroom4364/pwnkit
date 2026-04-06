@@ -166,7 +166,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cybench-results-${{ inputs.features || 'all' }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: packages/benchmark/results/cybench-latest.json
+          # Both files are uploaded so a workflow timeout still produces
+          # useful partial data via the JSONL incremental sidecar even
+          # when the end-of-run summary file (cybench-latest.json) was
+          # never written.
+          path: |
+            packages/benchmark/results/cybench-latest.json
+            packages/benchmark/results/cybench-incremental.jsonl
 
       - name: Post summary
         if: always()

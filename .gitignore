@@ -5,11 +5,17 @@ dist/
 .claude/*.lock
 .claude/worktrees/
 .omx/
-.internal/
-marketing/
-ROADMAP.md
 demo/out/
 pnpm-publish-summary.json
 *.sync-conflict-*
 .claude/SESSION_STATUS.md
+
+# Strategy / marketing / launch / fundraising / pitch material lives in
+# the business repo at ~/coding/business/opensoar-hq-strategy/, not here.
+# These patterns are kept so any stale local-only files don't accidentally
+# end up tracked again.
+.internal/
+.local/
+marketing/
 POSITIONING.md
+ROADMAP.md

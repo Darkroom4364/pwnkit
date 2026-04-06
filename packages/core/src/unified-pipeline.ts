@@ -761,7 +761,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
         : agentSystemPrompt;
 
       try {
-        findings = await runAnalysisAgent({
+        const agentResult = await runAnalysisAgent({
           role: prepared.resolvedType === "npm-package" ? "audit" : "review",
           scopePath: prepared.scopePath,
           target: prepared.resolvedTarget,
@@ -788,6 +788,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
           cliSystemPrompt:
             "You are a security researcher performing an authorized source code audit. For EACH vulnerability you find, output it using the exact ---FINDING--- / ---END--- format specified in the prompt. Do NOT write prose analysis — only output structured finding blocks. If you find no vulnerabilities, say 'No vulnerabilities found.' and nothing else.",
         });
+        findings = agentResult.findings;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         warnings.push({ stage: "research", message: `AI analysis failed: ${msg}` });
@@ -877,7 +878,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
             };
 
             try {
-              const verifiedFindings = await runAnalysisAgent({
+              const agentResult = await runAnalysisAgent({
                 role: "review",
                 scopePath: prepared.scopePath,
                 target: prepared.resolvedTarget,
@@ -895,6 +896,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
                 agentSystemPrompt: verifySystemPrompt,
                 cliSystemPrompt: "You are a blind verification agent. Read the file, trace the PoC, confirm or reject the vulnerability.",
               });
+              const verifiedFindings = agentResult.findings;
 
               const confirmed = verifiedFindings.length > 0;
               const rejectionReason = confirmed ? undefined : "Could not independently reproduce";

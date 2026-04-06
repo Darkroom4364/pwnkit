@@ -20,6 +20,7 @@ export interface RuntimeResult {
   exitCode: number | null;
   timedOut: boolean;
   durationMs: number;
+  usage?: { inputTokens: number; outputTokens: number };
   error?: string;
 }
 

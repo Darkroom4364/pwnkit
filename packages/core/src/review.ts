@@ -119,7 +119,7 @@ async function runReviewAgent(
   scanId: string,
   config: ReviewConfig,
   emit: ScanListener,
-): Promise<Finding[]> {
+): Promise<{ findings: Finding[]; usage?: { inputTokens: number; outputTokens: number }; estimatedCostUsd?: number }> {
   return runAnalysisAgent({
     role: "review",
     scopePath: repoPath,
@@ -170,7 +170,7 @@ export async function sourceReview(
     const semgrepFindings = runSemgrepScan(repoPath, emit);
 
     // Step 3: AI agent review
-    const findings = await runReviewAgent(
+    const agentResult = await runReviewAgent(
       repoPath,
       semgrepFindings,
       db,
@@ -178,6 +178,7 @@ export async function sourceReview(
       config,
       emit,
     );
+    const findings = agentResult.findings;
 
     // Step 4: Build report
     const durationMs = Date.now() - startTime;

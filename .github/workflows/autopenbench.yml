@@ -92,8 +92,8 @@ jobs:
               -e 's|^FROM openjdk:17.0.2-slim$|FROM eclipse-temurin:17-jre|' \
               -e 's|^FROM openjdk:17.0.2-slim |FROM eclipse-temurin:17-jre |' \
               -e 's|^FROM openjdk:8|FROM eclipse-temurin:8|' \
-              -e 's|kali-archive-keyring_2025\.1_all\.deb|kali-archive-keyring_2025.2_all.deb|g' \
               "$f"
+            perl -0pi -e 's{RUN wget -q https://http\.kali\.org/pool/main/k/kali-archive-keyring/kali-archive-keyring_[^\n]+?\.deb \\\n\s*&& dpkg -i [^\n]+ \\\n\s*&& rm [^\n]+\n}{RUN apt-get update \\\n    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends kali-archive-keyring\n}gms' "$f"
             after=$(sha1sum "$f" | cut -d' ' -f1)
             if [ "$before" != "$after" ]; then
               PATCHED+=("$f")

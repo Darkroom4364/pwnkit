@@ -16,6 +16,7 @@ import type { ScanEvent, ScanListener } from "./scanner.js";
 import { auditAgentPrompt } from "./analysis-prompts.js";
 import { runAnalysisAgent } from "./agent-runner.js";
 import { bufferToString, runSemgrepScan } from "./shared-analysis.js";
+import { scanForMaliciousPatterns } from "./malicious-detector.js";
 
 export interface PackageAuditOptions {
   config: AuditConfig;
@@ -463,8 +464,28 @@ export async function packageAudit(
     const npmAuditFindings = runNpmAudit(pkg.tempDir, emit);
     const semgrepFindings = runSemgrepScan(pkg.path, emit, { noGitIgnore: true });
 
+    // Step 2.5: Deterministic malicious-package oracles. These run before
+    // the LLM, do not depend on the model, and catch the supply-chain
+    // attack patterns the LLM prompt is structurally blind to: typosquats,
+    // install-script payloads, credential-theft hooks. Their findings are
+    // appended to the report alongside the agent findings.
+    emit({
+      type: "stage:start",
+      stage: "discovery",
+      message: "Running deterministic malicious-package oracles...",
+    });
+    const maliciousFindings = scanForMaliciousPatterns({
+      packageName: pkg.name,
+      packagePath: pkg.path,
+    });
+    emit({
+      type: "stage:end",
+      stage: "discovery",
+      message: `Malicious-package oracles: ${maliciousFindings.length} finding${maliciousFindings.length === 1 ? "" : "s"}`,
+    });
+
     // Step 3: AI agent analysis
-    const findings = await runAuditAgent(
+    const llmFindings = await runAuditAgent(
       pkg,
       semgrepFindings,
       npmAuditFindings,
@@ -473,6 +494,11 @@ export async function packageAudit(
       config,
       emit,
     );
+
+    // Combine deterministic + LLM findings into the final report set.
+    // Deterministic findings come FIRST so they're prominent in the
+    // report ordering — they're higher confidence than LLM output.
+    const findings = [...maliciousFindings, ...llmFindings];
 
     // Step 4: Build report
     const durationMs = Date.now() - startTime;

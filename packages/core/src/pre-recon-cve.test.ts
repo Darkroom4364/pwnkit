@@ -16,6 +16,8 @@ import { tmpdir } from "node:os";
 import {
   runPreReconCveCheck,
   formatPreReconForPrompt,
+  runPreReconWordPress,
+  formatPreReconWordPressForPrompt,
   type CveAdvisory,
   type PreReconCveReport,
 } from "./pre-recon-cve.js";
@@ -229,5 +231,200 @@ describe("formatPreReconForPrompt", () => {
     );
     expect(out).toContain("first priority");
     expect(out).toContain("running target");
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// runPreReconWordPress (Phase 4 black-box, GitHub #83)
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Build a tiny mock fetch that returns canned bodies + statuses keyed
+ * on the requested URL substring. Anything not matched returns 404.
+ */
+function mockFetch(routes: Record<string, { status: number; body: string }>) {
+  return async (url: string) => {
+    for (const [needle, resp] of Object.entries(routes)) {
+      if (url.includes(needle)) {
+        return {
+          ok: resp.status >= 200 && resp.status < 300,
+          status: resp.status,
+          headers: new Headers(),
+          text: async () => resp.body,
+          json: async () => {
+            try {
+              return JSON.parse(resp.body);
+            } catch {
+              return {};
+            }
+          },
+        };
+      }
+    }
+    return {
+      ok: false,
+      status: 404,
+      headers: new Headers(),
+      text: async () => "",
+      json: async () => ({}),
+    };
+  };
+}
+
+describe("runPreReconWordPress", () => {
+  it("returns isWordPress=false when none of the cheap probes match", async () => {
+    const fetchImpl = mockFetch({
+      "/wp-login.php": { status: 404, body: "Not Found" },
+      "/readme.html": { status: 200, body: "<html>Apache default</html>" },
+      "/wp-includes/version.php": { status: 404, body: "" },
+    });
+    const report = await runPreReconWordPress({
+      target: "http://example.test",
+      fetchImpl: fetchImpl as any,
+      skipOsv: true,
+    });
+    expect(report.isWordPress).toBe(false);
+    expect(report.fingerprint).toBeUndefined();
+    expect(report.detectionEvidence).toEqual([]);
+  });
+
+  it("detects WordPress and runs the full fingerprinter when probes match", async () => {
+    // Cheap detection: wp-login.php returns the form. Then the full
+    // wp-fingerprinter does its own probes — provide canned responses
+    // for those too. skipOsv keeps the test offline.
+    const homepage = `
+      <html>
+        <head>
+          <link rel="stylesheet" href="/wp-content/plugins/contact-form-7/style.css">
+          <link rel="stylesheet" href="/wp-content/themes/twentytwentyone/style.css">
+        </head>
+        <body>WordPress site</body>
+      </html>
+    `;
+    const fetchImpl = mockFetch({
+      // Cheap-detection probes
+      "/wp-login.php": {
+        status: 200,
+        body: '<form><input name="user_login"><input name="wp-submit"></form>',
+      },
+      "/readme.html": { status: 200, body: "WordPress Version 6.4.1" },
+      "/wp-includes/version.php": { status: 404, body: "" },
+      // Full-fingerprint probes
+      "/wp-admin/": { status: 302, body: "" },
+      "/feed/": { status: 200, body: "<generator>https://wordpress.org/?v=6.4.1</generator>" },
+      "/wp-json/": {
+        status: 200,
+        body: '{"namespaces":["wp/v2","contact-form-7/v1"]}',
+      },
+      "/wp-json/wp/v2/posts": { status: 200, body: "[]" },
+      "/wp-content/plugins/": { status: 404, body: "" },
+      "/wp-content/themes/": { status: 404, body: "" },
+      "/wp-content/plugins/contact-form-7/readme.txt": {
+        status: 200,
+        body: "=== Contact Form 7 ===\nStable tag: 5.7.0\n",
+      },
+      "/wp-content/themes/twentytwentyone/style.css": {
+        status: 200,
+        body: "/*\nTheme Name: Twenty Twenty-One\nVersion: 1.4\n*/",
+      },
+      // Homepage HTML for slug discovery
+      "example.test/": { status: 200, body: homepage },
+    });
+
+    const report = await runPreReconWordPress({
+      target: "http://example.test",
+      fetchImpl: fetchImpl as any,
+      skipOsv: true,
+    });
+
+    expect(report.isWordPress).toBe(true);
+    expect(report.detectionEvidence).toContain("wp-login.php");
+    expect(report.fingerprint).toBeDefined();
+    expect(report.fingerprint!.isWordPress).toBe(true);
+    // contact-form-7 should have been picked up from the homepage HTML
+    const slugs = report.fingerprint!.plugins.map((p) => p.slug);
+    expect(slugs).toContain("contact-form-7");
+  });
+
+  it("never throws on network failure — returns error report", async () => {
+    const fetchImpl = (async () => {
+      throw new Error("ENETUNREACH");
+    }) as any;
+    const report = await runPreReconWordPress({
+      target: "http://broken.test",
+      fetchImpl,
+      skipOsv: true,
+    });
+    // detect step caught the throw and returned empty evidence
+    expect(report.isWordPress).toBe(false);
+    expect(report.fingerprint).toBeUndefined();
+  });
+});
+
+describe("formatPreReconWordPressForPrompt", () => {
+  it("returns null when not WordPress", () => {
+    expect(
+      formatPreReconWordPressForPrompt({
+        isWordPress: false,
+        detectionEvidence: [],
+        durationMs: 10,
+      }),
+    ).toBeNull();
+  });
+
+  it("returns null when WordPress with no plugins, themes, or CVEs", () => {
+    expect(
+      formatPreReconWordPressForPrompt({
+        isWordPress: true,
+        detectionEvidence: ["wp-login.php"],
+        fingerprint: {
+          isWordPress: true,
+          evidence: ["wp-login.php"],
+          plugins: [],
+          themes: [],
+          findings: [],
+        },
+        durationMs: 50,
+      }),
+    ).toBeNull();
+  });
+
+  it("renders a CVE block when fingerprint has hits", () => {
+    const out = formatPreReconWordPressForPrompt({
+      isWordPress: true,
+      detectionEvidence: ["wp-login.php", "readme.html"],
+      fingerprint: {
+        isWordPress: true,
+        evidence: ["wp-login.php"],
+        coreVersion: "5.8.2",
+        plugins: [{ slug: "contact-form-7", version: "5.7.0", source: "readme" }],
+        themes: [],
+        findings: [
+          {
+            kind: "plugin",
+            slug: "contact-form-7",
+            version: "5.7.0",
+            source: "readme",
+            cves: [
+              {
+                id: "CVE-2024-99999",
+                aliases: ["GHSA-xxxx-yyyy-zzzz"],
+                summary: "Unauthenticated file upload",
+              },
+            ],
+            exploitHints: [
+              "Try unauthenticated file upload against /wp-content/plugins/contact-form-7/ endpoints",
+            ],
+          },
+        ],
+      },
+      durationMs: 200,
+    });
+    expect(out).not.toBeNull();
+    expect(out).toContain("WordPress pre-recon");
+    expect(out).toContain("5.8.2");
+    expect(out).toContain("contact-form-7");
+    expect(out).toContain("CVE-2024-99999");
+    expect(out).toContain("hint:");
   });
 });

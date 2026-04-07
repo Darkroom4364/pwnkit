@@ -1302,6 +1302,42 @@ async function runNativeAttack(
     }
   }
 
+  // Phase-4 WordPress pre-recon. Runs three cheap probes against the
+  // target; if WP is detected, invokes runWpFingerprint directly (not
+  // via the agent loop) and folds the structured CVE leads into the
+  // system prompt alongside the source-tree CVE block above. Gated by
+  // the `wpFingerprint` feature flag so it stays off in runs where
+  // network egress is not wanted. See GitHub issue #83.
+  if (isWeb && features.wpFingerprint) {
+    try {
+      const { runPreReconWordPress, formatPreReconWordPressForPrompt } =
+        await import("./pre-recon-cve.js");
+      const wpReport = await runPreReconWordPress({
+        target: config.target,
+      });
+      if (wpReport.isWordPress && wpReport.fingerprint) {
+        const formatted = formatPreReconWordPressForPrompt(wpReport);
+        if (formatted) {
+          preReconBlock += "\n\n" + formatted;
+          const pluginCount = wpReport.fingerprint.plugins.length;
+          const cveCount = wpReport.fingerprint.findings.reduce(
+            (sum, f) => sum + f.cves.length,
+            0,
+          );
+          emit({
+            type: "stage:end",
+            stage: "discovery",
+            message: `Pre-recon WordPress: ${pluginCount} plugin${pluginCount === 1 ? "" : "s"} enumerated, ${cveCount} CVE hit${cveCount === 1 ? "" : "s"} (${wpReport.durationMs}ms)`,
+          });
+        }
+      }
+    } catch (err) {
+      console.error(
+        `[pre-recon-wp] failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
   // Append challenge hint if provided (standard practice for XBOW benchmarks)
   const systemPrompt =
     (challengeHint ? basePrompt + "\n" + challengeHint : basePrompt) + preReconBlock;

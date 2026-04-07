@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import Spinner from "ink-spinner";
+import { selectVisibleActions, truncateStageAction } from "@pwnkit/core";
 
 // ── Types ──
 
@@ -44,6 +45,14 @@ export interface ScanUIProps {
   summary: ScanSummary | null;
   thinking: string | null;
   exitHint?: string | null;
+  /**
+   * When false (the default), each stage shows only the last 3 actions and
+   * each action is truncated to ~60 chars, to keep the banner terminal-friendly.
+   * When true, more history is shown with a wider per-row budget so the user
+   * can see what every turn is doing. Toggled at runtime via `v` or Ctrl+O in
+   * the scan TUI. The actual caps live in @pwnkit/core's scan-ui-state module.
+   */
+  verbose?: boolean;
 }
 
 // ── Colors ──
@@ -69,7 +78,7 @@ function formatDuration(ms: number): string {
 
 // ── Stage Row ──
 
-function StageRow({ stage }: { stage: StageState }) {
+function StageRow({ stage, verbose }: { stage: StageState; verbose: boolean }) {
   const icon =
     stage.status === "done" ? (
       <Text color={GREEN}>{"✓"}</Text>
@@ -112,41 +121,50 @@ function StageRow({ stage }: { stage: StageState }) {
       </Box>
 
       {/* Tool call actions — visible during and after execution */}
-      {stage.actions.length > 0 && (
-        <Box flexDirection="column" marginLeft={6}>
-          {stage.actions.map((action, i) => {
-            // Verify stage: confirmed (✓) green+bold, rejected (✗) dim red+strikethrough
-            if (stage.id === "verify") {
-              const isConfirmed = action.startsWith("\u2713");
-              const isRejected = action.startsWith("\u2717");
-              if (isConfirmed) {
+      {stage.actions.length > 0 && (() => {
+        const { shown, hiddenCount } = selectVisibleActions(stage.actions, verbose);
+        return (
+          <Box flexDirection="column" marginLeft={6}>
+            {hiddenCount > 0 && (
+              <Text color={GRAY} dimColor>
+                {`  … ${hiddenCount} earlier ${hiddenCount === 1 ? "action" : "actions"} hidden`}
+              </Text>
+            )}
+            {shown.map((rawAction, i) => {
+              const action = truncateStageAction(rawAction, verbose);
+              // Verify stage: confirmed (✓) green+bold, rejected (✗) dim red+strikethrough
+              if (stage.id === "verify") {
+                const isConfirmed = action.startsWith("\u2713");
+                const isRejected = action.startsWith("\u2717");
+                if (isConfirmed) {
+                  return (
+                    <Text key={i} color={GREEN} bold>
+                      {"→ "}{action}
+                    </Text>
+                  );
+                }
+                if (isRejected) {
+                  return (
+                    <Text key={i} color={CRIMSON} dimColor strikethrough>
+                      {"→ "}{action}
+                    </Text>
+                  );
+                }
                 return (
-                  <Text key={i} color={GREEN} bold>
-                    {"→ "}{action}
-                  </Text>
-                );
-              }
-              if (isRejected) {
-                return (
-                  <Text key={i} color={CRIMSON} dimColor strikethrough>
+                  <Text key={i} color={CYAN}>
                     {"→ "}{action}
                   </Text>
                 );
               }
               return (
-                <Text key={i} color={CYAN}>
+                <Text key={i} color={stage.status === "done" ? GRAY : CYAN} dimColor={stage.status === "done"}>
                   {"→ "}{action}
                 </Text>
               );
-            }
-            return (
-              <Text key={i} color={stage.status === "done" ? GRAY : CYAN} dimColor={stage.status === "done"}>
-                {"→ "}{action}
-              </Text>
-            );
-          })}
-        </Box>
-      )}
+            })}
+          </Box>
+        );
+      })()}
 
       {/* Thinking text */}
       {stage.status === "running" && stage.actions.length === 0 && stage.detail && (
@@ -203,23 +221,28 @@ function SummaryBar({ summary }: { summary: ScanSummary }) {
 
 // ── Main ──
 
-export function ScanUI({ stages, summary, thinking, exitHint }: ScanUIProps) {
+export function ScanUI({ stages, summary, thinking, exitHint, verbose = false }: ScanUIProps) {
   return (
     <Box flexDirection="column">
       {stages.map((stage) => (
-        <StageRow key={stage.id} stage={stage} />
+        <StageRow key={stage.id} stage={stage} verbose={verbose} />
       ))}
       {thinking && (
         <Box marginLeft={6}>
-          <Text color={GRAY} dimColor wrap="truncate">{thinking.slice(-80)}</Text>
+          <Text color={GRAY} dimColor wrap={verbose ? "wrap" : "truncate"}>
+            {verbose ? thinking : thinking.slice(-80)}
+          </Text>
         </Box>
       )}
       {summary && <SummaryBar summary={summary} />}
-      {summary && exitHint && (
-        <Box marginTop={1} marginLeft={2}>
+      <Box marginTop={1} marginLeft={2} gap={2}>
+        <Text color={GRAY} dimColor>
+          {verbose ? "verbose on" : "v / ctrl+o"} {verbose ? "" : "verbose"}
+        </Text>
+        {summary && exitHint && (
           <Text color={GRAY} dimColor>{exitHint}</Text>
-        </Box>
-      )}
+        )}
+      </Box>
     </Box>
   );
 }

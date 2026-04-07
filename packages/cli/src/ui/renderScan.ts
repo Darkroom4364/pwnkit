@@ -4,6 +4,7 @@ import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { VERSION } from "@pwnkit/shared";
+import { appendStageAction, normalizeStageAction } from "@pwnkit/core";
 import { printBanner } from "./banner.js";
 import { ScanUI } from "./ScanUI.js";
 import { buildShareUrl } from "../utils.js";
@@ -39,6 +40,7 @@ export function renderScanUI(opts: RenderScanOptions): RenderScanResult {
   let stages = getStages();
   let summary: ScanSummary | null = null;
   let thinking: string | null = null;
+  let verbose = false;
   let rerender: (() => void) | null = null;
   let resolveExit: (() => void) | null = null;
 
@@ -56,6 +58,15 @@ export function renderScanUI(opts: RenderScanOptions): RenderScanResult {
       return () => { rerender = null; };
     }, []);
     useInput((input, key) => {
+      // Verbose toggle is live at any point during the scan (not just after
+      // summary). Both `v` and Ctrl+O (muscle memory from codex / claude CLI)
+      // flip the detail level. The stored event log stays uncapped, so the
+      // toggle can reveal history the compact view had been hiding.
+      if ((key.ctrl && input === "o") || input === "v" || input === "V") {
+        verbose = !verbose;
+        rerender?.();
+        return;
+      }
       if (!summary) return;
       if (key.return || key.escape || input.toLowerCase() === "q") {
         resolveExit?.();
@@ -65,6 +76,7 @@ export function renderScanUI(opts: RenderScanOptions): RenderScanResult {
       stages,
       summary,
       thinking,
+      verbose,
       exitHint: summary ? "Press Enter, Esc, or q to close." : null,
     });
   }
@@ -107,17 +119,15 @@ export function renderScanUI(opts: RenderScanOptions): RenderScanResult {
       const current = stages.find((s) => s.id === stageId);
 
       if (current?.status === "running") {
-        // Already running — this is a sub-action (tool call, turn update)
-        // Clean the message for display
-        let action = msg
-          .replace(/^(Discovery|Attack|Verify)\s*turn\s*\d+:\s*/i, "")
-          .replace(/^Warning:\s*/i, "")
-          .trim();
-        if (action.length > 60) action = action.slice(0, 60) + "...";
+        // Already running — this is a sub-action (tool call, turn update).
+        // The reducer in @pwnkit/core handles prefix normalization and the
+        // history cap so compact/verbose display logic in ScanUI.tsx has a
+        // clean source of truth to slice from.
+        const action = normalizeStageAction(msg);
         if (!action) return;
         updateStage(stageId, (s) => ({
           ...s,
-          actions: [...s.actions, action].slice(-3),
+          actions: appendStageAction(s.actions, action),
         }));
       } else {
         // New stage start — show a clean label
@@ -142,11 +152,12 @@ export function renderScanUI(opts: RenderScanOptions): RenderScanResult {
         .trim();
       if (detail.length > 55) detail = detail.slice(0, 55) + "...";
       if (!detail) detail = "done";
+      // Keep the full action history for all stages — render-time slicing in
+      // ScanUI decides what to show based on the verbose toggle.
       updateStage(stageId, (s) => ({
         ...s,
         status: "done",
         detail,
-        actions: stageId === "verify" ? s.actions : s.actions.slice(0, 3),
         duration: (event.data as any)?.durationMs ?? s.duration,
       }));
       return;

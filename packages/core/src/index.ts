@@ -99,3 +99,17 @@ export { extractFeatures, FEATURE_NAMES } from "./triage/feature-extractor.js";
 // Remediation guidance
 export { generateRemediation, generateRemediationWithLLM } from "./remediation.js";
 export type { Remediation, RemediationCodeExample } from "./remediation.js";
+
+// Scan TUI state reducers (pure, consumed by the CLI's renderScan.ts).
+export {
+  appendStageAction,
+  normalizeStageAction,
+  selectVisibleActions,
+  truncateStageAction,
+  STAGE_ACTION_HISTORY_CAP,
+  VERBOSE_ACTIONS_RENDER_CAP,
+  COMPACT_ACTIONS_RENDER_CAP,
+  COMPACT_ACTION_CHARS,
+  VERBOSE_ACTION_CHARS,
+} from "./scan-ui-state.js";
+export type { VisibleActions } from "./scan-ui-state.js";

@@ -22,6 +22,171 @@ function safeParseJson(raw: string | null | undefined): Record<string, unknown> 
   }
 }
 
+/**
+ * Cache for the resolved Azure region, keyed by base URL. The region is
+ * probed once per process (per endpoint) and reused thereafter — see
+ * {@link probeAzureRegion}.
+ */
+const azureRegionCache = new Map<string, string>();
+
+/**
+ * Probe the Azure OpenAI endpoint once for its deployment region.
+ *
+ * Azure surfaces the physical region of a resource in the `x-ms-region`
+ * response header (e.g. "eastus2"). The URL itself never reveals this —
+ * two `*.openai.azure.com` endpoints can live in completely different
+ * geographies — so this probe is the only reliable way to tell an
+ * operator which data-residency jurisdiction their traffic lands in.
+ *
+ * The probe issues a single cheap request to `${baseUrl}/models`, reads
+ * the header, and caches the result per base URL for the rest of the
+ * process. It never throws: on any failure (network error, HTTP error,
+ * missing header) the function resolves to "unknown" so startup logging
+ * stays a no-op in adverse conditions.
+ *
+ * Test hook: `PWNKIT_REGION_OVERRIDE` short-circuits the probe entirely.
+ * Set it to force a specific region string without hitting the network —
+ * this keeps unit tests and air-gapped CI runs deterministic.
+ */
+export async function probeAzureRegion(
+  baseUrl: string,
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string> {
+  // PWNKIT_REGION_OVERRIDE: lets tests (and operators running offline)
+  // force a specific region string without touching the network.
+  const override = process.env.PWNKIT_REGION_OVERRIDE;
+  if (override && override.trim().length > 0) {
+    return override.trim();
+  }
+
+  const cached = azureRegionCache.get(baseUrl);
+  if (cached) return cached;
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetchImpl(`${baseUrl.replace(/\/+$/, "")}/models`, {
+      method: "GET",
+      headers: { "api-key": apiKey },
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer));
+
+    // Azure returns x-ms-region even on 401/403 — the header is set by the
+    // front door before authentication, so a missing key still reveals the
+    // resource geography. We accept any response that has the header.
+    const region = res.headers.get("x-ms-region");
+    const resolved = region && region.trim().length > 0
+      ? prettyRegion(region.trim())
+      : "unknown";
+    azureRegionCache.set(baseUrl, resolved);
+    return resolved;
+  } catch {
+    azureRegionCache.set(baseUrl, "unknown");
+    return "unknown";
+  }
+}
+
+/** Convert Azure's lowercase region codes into a human-readable label. */
+function prettyRegion(code: string): string {
+  const map: Record<string, string> = {
+    eastus: "East US",
+    eastus2: "East US 2",
+    westus: "West US",
+    westus2: "West US 2",
+    westus3: "West US 3",
+    centralus: "Central US",
+    northcentralus: "North Central US",
+    southcentralus: "South Central US",
+    westcentralus: "West Central US",
+    canadaeast: "Canada East",
+    canadacentral: "Canada Central",
+    brazilsouth: "Brazil South",
+    northeurope: "North Europe",
+    westeurope: "West Europe",
+    uksouth: "UK South",
+    ukwest: "UK West",
+    francecentral: "France Central",
+    germanywestcentral: "Germany West Central",
+    switzerlandnorth: "Switzerland North",
+    norwayeast: "Norway East",
+    swedencentral: "Sweden Central",
+    polandcentral: "Poland Central",
+    italynorth: "Italy North",
+    eastasia: "East Asia",
+    southeastasia: "Southeast Asia",
+    japaneast: "Japan East",
+    japanwest: "Japan West",
+    koreacentral: "Korea Central",
+    australiaeast: "Australia East",
+    centralindia: "Central India",
+    southindia: "South India",
+    uaenorth: "UAE North",
+    southafricanorth: "South Africa North",
+  };
+  return map[code.toLowerCase()] ?? code;
+}
+
+/** Reset the region cache. Test-only — do not call from production code. */
+export function __resetAzureRegionCacheForTests(): void {
+  azureRegionCache.clear();
+}
+
+/** Tracks which endpoints we've already printed a startup banner for. */
+const loggedProviderStartup = new Set<string>();
+
+/**
+ * Emit a single-line startup banner summarising the resolved provider
+ * config. For Azure, also probes and logs the physical region. Runs at
+ * most once per (provider, baseUrl) tuple per process.
+ *
+ * Non-Azure providers are a no-op beyond the provider label — the region
+ * only matters when the endpoint sits behind Azure's front door. This is
+ * called lazily from the first request on an `LlmApiRuntime` instance to
+ * avoid forcing a network probe at module import time.
+ */
+export async function logProviderStartup(
+  provider: ApiProvider,
+  providerLabel: string,
+  baseUrl: string,
+  model: string,
+  wireApi: WireApi,
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  const key = `${provider}:${baseUrl}`;
+  if (loggedProviderStartup.has(key)) return;
+  loggedProviderStartup.add(key);
+
+  if (provider !== "azure") {
+    // Non-Azure: brief banner, no region probe.
+    console.error(
+      `[pwnkit] ${providerLabel} provider initialized\n` +
+      `  endpoint: ${baseUrl}\n` +
+      `  model: ${model}`,
+    );
+    return;
+  }
+
+  const region = await probeAzureRegion(baseUrl, apiKey, fetchImpl);
+  const regionLine = region === "unknown"
+    ? "  region: unknown (x-ms-region header absent or probe failed)"
+    : `  region: ${region} (probed via x-ms-region header)`;
+
+  console.error(
+    `[pwnkit] Azure OpenAI provider initialized\n` +
+    `  endpoint: ${baseUrl}\n` +
+    `  model: ${model}\n` +
+    `${regionLine}\n` +
+    `  wire api: ${wireApi}`,
+  );
+}
+
+/** Reset the startup-banner guard. Test-only. */
+export function __resetProviderStartupLogForTests(): void {
+  loggedProviderStartup.clear();
+}
+
 const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
 const DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4.6";
 const FREE_OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free";
@@ -209,6 +374,25 @@ export class LlmApiRuntime implements Runtime, NativeRuntime {
       this.model = FREE_OPENROUTER_MODEL;
     } else {
       this.model = requestedModel ?? detected.defaultModel;
+    }
+
+    // Fire-and-forget startup banner. For Azure, this probes `/models`
+    // once for the x-ms-region header so operators can see where their
+    // traffic physically lands (data-residency transparency). The probe
+    // is cached and tolerant of failures — never blocks the main path.
+    // Skip entirely when no key is configured (the diagnostics path will
+    // surface the missing-key error to the user instead).
+    if (this.apiKey && !process.env.PWNKIT_SKIP_PROVIDER_BANNER) {
+      void logProviderStartup(
+        this.provider,
+        this.providerLabel,
+        this.baseUrl,
+        this.model,
+        this.wireApi,
+        this.apiKey,
+      ).catch(() => {
+        // Swallow — startup logging must never abort runtime init.
+      });
     }
   }
 

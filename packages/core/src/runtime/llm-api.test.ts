@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { LlmApiRuntime } from "./llm-api.js";
+import {
+  LlmApiRuntime,
+  probeAzureRegion,
+  __resetAzureRegionCacheForTests,
+  __resetProviderStartupLogForTests,
+} from "./llm-api.js";
 import type { NativeMessage, NativeContentBlock } from "./types.js";
 
 // ── Provider Detection ──
@@ -16,6 +21,10 @@ describe("LlmApiRuntime provider detection", () => {
     delete process.env.AZURE_OPENAI_MODEL;
     delete process.env.ANTHROPIC_BASE_URL;
     delete process.env.PWNKIT_MODEL;
+    delete process.env.PWNKIT_REGION_OVERRIDE;
+    // Suppress the startup banner so provider-detection tests don't
+    // spew log lines or attempt real network probes.
+    process.env.PWNKIT_SKIP_PROVIDER_BANNER = "1";
   });
 
   afterEach(() => {
@@ -462,6 +471,112 @@ const hasAzureKey = !!process.env.AZURE_OPENAI_API_KEY;
 
 // Capture the real Azure key before any test mutates process.env
 const realAzureKey = process.env.AZURE_OPENAI_API_KEY;
+
+// ── Azure Region Probe (Task #85) ──
+
+describe("probeAzureRegion", () => {
+  beforeEach(() => {
+    __resetAzureRegionCacheForTests();
+    __resetProviderStartupLogForTests();
+    delete process.env.PWNKIT_REGION_OVERRIDE;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    delete process.env.PWNKIT_REGION_OVERRIDE;
+  });
+
+  it("parses x-ms-region header and pretty-prints the region", async () => {
+    const mockFetch = vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      headers: new Headers({ "x-ms-region": "eastus2" }),
+      text: async () => "",
+    } as unknown as Response));
+    const region = await probeAzureRegion(
+      "https://rapidata-hackathon-resource.openai.azure.com/openai/v1",
+      "fake-key",
+      mockFetch as unknown as typeof fetch,
+    );
+    expect(region).toBe("East US 2");
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe(
+      "https://rapidata-hackathon-resource.openai.azure.com/openai/v1/models",
+    );
+    expect((init as any).headers["api-key"]).toBe("fake-key");
+  });
+
+  it("returns 'unknown' when the x-ms-region header is absent", async () => {
+    const mockFetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({}),
+      text: async () => "",
+    } as unknown as Response));
+    const region = await probeAzureRegion(
+      "https://no-header-resource.openai.azure.com/openai/v1",
+      "fake-key",
+      mockFetch as unknown as typeof fetch,
+    );
+    expect(region).toBe("unknown");
+  });
+
+  it("returns 'unknown' on network failure without throwing", async () => {
+    const mockFetch = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    const region = await probeAzureRegion(
+      "https://broken.openai.azure.com/openai/v1",
+      "fake-key",
+      mockFetch as unknown as typeof fetch,
+    );
+    expect(region).toBe("unknown");
+  });
+
+  it("caches the result per base URL", async () => {
+    const mockFetch = vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      headers: new Headers({ "x-ms-region": "westeurope" }),
+      text: async () => "",
+    } as unknown as Response));
+    const url = "https://cached-resource.openai.azure.com/openai/v1";
+    const r1 = await probeAzureRegion(url, "k", mockFetch as unknown as typeof fetch);
+    const r2 = await probeAzureRegion(url, "k", mockFetch as unknown as typeof fetch);
+    expect(r1).toBe("West Europe");
+    expect(r2).toBe("West Europe");
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("honors PWNKIT_REGION_OVERRIDE without hitting the network", async () => {
+    process.env.PWNKIT_REGION_OVERRIDE = "East US 2 (forced)";
+    const mockFetch = vi.fn();
+    const region = await probeAzureRegion(
+      "https://any-resource.openai.azure.com/openai/v1",
+      "fake-key",
+      mockFetch as unknown as typeof fetch,
+    );
+    expect(region).toBe("East US 2 (forced)");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("passes through an unknown region code verbatim", async () => {
+    const mockFetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "x-ms-region": "marscentral" }),
+      text: async () => "",
+    } as unknown as Response));
+    const region = await probeAzureRegion(
+      "https://mars.openai.azure.com/openai/v1",
+      "k",
+      mockFetch as unknown as typeof fetch,
+    );
+    expect(region).toBe("marscentral");
+  });
+});
 
 describe.skipIf(!hasAzureKey)("Azure Responses API live integration", () => {
   beforeEach(() => {

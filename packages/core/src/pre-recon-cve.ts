@@ -24,6 +24,11 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import {
+  runWpFingerprint,
+  type FetchLike,
+  type WpFingerprintResult,
+} from "./agent/wp-fingerprint.js";
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -345,4 +350,220 @@ export function formatPreReconForPrompt(report: PreReconCveReport): string | nul
     more,
     "",
   ].join("\n");
+}
+
+// ────────────────────────────────────────────────────────────────────
+// WordPress pre-recon (Phase 4, black-box side)
+// ────────────────────────────────────────────────────────────────────
+//
+// The `wp_fingerprint` tool already exists as an agent-callable action
+// (packages/core/src/agent/wp-fingerprint.ts). The gap this closes: by
+// the time the attack agent starts its first turn, it should already
+// know what plugins/themes are installed and which ones have CVEs — so
+// it doesn't burn $$$ rediscovering what a 2-second probe answers.
+//
+// The flow:
+//   1. Run three cheap probes (/wp-login.php, /readme.html, /wp-json/)
+//      to confirm WordPress. This is a cheaper superset of the full
+//      wp_fingerprint detection — we only need ~1 positive signal to
+//      decide whether to invoke the full fingerprinter.
+//   2. If WP is detected AND the wpFingerprint feature flag is on,
+//      call `runWpFingerprint` directly (bypassing the agent loop).
+//   3. Return a structured packet with the findings, which the caller
+//      folds into the system prompt alongside the source-tree CVEs.
+//
+// Feature flag is checked by the caller, not here, so unit tests can
+// exercise this module without mocking features.ts.
+
+export interface PreReconWordPressReport {
+  /** Did the cheap probes detect WordPress? */
+  isWordPress: boolean;
+  /** Which probe paths returned positive signals. */
+  detectionEvidence: string[];
+  /** Full fingerprint result (undefined if !isWordPress or fingerprinter was skipped). */
+  fingerprint?: WpFingerprintResult;
+  /** Total wall-time spent in pre-recon (detection + fingerprint). */
+  durationMs: number;
+  /** If the fingerprint run threw, the error message is stashed here. */
+  error?: string;
+}
+
+export interface PreReconWordPressOptions {
+  /** Target URL — scheme + host, trailing slash optional. */
+  target: string;
+  /** Injectable fetch for tests. Defaults to globalThis.fetch. */
+  fetchImpl?: FetchLike;
+  /** Per-probe timeout, ms. Default 8_000. */
+  timeoutMs?: number;
+  /** Skip OSV lookups — test helper. Default false. */
+  skipOsv?: boolean;
+  /** Extra headers to forward on every probe (auth, etc). */
+  headers?: Record<string, string>;
+}
+
+/**
+ * Cheap WordPress detection — hits three well-known endpoints in
+ * parallel and returns the set of paths that looked WP-ish. Mirrors
+ * the detection logic in `wp-fingerprint.ts` but uses a smaller probe
+ * set to stay fast in the common "target is not WordPress" case.
+ */
+async function detectWordPressCheap(
+  target: string,
+  fetchImpl: FetchLike,
+  timeoutMs: number,
+  headers?: Record<string, string>,
+): Promise<string[]> {
+  const base = target.replace(/\/+$/, "");
+  const paths = ["wp-login.php", "readme.html", "wp-includes/version.php"];
+  const evidence: string[] = [];
+
+  const results = await Promise.all(
+    paths.map(async (p) => {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        const res = await fetchImpl(`${base}/${p}`, {
+          method: "GET",
+          headers: headers ?? {},
+        }).finally(() => clearTimeout(timer));
+        const body = await res.text().catch(() => "");
+        return { path: p, ok: res.ok, status: res.status, body };
+      } catch {
+        return undefined;
+      }
+    }),
+  );
+
+  for (const r of results) {
+    if (!r) continue;
+    if (r.path === "wp-login.php" && r.ok && /wp-submit|user_login|wp-login/i.test(r.body)) {
+      evidence.push("wp-login.php");
+    }
+    if (r.path === "readme.html" && r.ok && /wordpress/i.test(r.body)) {
+      evidence.push("readme.html");
+    }
+    if (r.path === "wp-includes/version.php" && r.ok && /\$wp_version/.test(r.body)) {
+      evidence.push("wp-includes/version.php");
+    }
+  }
+
+  return evidence;
+}
+
+/**
+ * Phase-4 pre-recon WordPress probe. Runs cheap detection; if positive,
+ * invokes the full `runWpFingerprint` and returns the structured result
+ * for the caller to inject into the attack agent's evidence packet.
+ *
+ * Always returns a report — on any error the promise resolves to a
+ * report with `error` set and no fingerprint payload. Never throws.
+ *
+ * The caller (agentic-scanner.ts) is responsible for:
+ *   1. Feature-flag gating (only run if wpFingerprint is enabled)
+ *   2. Calling this before the attack agent's first turn
+ *   3. Folding the formatted output into the system prompt
+ */
+export async function runPreReconWordPress(
+  opts: PreReconWordPressOptions,
+): Promise<PreReconWordPressReport> {
+  const start = Date.now();
+  const fetchImpl = opts.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
+  const timeoutMs = opts.timeoutMs ?? 8_000;
+
+  try {
+    const evidence = await detectWordPressCheap(
+      opts.target,
+      fetchImpl,
+      timeoutMs,
+      opts.headers,
+    );
+    if (evidence.length === 0) {
+      return {
+        isWordPress: false,
+        detectionEvidence: [],
+        durationMs: Date.now() - start,
+      };
+    }
+
+    const fingerprint = await runWpFingerprint({
+      target: opts.target,
+      fetchImpl,
+      timeoutMs,
+      skipOsv: opts.skipOsv,
+      headers: opts.headers,
+    });
+
+    return {
+      isWordPress: true,
+      detectionEvidence: evidence,
+      fingerprint,
+      durationMs: Date.now() - start,
+    };
+  } catch (err) {
+    return {
+      isWordPress: false,
+      detectionEvidence: [],
+      durationMs: Date.now() - start,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Render a WordPress pre-recon report into a prompt block. Returns null
+ * when there's nothing useful to say (not WordPress, or WP with zero
+ * plugins/themes/cves) — the caller should not inject an empty header.
+ */
+export function formatPreReconWordPressForPrompt(
+  report: PreReconWordPressReport,
+): string | null {
+  if (!report.isWordPress || !report.fingerprint) return null;
+  const fp = report.fingerprint;
+  if (fp.plugins.length === 0 && fp.themes.length === 0 && fp.findings.length === 0) {
+    return null;
+  }
+
+  const lines: string[] = [];
+  lines.push("## WordPress pre-recon");
+  lines.push("");
+  lines.push(
+    `Phase-4 auto-detected WordPress at the target before the attack agent started. Core version: ${fp.coreVersion ?? "unknown"}. Detection evidence: ${report.detectionEvidence.join(", ")}.`,
+  );
+  lines.push("");
+  lines.push(
+    `Enumerated **${fp.plugins.length} plugin${fp.plugins.length === 1 ? "" : "s"}** and **${fp.themes.length} theme${fp.themes.length === 1 ? "" : "s"}**.`,
+  );
+
+  const withCves = fp.findings.filter((f) => f.cves.length > 0);
+  if (withCves.length > 0) {
+    lines.push("");
+    lines.push(
+      `### Priority WP CVE leads (${withCves.length} affected components)`,
+    );
+    lines.push("");
+    lines.push(
+      "**Investigate these first** — the WP fingerprinter confirmed each slug/version pair against the OSV advisory database, so every entry below is a concrete lead, not a guess.",
+    );
+    lines.push("");
+    for (const f of withCves.slice(0, 20)) {
+      const ids = f.cves.slice(0, 5).map((c) => c.id).join(", ");
+      const more = f.cves.length > 5 ? ` (+${f.cves.length - 5} more)` : "";
+      lines.push(
+        `- **${f.kind}** \`${f.slug}\`${f.version ? `@${f.version}` : ""}: ${ids}${more}`,
+      );
+      for (const hint of f.exploitHints.slice(0, 2)) {
+        lines.push(`  - hint: ${hint}`);
+      }
+    }
+    if (withCves.length > 20) {
+      lines.push("");
+      lines.push(`_(${withCves.length - 20} more affected components suppressed for brevity.)_`);
+    }
+  } else {
+    lines.push("");
+    lines.push("No OSV advisory matches for the enumerated plugin/theme versions.");
+  }
+  lines.push("");
+
+  return lines.join("\n");
 }

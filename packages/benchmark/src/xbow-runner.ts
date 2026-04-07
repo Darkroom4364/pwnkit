@@ -33,6 +33,7 @@ import { randomBytes } from "node:crypto";
 import { scan, agenticScan } from "@pwnkit/core";
 import { tmpdir } from "node:os";
 import type { RuntimeMode } from "@pwnkit/shared";
+import { aggregateRuns, type RepeatAggregate, type RepeatRun } from "./wilson.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -54,6 +55,26 @@ const runtimeArg = args.includes("--runtime") ? args[args.indexOf("--runtime") +
 const modelsArg = args.includes("--models")
   ? args[args.indexOf("--models") + 1].split(",").map((s) => s.trim()).filter(Boolean)
   : [];
+
+// ── n=10 statistical evaluation harness (issue #81) ──
+//
+// `--repeat N` runs each enabled challenge N independent times and reports
+// the per-attempt success rate with a 95% Wilson score interval. This is
+// NOT the same as `--retries 3`: --retries retries a FAILING attempt to
+// turn it into a "best-of-K" number; --repeat is honest statistical
+// evaluation — every attempt counts, pass or fail, so we can tell whether
+// a single solve was a generalizable signal or noise.
+//
+// `--repeat-cost-ceiling-usd $5.00` caps the cumulative LLM spend per
+// (challenge) cell. Subsequent attempts of a challenge are skipped once
+// the ceiling is reached and the aggregated result carries
+// `costCeilingHit: true` so the reader knows N_effective < N_requested.
+const repeatArg = args.includes("--repeat")
+  ? Math.max(1, parseInt(args[args.indexOf("--repeat") + 1]))
+  : 1;
+const repeatCostCeilingUsd = args.includes("--repeat-cost-ceiling-usd")
+  ? parseFloat(args[args.indexOf("--repeat-cost-ceiling-usd") + 1])
+  : 5.0;
 
 // ── Benchmark source (repo / ref / path) ──
 //
@@ -140,7 +161,7 @@ function resolveXbowPath(): string {
 const XBOW_PATH = resolveXbowPath();
 
 // ── Types ──
-interface XbowChallenge {
+export interface XbowChallenge {
   id: string;
   name: string;
   description: string;
@@ -150,7 +171,7 @@ interface XbowChallenge {
   path: string;
 }
 
-interface XbowResult {
+export interface XbowResult {
   id: string;
   name: string;
   level: number;
@@ -163,6 +184,19 @@ interface XbowResult {
   findingsCount: number;
   durationMs: number;
   error?: string;
+  // n=10 harness fields — present only when --repeat > 1. When --repeat 1
+  // these are all omitted so the JSON shape is byte-compatible with the
+  // pre-issue-#81 schema and existing consumers keep working.
+  attempts?: number;
+  passes?: number;
+  successRate?: number;
+  successRateCI95?: [number, number];
+  meanTurns?: number;
+  stdDevTurns?: number;
+  meanCostUsd?: number;
+  stdDevCostUsd?: number;
+  perRun?: RepeatRun[];
+  costCeilingHit?: boolean;
 }
 
 interface XbowReport {
@@ -182,6 +216,10 @@ interface XbowReport {
   startupFailures: number;
   scanErrors: number;
   results: XbowResult[];
+  // Present only when --repeat > 1. Encodes the N=10 protocol so any
+  // consumer of the JSON can tell at a glance that each result entry
+  // summarizes multiple independent runs rather than a single attempt.
+  repeatProtocol?: { N: number; costCeilingUsd: number };
 }
 
 function chooseBetterResult(a: XbowResult, b: XbowResult): XbowResult {
@@ -490,6 +528,83 @@ async function runChallenge(challenge: XbowChallenge): Promise<XbowResult> {
   return best!;
 }
 
+/**
+ * n=10 repeat harness (issue #81).
+ *
+ * Runs a single challenge `repeat` times, aborts early if the cumulative
+ * cost exceeds `costCeilingUsd`, and folds the per-run results into one
+ * XbowResult that carries both the aggregated Wilson-CI summary fields
+ * AND the legacy single-shot fields (populated from the first attempt)
+ * for backward compatibility with consumers that don't know about the
+ * new schema.
+ */
+export async function runChallengeRepeated(
+  challenge: XbowChallenge,
+  repeat: number,
+  costCeilingUsd: number,
+  runOne: (c: XbowChallenge) => Promise<XbowResult> = runChallenge,
+): Promise<XbowResult> {
+  const runs: RepeatRun[] = [];
+  const rawResults: XbowResult[] = [];
+  let cumulativeCost = 0;
+  let costCeilingHit = false;
+
+  for (let i = 0; i < repeat; i++) {
+    const r = await runOne(challenge);
+    rawResults.push(r);
+    runs.push({
+      runIndex: i,
+      passed: r.flagFound,
+      turns: r.attackTurns ?? 0,
+      cost: r.estimatedCostUsd ?? 0,
+      durationMs: r.durationMs,
+    });
+    cumulativeCost += r.estimatedCostUsd ?? 0;
+
+    if (!jsonOutput) {
+      const icon = r.flagFound ? "\x1b[32mPASS\x1b[0m" : "\x1b[31mFAIL\x1b[0m";
+      const cost = r.estimatedCostUsd ? ` $${r.estimatedCostUsd.toFixed(3)}` : "";
+      process.stdout.write(
+        `    [repeat ${i + 1}/${repeat}] ${icon}  ${r.attackTurns ?? 0} turns${cost}  cumulative $${cumulativeCost.toFixed(2)}\n`,
+      );
+    }
+
+    if (cumulativeCost >= costCeilingUsd && i + 1 < repeat) {
+      costCeilingHit = true;
+      if (!jsonOutput) {
+        process.stdout.write(
+          `    \x1b[33m[repeat] cost ceiling $${costCeilingUsd.toFixed(2)} hit after ${i + 1}/${repeat} runs — stopping this cell\x1b[0m\n`,
+        );
+      }
+      break;
+    }
+  }
+
+  const agg: RepeatAggregate = aggregateRuns(runs, { costCeilingHit });
+
+  // Legacy fields come from the first attempt so readers that don't know
+  // about the aggregate schema still see a recognizable single-run shape.
+  const first = rawResults[0];
+  return {
+    ...first,
+    // passed reflects "did any attempt find the flag?" so the top-level
+    // `passed` counter still means something in repeat mode. The honest
+    // per-attempt number lives in successRate.
+    passed: agg.passes > 0,
+    flagFound: agg.passes > 0,
+    attempts: agg.attempts,
+    passes: agg.passes,
+    successRate: agg.successRate,
+    successRateCI95: agg.successRateCI95,
+    meanTurns: agg.meanTurns,
+    stdDevTurns: agg.stdDevTurns,
+    meanCostUsd: agg.meanCostUsd,
+    stdDevCostUsd: agg.stdDevCostUsd,
+    perRun: agg.perRun,
+    costCeilingHit: agg.costCeilingHit,
+  };
+}
+
 // ── Main ──
 async function main() {
   if (modelsArg.length > 0 && !jsonOutput) {
@@ -532,14 +647,29 @@ async function main() {
   const results: XbowResult[] = [];
 
   for (const challenge of challenges) {
-    let result = await runChallenge(challenge);
+    let result: XbowResult;
 
-    // Retry on failure if --retries > 1 (non-deterministic model may succeed on retry)
-    for (let attempt = 2; attempt <= retries && modelsArg.length === 0 && !result.flagFound && !result.error; attempt++) {
+    if (repeatArg > 1) {
+      // n=10 statistical evaluation path (issue #81). Each attempt is
+      // independent — no early stopping on success, no "retry until it
+      // passes" — so we can report a per-attempt success rate honestly.
       if (!jsonOutput) {
-        process.stdout.write(`  ... retry ${attempt}/${retries}\n`);
+        process.stdout.write(
+          `  [repeat] ${challenge.id}: ${repeatArg} attempts, cost ceiling $${repeatCostCeilingUsd.toFixed(2)}\n`,
+        );
       }
+      result = await runChallengeRepeated(challenge, repeatArg, repeatCostCeilingUsd);
+    } else {
       result = await runChallenge(challenge);
+
+      // Retry on failure if --retries > 1 (non-deterministic model may succeed on retry).
+      // This is the legacy best-of-K behavior — see --repeat for the honest statistical path.
+      for (let attempt = 2; attempt <= retries && modelsArg.length === 0 && !result.flagFound && !result.error; attempt++) {
+        if (!jsonOutput) {
+          process.stdout.write(`  ... retry ${attempt}/${retries}\n`);
+        }
+        result = await runChallenge(challenge);
+      }
     }
 
     results.push(result);
@@ -580,6 +710,9 @@ async function main() {
     startupFailures,
     scanErrors,
     results,
+    ...(repeatArg > 1
+      ? { repeatProtocol: { N: repeatArg, costCeilingUsd: repeatCostCeilingUsd } }
+      : {}),
   };
 
   if (jsonOutput) {
@@ -663,7 +796,11 @@ async function main() {
   }
 }
 
-main()
+// Only run main() when this file is executed directly (via `tsx xbow-runner.ts`).
+// When the runner is imported by a unit test we want to exercise pure
+// helpers like runChallengeRepeated without booting Docker or the agent.
+const isMain = import.meta.url === `file://${process.argv[1]}`;
+if (isMain) main()
   .then(() => {
     // Force exit — async resources (DB connections, event loop timers from
     // the agentic scanner, browser instances) sometimes keep the process

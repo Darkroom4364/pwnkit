@@ -86,3 +86,122 @@ See the header comment in `src/xbow-runner.ts` for the full flag list
 (`--agentic`, `--white-box`, `--limit`, `--tag`, `--level`, `--only`,
 `--start`, `--retries`, `--models`, `--fresh`, `--save-findings`,
 `--runtime`, `--dry-run`, `--json`).
+
+### Statistical evaluation (`--repeat N`)
+
+A single XBOW solve is an anecdote, not a benchmark. On 2026-04-06 a
+v1 sweep solved XBEN-061 in 8 turns with a `handoff,no-hiw,no-evidence`
+feature combo; we promoted that to a "winning configuration" in a blog
+post and on the public roadmap. The same afternoon, a v2 regression
+test ran the same combo against the same challenge with a fresh
+workspace and failed. The single solve was noise inside an estimated
+20–40% per-attempt success rate — not a generalizable signal.
+
+Issue [#81] is the fix: every `(challenge, configuration)` cell gets
+run N independent times and the harness reports the per-attempt
+success rate with a 95% **Wilson score** confidence interval before
+anything gets promoted to a default. Wilson (not Wald / normal
+approximation) because N is small and rates can be near 0 or 1, where
+Wald produces degenerate intervals like `[0, 0]` or extends outside
+`[0, 1]`.
+
+[#81]: https://github.com/peaktwilight/pwnkit/issues/81
+
+#### Flags
+
+```
+--repeat N                         number of independent attempts per
+                                   challenge (default 1)
+--repeat-cost-ceiling-usd <amount> per-cell cost ceiling (default $5.00).
+                                   Subsequent runs of a challenge are
+                                   skipped once cumulative cost across
+                                   attempts exceeds the ceiling; the
+                                   result carries costCeilingHit: true.
+```
+
+Default reasoning for the cost ceiling: `$5/cell × 8 unsolved challenges
+× n=10 = $40 max per sweep.` Affordable for a nightly CI job.
+
+#### Recommended invocation (n=10 evaluation)
+
+Run the n=10 harness over the 8 unsolved XBEN challenges with the
+lean-scaffolding feature combo under investigation:
+
+```sh
+pnpm --filter @pwnkit/benchmark xbow \
+  --agentic \
+  --only XBEN-010,XBEN-051,XBEN-061,XBEN-066,XBEN-080,XBEN-084,XBEN-099,XBEN-104 \
+  --repeat 10 \
+  --repeat-cost-ceiling-usd 5.00 \
+  --fresh --json
+```
+
+The CI workflow exposes the same via the `repeat` and
+`repeat_cost_ceiling_usd` `workflow_dispatch` inputs on
+`.github/workflows/xbow-bench.yml`.
+
+#### JSON output schema
+
+**When `--repeat 1` (default):** the `xbow-latest.json` shape is
+**unchanged**. Same `results: [...]` array, no new fields, no
+top-level `repeatProtocol`. Existing consumers that don't know about
+`--repeat` keep working byte-for-byte.
+
+**When `--repeat N > 1`:** a top-level `repeatProtocol` field appears:
+
+```jsonc
+{
+  "timestamp": "…",
+  "repeatProtocol": { "N": 10, "costCeilingUsd": 5.0 },
+  "results": [ /* … */ ]
+}
+```
+
+And each entry in `results[]` **adds** the aggregation fields while
+**keeping** the legacy single-run fields populated from the first
+attempt, so old consumers still see a recognizable shape:
+
+```jsonc
+{
+  "id": "XBEN-061",
+  "name": "IDOR in user profile",
+  "level": 2,
+  "tags": ["idor"],
+
+  // Legacy single-shot fields — populated from the FIRST attempt.
+  // `passed` / `flagFound` reflect "did any attempt solve it?" so
+  // the top-level pass counter still means something in repeat mode.
+  "passed": true,
+  "flagFound": true,
+  "attackTurns": 8,
+  "estimatedCostUsd": 0.25,
+  "durationMs": 42000,
+
+  // n=10 aggregation fields.
+  "attempts": 10,
+  "passes": 3,
+  "successRate": 0.3,
+  "successRateCI95": [0.1078, 0.6032],
+  "meanTurns": 10.5,
+  "stdDevTurns": 2.4,
+  "meanCostUsd": 0.35,
+  "stdDevCostUsd": 0.1,
+  "perRun": [
+    { "runIndex": 0, "passed": true,  "turns": 8,  "cost": 0.25, "durationMs": 42000 },
+    { "runIndex": 1, "passed": false, "turns": 12, "cost": 0.42, "durationMs": 68000 }
+    // … 8 more
+  ],
+  "costCeilingHit": false
+}
+```
+
+If a cell stops early because the `--repeat-cost-ceiling-usd` ceiling
+was hit, `costCeilingHit: true` and `attempts < repeatProtocol.N` —
+a reader can tell at a glance that the sample is smaller than the
+requested N.
+
+The Wilson CI computation and the aggregation logic live in
+`src/wilson.ts` and are independently unit-tested in
+`src/wilson.test.ts` (15 tests, including the k=0 / k=n boundary
+clamps) and `src/xbow-runner.test.ts` (4 tests covering the repeat
+harness with an injected fake `runOne`).

@@ -43,6 +43,14 @@ on:
         description: 'Optional branch/tag/sha inside benchmark_repo (defaults to the repo default branch).'
         required: false
         default: ''
+      repeat:
+        description: 'Number of independent attempts per challenge (default 1; set to 10 for statistical evaluation)'
+        required: false
+        default: '1'
+      repeat_cost_ceiling_usd:
+        description: 'Cost ceiling per challenge cell in USD when repeat > 1 (default 5.00)'
+        required: false
+        default: '5.00'
   schedule:
     # Weekly on Sunday at 04:00 UTC
     - cron: "0 4 * * 0"
@@ -236,10 +244,13 @@ jobs:
           ONLY="${{ inputs.only || '' }}"
           FRESH="${{ inputs.fresh || 'true' }}"
           MODELS="${{ inputs.models || '' }}"
+          REPEAT="${{ inputs.repeat || '1' }}"
+          REPEAT_CEILING="${{ inputs.repeat_cost_ceiling_usd || '5.00' }}"
           START_FLAG=""
           ONLY_FLAG=""
           FRESH_FLAG=""
           MODELS_FLAG=""
+          REPEAT_FLAG=""
           if [ "$START" != "0" ]; then
             START_FLAG="--start $START"
           fi
@@ -252,12 +263,20 @@ jobs:
           if [ -n "$MODELS" ]; then
             MODELS_FLAG="--runtime api --models $MODELS"
           fi
+          if [ "$REPEAT" != "1" ]; then
+            # n=10 statistical evaluation harness (issue #81). Runs each
+            # challenge N independent times and reports Wilson-CI-bounded
+            # per-attempt success rates. Mutually useful with --retries,
+            # but semantically different: --retries retries FAILURES,
+            # --repeat runs N honest attempts regardless of outcome.
+            REPEAT_FLAG="--repeat $REPEAT --repeat-cost-ceiling-usd $REPEAT_CEILING"
+          fi
           if [ "$MODE" = "white-box" ]; then
-            echo "Running WHITE-BOX benchmark... (start=$START, limit=$LIMIT, only=$ONLY, fresh=$FRESH, models=$MODELS)"
-            pnpm --filter @pwnkit/benchmark xbow --agentic --white-box --save-findings --limit "$LIMIT" --retries 3 $START_FLAG $ONLY_FLAG $FRESH_FLAG $MODELS_FLAG
+            echo "Running WHITE-BOX benchmark... (start=$START, limit=$LIMIT, only=$ONLY, fresh=$FRESH, models=$MODELS, repeat=$REPEAT)"
+            pnpm --filter @pwnkit/benchmark xbow --agentic --white-box --save-findings --limit "$LIMIT" --retries 3 $START_FLAG $ONLY_FLAG $FRESH_FLAG $MODELS_FLAG $REPEAT_FLAG
           else
-            echo "Running BLACK-BOX benchmark... (start=$START, limit=$LIMIT, only=$ONLY, fresh=$FRESH, models=$MODELS)"
-            pnpm --filter @pwnkit/benchmark xbow --agentic --save-findings --limit "$LIMIT" --retries 3 $START_FLAG $ONLY_FLAG $FRESH_FLAG $MODELS_FLAG
+            echo "Running BLACK-BOX benchmark... (start=$START, limit=$LIMIT, only=$ONLY, fresh=$FRESH, models=$MODELS, repeat=$REPEAT)"
+            pnpm --filter @pwnkit/benchmark xbow --agentic --save-findings --limit "$LIMIT" --retries 3 $START_FLAG $ONLY_FLAG $FRESH_FLAG $MODELS_FLAG $REPEAT_FLAG
           fi
         timeout-minutes: 330
 

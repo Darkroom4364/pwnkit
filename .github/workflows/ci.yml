@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Opt in to running the JavaScript actions (setup-node, checkout, etc.) on
+# Node 24 instead of the deprecated Node 20 internals. GitHub will flip the
+# default in June 2026; this silences the deprecation annotations today.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -38,10 +44,11 @@ jobs:
   # ── Install-smoke matrix ──────────────────────────────────────────────
   # Guards against runtime/ABI regressions like the better-sqlite3 crash on
   # Node 25 (pre-0.7.1). Installs the built tarball into a clean directory
-  # using each supported runtime (Node LTS matrix, Bun, Docker) and runs
-  # `pwnkit-cli history`, which forces the SQLite layer to initialise end-
-  # to-end. If the DB layer ever regresses to a native binding or breaks
-  # on a new Node ABI, this job fails loudly on every PR.
+  # via each supported runtime (Node LTS matrix, Bun, Docker) and runs the
+  # shared `scripts/smoke-cli.sh` harness, which exercises every subcommand
+  # most likely to silently break: --help, doctor, history (DB init path),
+  # mcp-server (stdio JSON-RPC handshake), and review (source pipeline
+  # bootstrap against a throwaway tiny repo with a fake API key).
 
   install-smoke-node:
     name: install-smoke (node ${{ matrix.node }})
@@ -66,12 +73,8 @@ jobs:
           mkdir -p /tmp/smoke && cd /tmp/smoke
           npm init -y >/dev/null
           npm install "$GITHUB_WORKSPACE"/dist/pwnkit-cli-*.tgz
-      - name: --help smoke
-        run: cd /tmp/smoke && node_modules/.bin/pwnkit-cli --help
-      - name: DB init smoke (history)
-        run: cd /tmp/smoke && node_modules/.bin/pwnkit-cli history --db-path /tmp/smoke.db
-      - name: SQLite file was created
-        run: test -s /tmp/smoke.db
+      - name: Runtime smoke (node)
+        run: bash "$GITHUB_WORKSPACE/scripts/smoke-cli.sh" "node /tmp/smoke/node_modules/pwnkit-cli/pwnkit.js"
 
   install-smoke-bun:
     name: install-smoke (bun)
@@ -95,12 +98,8 @@ jobs:
           mkdir -p /tmp/smoke-bun && cd /tmp/smoke-bun
           bun init -y >/dev/null
           bun add "$GITHUB_WORKSPACE"/dist/pwnkit-cli-*.tgz
-      - name: --help smoke (bun)
-        run: cd /tmp/smoke-bun && bun run node_modules/pwnkit-cli/pwnkit.js --help
-      - name: DB init smoke (history, bun)
-        run: cd /tmp/smoke-bun && bun run node_modules/pwnkit-cli/pwnkit.js history --db-path /tmp/smoke-bun.db
-      - name: SQLite file was created
-        run: test -s /tmp/smoke-bun.db
+      - name: Runtime smoke (bun)
+        run: bash "$GITHUB_WORKSPACE/scripts/smoke-cli.sh" "bun run /tmp/smoke-bun/node_modules/pwnkit-cli/pwnkit.js"
 
   install-smoke-docker:
     name: install-smoke (docker)
@@ -110,13 +109,18 @@ jobs:
       - uses: actions/checkout@v6
       - name: Build image
         run: docker build -t pwnkit-ci-smoke .
-      - name: --help smoke (docker)
-        run: docker run --rm pwnkit-ci-smoke --help
-      - name: DB init smoke (history, docker)
-        # Runs inside the container's tmpfs so we don't entangle bind-mount
-        # permissions with node-sqlite3-wasm's Emscripten VFS. A zero exit
-        # code proves the full DB path booted: pwnkitDB constructor,
-        # migrations, and a listScans() query.
-        run: docker run --rm pwnkit-ci-smoke history --db-path /tmp/pwnkit.db
+      - name: Runtime smoke (docker)
+        # Overrides the image ENTRYPOINT to bash and mounts the smoke
+        # harness into the container read-only. The harness itself runs
+        # pwnkit-cli inside the container via the CLI arg, so temp files
+        # live on container tmpfs and never cross the bind-mount boundary
+        # (which is where an earlier iteration tripped over Emscripten VFS
+        # permissions on node-sqlite3-wasm writes).
+        run: |
+          docker run --rm \
+            --entrypoint bash \
+            -v "$GITHUB_WORKSPACE/scripts":/ci-scripts:ro \
+            pwnkit-ci-smoke \
+            /ci-scripts/smoke-cli.sh "node /app/dist/pwnkit.js"
 
   # Website auto-deploys via Cloudflare Pages Git integration

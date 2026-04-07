@@ -194,6 +194,76 @@ describe("runWpFingerprint (integration, mocked fetch)", () => {
     expect(result.plugins).toHaveLength(0);
   });
 
+  it("enriches findings with a curated CVE recipe when OSV reports CVE-2023-3452 (canto RFI)", async () => {
+    const homepageHtml = `
+      <html><head>
+        <link rel='stylesheet' href='${BASE}/wp-content/plugins/canto/assets/style.css?ver=3.0.4' />
+      </head><body>hello</body></html>
+    `;
+
+    const cantoReadme = [
+      "=== Canto ===",
+      "Contributors: canto",
+      "Stable tag: 3.0.4",
+      "License: GPLv2",
+    ].join("\n");
+
+    // OSV response — the mock fetch routes by origin+pathname, so a POST to
+    // https://api.osv.dev/v1/query will land here. The codex lookup happens
+    // off `id`, so we make sure CVE-2023-3452 is reported.
+    const osvJson = {
+      vulns: [
+        {
+          id: "CVE-2023-3452",
+          aliases: [],
+          summary:
+            "The Canto plugin for WordPress is vulnerable to Remote File Inclusion via wp_abspath.",
+          severity: [{ type: "CVSS_V3", score: "9.8" }],
+        },
+      ],
+    };
+
+    const routes: Record<string, MockResponse> = {
+      [`${BASE}/wp-login.php`]: {
+        ok: true,
+        status: 200,
+        body: `<form id="loginform"><input name="log" id="user_login"/><input type="submit" name="wp-submit"/></form>`,
+      },
+      [`${BASE}/`]: { ok: true, status: 200, body: homepageHtml },
+      [`${BASE}/wp-content/plugins/canto/readme.txt`]: {
+        ok: true,
+        status: 200,
+        body: cantoReadme,
+      },
+      "https://api.osv.dev/v1/query": {
+        ok: true,
+        status: 200,
+        json: osvJson,
+        body: JSON.stringify(osvJson),
+      },
+    };
+
+    const fetchImpl = buildMockFetch(routes);
+    const result = await runWpFingerprint({
+      target: BASE,
+      fetchImpl,
+      timeoutMs: 1000,
+      skipOsv: false, // exercise the OSV → codex enrichment path
+    });
+
+    expect(result.isWordPress).toBe(true);
+    const canto = result.findings.find((f) => f.slug === "canto");
+    expect(canto).toBeDefined();
+    expect(canto?.cves.some((c) => c.id === "CVE-2023-3452")).toBe(true);
+
+    // The curated codex hint should now be embedded in the exploitHints
+    // as a fully-formatted recipe — not the generic "check the advisory" line.
+    const hintBlob = (canto?.exploitHints ?? []).join("\n");
+    expect(hintBlob).toContain("wp_abspath");
+    expect(hintBlob).toMatch(/RFI|Remote File Inclusion/);
+    expect(hintBlob).toContain("CVE-2023-3452");
+  });
+
   it("summarizeWpFingerprint produces a non-empty human-readable report", async () => {
     const result = {
       isWordPress: true,

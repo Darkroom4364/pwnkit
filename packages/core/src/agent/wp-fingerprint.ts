@@ -16,6 +16,8 @@
  * `wpFingerprint` feature flag so it does not run on every challenge.
  */
 
+import { getCveExploit, formatExploitRecipe } from "./cve-exploit-codex.js";
+
 // ── Types ──
 
 export interface WpPlugin {
@@ -517,6 +519,21 @@ function extractSeverity(vuln: Record<string, unknown>): string | undefined {
 function buildExploitHints(slug: string, cves: WpCveHit[]): string[] {
   const hints: string[] = [];
   if (cves.length === 0) return hints;
+
+  // ── Curated CVE codex pass ──
+  // For each CVE we have a hand-curated exploit recipe for, prepend the full
+  // formatted recipe so the agent can act on it immediately. We also check
+  // GHSA aliases so an OSV record keyed on a GHSA still resolves.
+  for (const cve of cves) {
+    const candidates = [cve.id, ...cve.aliases];
+    for (const id of candidates) {
+      const recipe = getCveExploit(id);
+      if (recipe) {
+        hints.push(formatExploitRecipe(recipe));
+        break; // one recipe per CVE
+      }
+    }
+  }
 
   const summaries = cves.map((c) => (c.summary ?? "").toLowerCase()).join(" | ");
   if (/file upload|arbitrary file|upload/i.test(summaries)) {

@@ -9,6 +9,7 @@
  * Prerequisites:
  * - Docker + Docker Compose installed
  * - XBOW repo cloned: git clone https://github.com/0ca/xbow-validation-benchmarks-patched /tmp/xbow-benchmarks
+ *   (or let the runner clone it for you via --benchmark-repo)
  *
  * Usage:
  *   tsx src/xbow-runner.ts                    # run all 104
@@ -16,6 +17,12 @@
  *   tsx src/xbow-runner.ts --tag xss          # filter by tag
  *   tsx src/xbow-runner.ts --level 1          # easy only
  *   tsx src/xbow-runner.ts --json             # JSON output
+ *
+ *   # Run against an arbitrary XBOW-compatible fork
+ *   tsx src/xbow-runner.ts --benchmark-repo xbow-engineering/validation-benchmarks
+ *   tsx src/xbow-runner.ts --benchmark-repo 0ca/xbow-validation-benchmarks-patched
+ *   tsx src/xbow-runner.ts --benchmark-repo KeygraphHQ/xbow-validation-benchmarks
+ *   tsx src/xbow-runner.ts --benchmark-repo https://github.com/foo/bar.git --benchmark-ref main
  */
 
 import { execSync, spawnSync } from "node:child_process";
@@ -28,7 +35,6 @@ import { tmpdir } from "node:os";
 import type { RuntimeMode } from "@pwnkit/shared";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const XBOW_PATH = process.env.XBOW_PATH ?? "/tmp/xbow-benchmarks";
 
 // ── CLI Args ──
 const args = process.argv.slice(2);
@@ -48,6 +54,90 @@ const runtimeArg = args.includes("--runtime") ? args[args.indexOf("--runtime") +
 const modelsArg = args.includes("--models")
   ? args[args.indexOf("--models") + 1].split(",").map((s) => s.trim()).filter(Boolean)
   : [];
+
+// ── Benchmark source (repo / ref / path) ──
+//
+// Precedence for locating the XBOW-compatible benchmark suite on disk:
+//   1. --benchmark-path <dir>          explicit local path (no cloning)
+//   2. XBOW_PATH env var               existing behavior, no cloning
+//   3. --benchmark-repo <git-url>      clone into a workspace cache dir
+//   4. default                         /tmp/xbow-benchmarks
+//
+// --benchmark-repo accepts either a GitHub short form ("owner/repo") or a
+// full git URL ("https://github.com/owner/repo.git", "git@github.com:…").
+// --benchmark-ref selects a branch/tag/sha (default: repo's default branch).
+const benchmarkRepoArg = args.includes("--benchmark-repo")
+  ? args[args.indexOf("--benchmark-repo") + 1]
+  : undefined;
+const benchmarkRefArg = args.includes("--benchmark-ref")
+  ? args[args.indexOf("--benchmark-ref") + 1]
+  : undefined;
+const benchmarkPathArg = args.includes("--benchmark-path")
+  ? args[args.indexOf("--benchmark-path") + 1]
+  : undefined;
+
+function normalizeBenchmarkRepo(repo: string): string {
+  // Accept short form "owner/repo" and turn it into a full HTTPS URL.
+  // Anything that looks like a URL or an SSH spec is passed through.
+  if (/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+    return `https://github.com/${repo}.git`;
+  }
+  return repo;
+}
+
+function cacheDirForRepo(repo: string): string {
+  // Derive a stable cache dir from the normalized repo URL so different
+  // forks never collide. We intentionally use /tmp so CI's ephemeral disk
+  // is the default location; XBOW_PATH still wins if explicitly set.
+  const slug = repo
+    .replace(/^https?:\/\//, "")
+    .replace(/^git@/, "")
+    .replace(/\.git$/, "")
+    .replace(/[^\w.-]+/g, "_");
+  return join(tmpdir(), `pwnkit-xbow-cache`, slug);
+}
+
+function ensureBenchmarkRepo(repo: string, ref: string | undefined): string {
+  const url = normalizeBenchmarkRepo(repo);
+  const dest = cacheDirForRepo(url);
+  const benchDir = join(dest, "benchmarks");
+
+  if (existsSync(benchDir)) {
+    if (!jsonOutput) {
+      console.log(`  using cached benchmark repo at ${dest}`);
+    }
+    return dest;
+  }
+
+  mkdirSync(dirname(dest), { recursive: true });
+  const cloneArgs = ["clone", "--depth", "1"];
+  if (ref) cloneArgs.push("--branch", ref);
+  cloneArgs.push(url, dest);
+
+  if (!jsonOutput) {
+    console.log(`  cloning benchmark repo ${url}${ref ? ` @ ${ref}` : ""} → ${dest}`);
+  }
+  const res = spawnSync("git", cloneArgs, { stdio: "pipe" });
+  if (res.status !== 0) {
+    const stderr = res.stderr?.toString() ?? "";
+    console.error(`Failed to clone benchmark repo ${url}: ${stderr}`);
+    process.exit(1);
+  }
+  return dest;
+}
+
+function resolveXbowPath(): string {
+  // 1. explicit --benchmark-path
+  if (benchmarkPathArg) return benchmarkPathArg;
+  // 2. XBOW_PATH env var (legacy — CI clones ahead of time and sets this)
+  if (process.env.XBOW_PATH) return process.env.XBOW_PATH;
+  // 3. --benchmark-repo
+  if (benchmarkRepoArg) return ensureBenchmarkRepo(benchmarkRepoArg, benchmarkRefArg);
+  // 4. legacy default
+  return "/tmp/xbow-benchmarks";
+}
+
+const XBOW_PATH = resolveXbowPath();
 
 // ── Types ──
 interface XbowChallenge {
@@ -109,7 +199,9 @@ function loadChallenges(): XbowChallenge[] {
   const benchDir = join(XBOW_PATH, "benchmarks");
   if (!existsSync(benchDir)) {
     console.error(`XBOW benchmarks not found at ${benchDir}`);
-    console.error(`Clone them: git clone https://github.com/0ca/xbow-validation-benchmarks-patched ${XBOW_PATH}`);
+    console.error(`Either clone them manually:`);
+    console.error(`  git clone https://github.com/0ca/xbow-validation-benchmarks-patched ${XBOW_PATH}`);
+    console.error(`or re-run with --benchmark-repo <owner/repo> to have the runner clone for you.`);
     process.exit(1);
   }
 

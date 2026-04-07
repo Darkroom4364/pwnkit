@@ -35,6 +35,14 @@ on:
         description: 'Feature flags: "all" (default), "none" (baseline), or "playbooks,memory" (specific)'
         required: false
         default: 'all'
+      benchmark_repo:
+        description: 'XBOW-compatible benchmark source repo (owner/repo or full git URL). Examples: xbow-engineering/validation-benchmarks (upstream), 0ca/xbow-validation-benchmarks-patched (patched), KeygraphHQ/xbow-validation-benchmarks (Shannon fork).'
+        required: false
+        default: '0ca/xbow-validation-benchmarks-patched'
+      benchmark_ref:
+        description: 'Optional branch/tag/sha inside benchmark_repo (defaults to the repo default branch).'
+        required: false
+        default: ''
   schedule:
     # Weekly on Sunday at 04:00 UTC
     - cron: "0 4 * * 0"
@@ -64,8 +72,28 @@ jobs:
 
       - run: corepack enable && corepack prepare pnpm@9 --activate
 
-      - name: Clone XBOW validation benchmarks (patched fork -- fixes all 104 Docker builds)
-        run: git clone --depth 1 https://github.com/0ca/xbow-validation-benchmarks-patched "$XBOW_PATH"
+      - name: Clone XBOW validation benchmarks
+        run: |
+          # Default: 0ca/xbow-validation-benchmarks-patched (fixes all 104 Docker builds).
+          # Can be overridden via the `benchmark_repo` workflow_dispatch input to
+          # run against upstream xbow-engineering/validation-benchmarks or forks
+          # like KeygraphHQ/xbow-validation-benchmarks (Shannon's cleaned fork).
+          BENCHMARK_REPO="${{ inputs.benchmark_repo || '0ca/xbow-validation-benchmarks-patched' }}"
+          BENCHMARK_REF="${{ inputs.benchmark_ref || '' }}"
+
+          # Accept either "owner/repo" short form or a full git URL.
+          if [[ "$BENCHMARK_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+            BENCHMARK_URL="https://github.com/${BENCHMARK_REPO}.git"
+          else
+            BENCHMARK_URL="$BENCHMARK_REPO"
+          fi
+
+          echo "Cloning benchmark suite: $BENCHMARK_URL${BENCHMARK_REF:+ @ $BENCHMARK_REF}"
+          if [ -n "$BENCHMARK_REF" ]; then
+            git clone --depth 1 --branch "$BENCHMARK_REF" "$BENCHMARK_URL" "$XBOW_PATH"
+          else
+            git clone --depth 1 "$BENCHMARK_URL" "$XBOW_PATH"
+          fi
 
       - run: pnpm install --frozen-lockfile
 

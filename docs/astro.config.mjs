@@ -81,6 +81,10 @@ export default defineConfig({
           slug: "benchmark",
         },
         {
+          label: "Roadmap",
+          slug: "roadmap",
+        },
+        {
           label: "Research",
           items: [
             { label: "Overview", slug: "research" },

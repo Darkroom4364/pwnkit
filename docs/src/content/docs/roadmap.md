@@ -1,0 +1,206 @@
+---
+title: Roadmap
+description: Where pwnkit is going next. Opinionated, prioritised by leverage, dated by what already shipped.
+---
+
+This roadmap is opinionated. It prioritises product leverage over surface-area creep, and it stays honest about what has actually shipped vs what is still being scoped.
+
+The current thesis is unchanged from earlier in the year:
+
+1. Make the core agentic pipeline trustworthy.
+2. Make the outputs operationally useful for real teams.
+3. Then add orchestration and control-plane UX on top.
+
+What has changed is that the trust layer is now real. The 92.3% white-box best-of-N aggregate on the public XBOW benchmark is the proof. Most of the next-quarter work is about taking that capability and making it operationally easy to live with — for one developer running a single review, for a CI pipeline gating PRs, and for a security team running a continuous campaign.
+
+## Recently shipped (April 2026)
+
+These are the things that landed since the last public roadmap snapshot. They should not be in the "Now" column anymore — they are done.
+
+- **96 / 104 unique flags on XBOW (white-box best-of-N aggregate, 92.3%).** Up from 95/104 the day before via the lean-scaffolding A/B sweep that solved XBEN-061 in 8 turns.
+- **91 / 104 on the published black-box mode (87.5%).** Both numbers reported separately, no methodology blending.
+- **Cost ceiling enforcement.** Scans abort cleanly when a per-run USD budget is exceeded, instead of silently spending past it.
+- **Direct OSV advisory lookup in the npm audit pipeline.** No more relying on `npm audit` alone for known-CVE coverage.
+- **Phase 4 pre-recon CVE check** for white-box mode — the agent fingerprints the target stack against known vulnerabilities before it starts attacking.
+- **Phase A flag-regex extractor + gate filters.** Catches flag-shaped strings the agent emits and validates them against expected format. This is what caught the XBEN-079 honeypot decoy (`FLAG{I'm_a_Script_Kiddie}`) before it became a silent false positive.
+- **Phase B malicious-package detection** in the audit pipeline.
+- **Cloud handshake (Phase 1).** Findings produced by the OSS engine can be normalised and ingested by an orchestrator service that tracks scan jobs end-to-end.
+- **A/B sweep cadence.** Overnight workflow dispatches across feature combinations are now the default way improvements get tested. The first sweep cost $3.08 across 8 challenges, added one solve, and surfaced one actionable failure mode (the honeypot).
+
+## Now
+
+These are the next four things in priority order. Each one is small enough to ship in one or two focused passes.
+
+### 1. Anti-honeypot / decoy-flag heuristic
+
+**Goal:** stop the agent from declaring victory on the first flag-shaped string it finds when the target deliberately seeds a fake one.
+
+**Why:** the v1 A/B sweep caught the agent submitting `FLAG{I'm_a_Script_Kiddie}` on XBEN-079 ("Poison Inclusion - Protected"). The real flag was `FLAG{7dda4e738d29a996f343a610}`. The flag-extractor gate caught the mismatch and the run failed cleanly — but a non-CTF target could plant a similar honeypot string in a `.git/config` or a config file decoy and the agent would happily submit it as a finding.
+
+**Deliverables:**
+
+- on flag-shaped match, mark provisional and continue at least one more layer of exploration
+- prefer hex/uuid shapes that match the surrounding suite's flag format over jokey decoys
+- expose the heuristic as `--decoy-detection` (default: on)
+
+This is a small, falsifiable change. If it lands XBEN-079 it almost certainly catches a class of similar honeypots in real engagements.
+
+### 2. Lean scaffolding default for long-horizon white-box
+
+**Goal:** make the configuration that solved XBEN-061 in 8 turns the default for long-horizon white-box runs.
+
+**Why:** the v1 sweep proved that `handoff,no-hiw,no-evidence` (cross-agent handoff enabled, human-in-the-loop disabled, evidence pass disabled) cracked a stalled challenge in a fraction of the turns the baseline used. The hypothesis is that over-careful scaffolding was crowding the context window and starving the model of attention budget for the actual exploit.
+
+**Deliverables:**
+
+- promote the lean combo to `--profile long-horizon` instead of a feature-flag stack
+- run the v2 sweep against XBEN-066 and XBEN-092 (both long-horizon white-box stalls) under the same combo
+- if v2 confirms generalisation, switch the white-box default
+
+### 3. Resumable scans
+
+**Goal:** if a long review or scan dies, resume from stored state instead of restarting.
+
+**Why:**
+
+- the repo already persists `agent_sessions` and `pipeline_events`
+- long-running agentic workflows are expensive to restart
+- this is what makes pwnkit feel like infrastructure instead of a disposable CLI run
+
+**Deliverables:**
+
+- `pwnkit-cli resume <scan-id>`
+- stage-level checkpointing
+- partial-result recovery after crash or timeout
+- resume-safe report generation
+
+### 4. Finding inbox + triage workflow
+
+**Goal:** make findings manageable across repeated runs.
+
+**Why:** "found a thing" is not enough for teams. Repeated findings need dedupe, suppression, and audit history.
+
+**Deliverables:**
+
+- finding fingerprinting across scans
+- statuses such as `new`, `accepted`, `suppressed`, `needs-human`, `regression`
+- suppression rules with reason + expiration
+- comments / notes on findings
+- diff view between scans
+
+## Next
+
+These become much more valuable once the items above are solid.
+
+### 5. Diff-aware PR scanning
+
+**Goal:** make the GitHub Action and CI path fast enough to use on every PR.
+
+**Why:** full deep review on every pull request is too expensive. Most teams want "changed files first, expand when suspicious."
+
+**Deliverables:**
+
+- changed-file targeting for `review`
+- priority scoring for touched paths, auth, secrets, network, tool-use, eval-like sinks
+- optional fallback to full review on high-risk deltas
+- PR summary output tuned for reviewer action
+
+### 6. Deterministic replay for every finding
+
+**Goal:** every confirmed finding should be reproducible on demand.
+
+**Why:** replay is how the tool earns trust. It is the bridge between "AI said so" and "I can see it myself."
+
+**Deliverables:**
+
+- replay command from finding ID
+- saved exploit inputs / requests / prompts
+- verifier transcript and verdict trace
+- artifact bundle for share / export
+
+### 7. Multi-target orchestration
+
+**Goal:** scan many repos, packages, or endpoints as one campaign. This is where subagents actually matter.
+
+**Good use of subagents:**
+
+- fan out research across many targets
+- parallel blind verification
+- aggregate results into one campaign view
+
+**Bad use of subagents:**
+
+- navigation gimmicks
+- vague "AI assistant" behaviour with no task boundary
+
+**Deliverables:**
+
+- campaign runs
+- worker pool / concurrency controls
+- queueing and retry policy
+- shared target inventory and cross-target clustering
+
+### 8. Local dashboard / operations shell
+
+**Goal:** expose the stored scan state as a real operator interface for running the autonomous control plane, working the review inbox, and inspecting runtime failures.
+
+**Status:**
+
+- baseline shipped: grouped findings, thread-level workflow, quick filtering, scan dossiers, recent shadcn rebuild
+- next cut: operations-first home, active run stage progress, replay launch, and better provenance links between threads and runs
+
+**Core views:**
+
+- operations control as the primary home
+- review inbox for operator decisions and blocked automation
+- scan dossiers and pipeline timelines as supporting provenance views
+- replay / evidence viewer
+- target inventory
+- scan history and trend charts
+
+## Later
+
+These are valuable, but they should not outrank the workflow / control-plane work above.
+
+### 9. Policy packs and organisation presets
+
+- suppressions as code
+- severity gates by environment
+- org-level runtime / model defaults
+- approved attack template sets
+
+### 10. Richer target inventory and trend analysis
+
+- first-seen / last-seen attack surface changes
+- recurring finding families
+- regression alerts
+- "what changed since last green run"
+
+### 11. Distributed workers / remote execution
+
+- remote queue workers
+- large campaign execution
+- shared artifact store
+- eventually a hosted control plane if adoption justifies it
+
+## Non-Goals Right Now
+
+Things that sound flashy but should stay below the line for now:
+
+- a giant SaaS dashboard before the local workflow is excellent
+- "chat with your findings" before replay, dedupe, and triage are strong
+- adding lots of new scan modes without stronger replay and campaign ergonomics
+- subagents used as UI magic instead of bounded workers
+- EGATS-style tree search on challenges this size — the v1 sweep proved it currently costs more than it earns
+
+## Product Direction
+
+The best version of pwnkit is:
+
+- a sharp local CLI for one-off deep work
+- a reliable CI primitive for PRs and repos
+- a persistent evidence store for findings and agent runs
+- a local operations shell on top of that state
+- eventually a separate distributed agentic security control plane for campaigns and remote workers
+
+That is more compelling than being "yet another scanner with more templates." The XBOW number is the proof that the core capability is real. The roadmap above is the work to turn that capability into something teams can actually live with.

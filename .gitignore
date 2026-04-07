@@ -2,13 +2,15 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
-.claude/*.lock
-.claude/worktrees/
+.claude/
 .omx/
 demo/out/
 pnpm-publish-summary.json
 *.sync-conflict-*
-.claude/SESSION_STATUS.md
+
+# Astro generated build artifacts (root + nested)
+.astro/
+**/.astro/
 
 # Strategy / marketing / launch / fundraising / pitch material lives in
 # the business repo at ~/coding/business/opensoar-hq-strategy/, not here.
@@ -18,4 +20,4 @@ pnpm-publish-summary.json
 .local/
 marketing/
 POSITIONING.md
-ROADMAP.md
+www/

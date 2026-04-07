@@ -11,11 +11,16 @@ pwnkit is a general-purpose autonomous pentesting framework. It scans AI/LLM app
 # Run directly (no install)
 npx pwnkit-cli scan --target https://your-app.com/api/chat
 
+# Or with Bun for a noticeably faster cold start (~10x)
+bunx pwnkit-cli scan --target https://your-app.com/api/chat
+
 # Or install globally
 npm i -g pwnkit-cli
+# or
+bun add -g pwnkit-cli
 ```
 
-**Requirements:** Node.js 20+ and pnpm 8+ (for development).
+**Requirements:** Node.js 18+ (tested through Node 25) or Bun. Since v0.7.1, pwnkit-cli ships with **zero native modules** — the SQLite persistence layer runs on a pure-WASM build, so there are no prebuilds to fetch and no `NODE_MODULE_VERSION` ABI mismatches between Node releases. Same binary runs on every Node version and on Bun without rebuilding. For development from source, pnpm 9+ is required.
 
 ## Set up an API key
 

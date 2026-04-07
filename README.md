@@ -11,13 +11,14 @@
 
 <p align="center">
  <a href="https://www.npmjs.com/package/pwnkit-cli"><img src="https://img.shields.io/npm/v/pwnkit-cli?color=crimson&style=flat-square" alt="npm version" /></a>
+ <img src="https://img.shields.io/badge/runs%20with-npx%20%C2%B7%20bunx%20%C2%B7%20docker-2a9d8f?style=flat-square" alt="runs with npx, bunx, docker" />
  <a href="https://github.com/peaktwilight/pwnkit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="license" /></a>
  <a href="https://github.com/peaktwilight/pwnkit/actions"><img src="https://img.shields.io/github/actions/workflow/status/peaktwilight/pwnkit/ci.yml?style=flat-square" alt="CI" /></a>
  <a href="https://github.com/peaktwilight/pwnkit/stargazers"><img src="https://img.shields.io/github/stars/peaktwilight/pwnkit?style=flat-square&color=gold" alt="stars" /></a>
  <img src="https://img.shields.io/badge/XBOW%20best--of--N-92.3%25%20(96%2F104)-e63946?style=flat-square" alt="XBOW best-of-N score" />
  <img src="https://img.shields.io/badge/XBOW%20black--box-87.5%25%20(91%2F104)-e63946?style=flat-square" alt="XBOW black-box score" />
  <img src="https://img.shields.io/badge/Cybench-80%25%20(8%2F10)-e63946?style=flat-square" alt="Cybench score" />
- <img src="https://img.shields.io/badge/tests-206%20passing-2a9d8f?style=flat-square" alt="tests" />
+ <img src="https://img.shields.io/badge/tests-340%2B%20passing-2a9d8f?style=flat-square" alt="tests" />
 </p>
 
 <p align="center">
@@ -51,7 +52,7 @@ If you use Azure OpenAI instead, also pass `AZURE_OPENAI_BASE_URL` and `AZURE_OP
 
 The image ships with Node 20, Playwright/Chromium, and the standard pentest toolbox (sqlmap, nmap, nikto, gobuster, ffuf, hydra, john, …) preinstalled.
 
-### npx / npm
+### npx / bunx
 
 ```bash
 # Scan an AI / LLM endpoint
@@ -73,10 +74,14 @@ npx pwnkit-cli review ./my-app
 npx pwnkit-cli https://example.com
 ```
 
+Prefer [Bun](https://bun.sh)? Swap `npx` for `bunx` — same commands, same flags, zero-install, noticeably faster cold start. pwnkit-cli is pure-JS with a WASM SQLite core, so there are no native bindings to rebuild on either runtime.
+
 Global install:
 
 ```bash
 npm i -g pwnkit-cli
+# or
+bun add -g pwnkit-cli
 ```
 
 ## What It Does

@@ -49,6 +49,20 @@ export const features = {
   povGate: env("PWNKIT_FEATURE_POV_GATE", false),
   /** Semgrep-style per-target persistent FP memories injected into the verify pipeline */
   triageMemories: env("PWNKIT_FEATURE_TRIAGE_MEMORIES", false),
+  /**
+   * WordPress plugin/theme fingerprinter + OSV CVE lookup.
+   * Exposes the `wp_fingerprint` tool to the attack agent. Off by default —
+   * opt in via `--features wp_fingerprint` (or PWNKIT_FEATURE_WP_FINGERPRINT=1)
+   * when the target is known or suspected to be WordPress. See
+   * packages/core/src/agent/wp-fingerprint.ts for the implementation.
+   *
+   * Implemented as a getter so the CLI `--features` flag — which sets the env
+   * var inside the command action, AFTER this module has been imported — is
+   * still honored at tool-dispatch time.
+   */
+  get wpFingerprint(): boolean {
+    return env("PWNKIT_FEATURE_WP_FINGERPRINT", false);
+  },
 
   // ── Always-on triage filters (default ON, ablatable for A/B testing) ──
 

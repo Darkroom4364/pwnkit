@@ -274,6 +274,7 @@ the fastest path to the flag is usually a public CVE rather than a novel bug. Fi
 then search for exploits, then execute the simplest working PoC.
 
 ### Step 1: Fingerprint Software and Versions
+- **If WordPress suspected, call the \`wp_fingerprint\` tool first** (requires --features wp_fingerprint). It returns a structured list of (plugin, version, cve_ids, exploit_hints) that you should iterate through before any manual fingerprinting.
 - Run: whatweb -a 3 <target>, nmap -sV -sC -p- <target>
 - If WordPress suspected: wpscan --url <target> --enumerate vp,vt,u (vulnerable plugins, themes, users)
 - Pull version hints from:

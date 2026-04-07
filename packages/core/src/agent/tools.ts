@@ -10,6 +10,11 @@ import { buildAuthHeaders } from "./prompts.js";
 import type { pwnkitDB } from "@pwnkit/db";
 import { features as featureFlags } from "./features.js";
 import { PtySessionManager } from "./pty-session.js";
+import {
+  runWpFingerprint,
+  summarizeWpFingerprint,
+  type FetchLike,
+} from "./wp-fingerprint.js";
 
 // ── Tool Registry ──
 
@@ -266,6 +271,22 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
       timeout: { type: "number", description: "Read timeout in ms (for read action, default 5000)" },
     },
     required: ["action"],
+  },
+
+  wp_fingerprint: {
+    name: "wp_fingerprint",
+    description:
+      "WordPress reconnaissance and CVE lookup. Confirms the target is WordPress, extracts the core version, enumerates installed plugins and themes (via HTML source, /wp-json/, and /wp-content/ directory listings), probes each plugin's readme.txt and each theme's style.css for a version string, and queries the OSV vulnerability database for known CVEs per (slug, version) pair. Returns a structured list of findings with exploit hints. Feature-gated behind --features wp_fingerprint. Use this once, early, when the target is or might be WordPress.",
+    parameters: {
+      max_plugin_probes: {
+        type: "number",
+        description: "Maximum plugins/themes to probe for a version file (default 40).",
+      },
+      skip_osv: {
+        type: "boolean",
+        description: "Skip OSV lookups (for offline or diagnostic runs). Default false.",
+      },
+    },
   },
 
   done: {
@@ -598,6 +619,8 @@ export class ToolExecutor {
           return await this.ptySession(call.arguments);
         case "spawn_agent":
           return await this.spawnAgent(call.arguments);
+        case "wp_fingerprint":
+          return await this.wpFingerprint(call.arguments);
         case "done":
           return this.markDone(call.arguments);
         default:
@@ -1608,6 +1631,61 @@ export class ToolExecutor {
     return { success: true, output: { message: "Target profile updated", target: this.ctx.targetInfo } };
   }
 
+  // ── WordPress fingerprinter (feature-gated) ──
+
+  private async wpFingerprint(args: Record<string, unknown>): Promise<ToolResult> {
+    if (!featureFlags.wpFingerprint) {
+      return {
+        success: false,
+        output: null,
+        error:
+          "wp_fingerprint is disabled. Enable with --features wp_fingerprint or PWNKIT_FEATURE_WP_FINGERPRINT=1.",
+      };
+    }
+
+    // Same-origin enforcement: only probe the scan target.
+    const base = validateTargetUrl(this.ctx.target, this.ctx.target);
+
+    // Build an auth-aware fetch wrapper that reuses the scan's credentials.
+    const authHeaders = buildAuthHeaders(this.ctx.authConfig);
+    const wrappedFetch: FetchLike = async (url, init) => {
+      const headers = {
+        ...authHeaders,
+        ...(init?.headers ?? {}),
+      };
+      const res = await fetch(url, {
+        method: init?.method ?? "GET",
+        headers,
+        body: init?.body,
+      });
+      return {
+        ok: res.ok,
+        status: res.status,
+        text: () => res.text(),
+        json: () => res.json(),
+      };
+    };
+
+    try {
+      const result = await runWpFingerprint({
+        target: base,
+        fetchImpl: wrappedFetch,
+        maxPluginProbes: (args.max_plugin_probes as number) ?? 40,
+        skipOsv: (args.skip_osv as boolean) ?? false,
+      });
+      return {
+        success: true,
+        output: {
+          summary: summarizeWpFingerprint(result),
+          result,
+        },
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { success: false, output: null, error: msg };
+    }
+  }
+
   private markDone(args: Record<string, unknown>): ToolResult {
     return {
       success: true,
@@ -1623,7 +1701,8 @@ export function getToolsForRole(role: string, opts?: { hasScope?: boolean; webMo
   const browserTools = opts?.hasBrowser ? ["browser"] : [];
   const webSearchTools = featureFlags.webSearch ? ["web_search"] : [];
   const ptyTools = featureFlags.ptySession ? ["pty_session"] : [];
-  const networkTools = ["http_request", "crawl", "submit_form", "bash", ...browserTools, ...webSearchTools, ...ptyTools, "send_prompt", "save_finding", "update_finding", "update_target", ...common];
+  const wpTools = featureFlags.wpFingerprint ? ["wp_fingerprint"] : [];
+  const networkTools = ["http_request", "crawl", "submit_form", "bash", ...browserTools, ...webSearchTools, ...ptyTools, ...wpTools, "send_prompt", "save_finding", "update_finding", "update_target", ...common];
   const fileTools = ["read_file", "run_command"];
 
   const roleTools: Record<string, string[]> = {

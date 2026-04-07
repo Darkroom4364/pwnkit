@@ -64,6 +64,10 @@ export function registerScanCommand(program: Command): void {
     .option("--race", "Enable best-of-N strategy racing: run multiple attack strategies in parallel", false)
     .option("--egats", "Enable EGATS (Evidence-Gated Attack Tree Search): beam-search over a hypothesis tree", false)
     .option("--cost-ceiling <usd>", "Hard per-scan USD cost ceiling. Aborts cleanly with partial findings if exceeded. Overrides PWNKIT_COST_CEILING_USD.")
+    .option(
+      "--features <list>",
+      "Comma-separated list of opt-in feature flags to enable for this scan (e.g. 'wp_fingerprint,web_search'). Each flag maps to the corresponding PWNKIT_FEATURE_<NAME> environment variable.",
+    )
     .option("--verbose", "Show detailed output", false)
     .option("--replay", "Replay the last scan's results", false)
     .action(async (opts) => {
@@ -112,6 +116,23 @@ export function registerScanCommand(program: Command): void {
       if (!validModes.has(mode)) {
         console.error(chalk.red(`Unknown mode '${mode}'. Valid: ${[...validModes].join(", ")}`));
         process.exit(2);
+      }
+
+      // ── Parse --features flag: map each token to PWNKIT_FEATURE_<UPPER>=1 ──
+      // The core `features` object for most flags is captured at import time,
+      // so in general you should prefer setting PWNKIT_FEATURE_* env vars in
+      // your shell. Flags that are declared as getters (e.g. wp_fingerprint)
+      // re-read the env at access time and therefore honor this flag even
+      // though it's applied inside the action handler.
+      if (opts.features) {
+        const tokens = String(opts.features)
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
+        for (const token of tokens) {
+          const envName = `PWNKIT_FEATURE_${token.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
+          process.env[envName] = "1";
+        }
       }
 
       // Parse --auth flag if provided

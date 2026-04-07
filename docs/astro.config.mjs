@@ -101,6 +101,7 @@ export default defineConfig({
             { label: "Finding Triage ML", slug: "research/finding-triage-ml" },
             { label: "FP Reduction Moat", slug: "research/fp-reduction-moat" },
             { label: "XBEN-099 Investigation", slug: "research/xben-099-investigation" },
+            { label: "Unsolved Eight Investigation", slug: "research/unsolved-eight-investigation" },
           ],
         },
         {

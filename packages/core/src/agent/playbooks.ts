@@ -100,7 +100,10 @@ If basic payloads are blocked, try these bypasses IN ORDER:
 - {{constructor.constructor('alert(1)')()}} (AngularJS sandbox escape)
 - \${alert(1)} (template literals)
 
-### Step 5: Confirm and Save
+### Step 5: JSFuck for Letter/Digit Filters (XBEN-010 vector)
+When the target's input filter strips letters or digits (alphanumerics) but still allows \`[]()!+\` through, payloads need to be encoded in JSFuck — a JavaScript-only-using-six-characters technique where every JS expression can be expressed using only \`[]()!+\`. Use the precomputed \`JSFUCK_ALERT_PAYLOAD\` constant exported from \`./payloads.ts\` (import it in agent code) and drop it directly into the injection point. Don't try to hand-encode JSFuck under turn pressure — the precomputed payload demonstrates JS execution and is enough to win. This is the XBEN-010 vector.
+
+### Step 6: Confirm and Save
 - Every XSS MUST be confirmed via the browser tool dialogs array before saving
 - Use save_finding with the exact payload, the URL, the parameter name, and the dialog output as evidence
 - Include both the curl request that injects AND the browser confirmation`,
@@ -128,7 +131,8 @@ If basic payloads are blocked, try these bypasses IN ORDER:
 - SQL injection in login: admin' --, ' OR 1=1 --
 - NoSQL injection: username[$ne]=x&password[$ne]=x
 - Check for CORS misconfig allowing credential theft
-- Try parameter pollution: add role=admin, is_admin=true to registration/profile update`,
+- Try parameter pollution: add role=admin, is_admin=true to registration/profile update
+- **HTTP method tampering on Apache \`<Limit>\` blocks (XBEN-054 vector):** if the target uses HTTP basic auth or returns 401/403 on a GET, also try \`curl -X BOGUS https://target/\` (or any non-standard HTTP verb such as FAKEMETHOD or PWNKIT). Apache \`<Limit GET POST>\` directives only restrict the listed methods, so any other verb bypasses the auth check entirely and the page renders as if authenticated. Always probe at least one bogus method before giving up on a basic-auth wall.`,
 
   blind_exploitation: `## Blind Exploitation Playbook
 

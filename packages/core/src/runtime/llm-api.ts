@@ -754,11 +754,23 @@ export class LlmApiRuntime implements Runtime, NativeRuntime {
         ];
 
         for (const m of messages) {
-          // Collect text blocks into a role-based message
+          // Collect text blocks into a role-based message. The OpenAI Responses
+          // API distinguishes text content by producer: user/system/developer
+          // roles use `input_text`, but the assistant role must use
+          // `output_text` (or `refusal`). Sending `input_text` on an assistant
+          // message yields a 400 on Azure with:
+          //   "Invalid value: 'input_text'. Supported values are:
+          //    'output_text' and 'refusal'."
+          // The agent loop replays the assistant's prior text replies on every
+          // turn, so this bug used to kill every multi-turn scan on Azure
+          // starting at turn 2 — the error was misdiagnosed as a "max turns
+          // without completion" because each retry failed with the same 400.
+          const assistantText = m.role === "assistant";
+          const textType = assistantText ? "output_text" : "input_text";
           const textBlocks: Array<Record<string, unknown>> = [];
           for (const block of m.content) {
             if (block.type === "text") {
-              textBlocks.push({ type: "input_text", text: block.text });
+              textBlocks.push({ type: textType, text: block.text });
             } else if (block.type === "tool_use") {
               // Flush any pending text blocks first
               if (textBlocks.length > 0) {

@@ -212,9 +212,12 @@ describe("LlmApiRuntime Responses API message format", () => {
     expect(input[1].role).toBe("user");
     expect(input[1].content[0].type).toBe("input_text");
 
-    // Assistant history should be serialized as input_text when sent back in input
+    // Assistant history must be serialized as `output_text` — the OpenAI
+    // Responses API rejects `input_text` on an assistant message with a 400
+    // ("Supported values are: 'output_text' and 'refusal'"), which used to
+    // blow up every multi-turn Azure scan starting at turn 2.
     expect(input[2].role).toBe("assistant");
-    expect(input[2].content[0].type).toBe("input_text");
+    expect(input[2].content[0].type).toBe("output_text");
     expect(input[2].content[0].text).toBe("I'll call a tool");
 
     // function_call should be a top-level item, NOT nested in content
@@ -260,6 +263,65 @@ describe("LlmApiRuntime Responses API message format", () => {
     expect(input[4].call_id).toBe("c1");
     expect(input[5].type).toBe("function_call_output");
     expect(input[5].call_id).toBe("c2");
+  });
+
+  it("regression: assistant text replies use output_text, not input_text (Azure 400 at turn 2+)", async () => {
+    // This is the regression guard for the bug that made every multi-turn
+    // Azure Responses API scan fail at turn 2 or later. The agent loop replays
+    // the assistant's prior text reply on every turn to preserve context; if
+    // we serialize that text with `input_text` the API 400s with:
+    //   "Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    // The symptom in the TUI looked like a stuck attack stage that reached
+    // max turns with 0 findings — the real cause was that every turn after
+    // the first was getting rejected by Azure.
+    const messages: NativeMessage[] = [
+      { role: "user", content: [{ type: "text", text: "initial user prompt" }] },
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "I'll start by probing the target." },
+          { type: "tool_use", id: "probe1", name: "http_request", input: { url: "https://t.invalid" } },
+        ],
+      },
+      {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "probe1", content: '{"status":200}' }],
+      },
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "The target is live. Let me try an SQL injection." }],
+      },
+      {
+        role: "user",
+        content: [{ type: "text", text: "follow-up from user" }],
+      },
+    ];
+
+    await rt.executeNative("system", messages, []);
+
+    const input = capturedBody.input;
+    // Walk every item that carries a content array and assert role → type.
+    // Assistant text MUST be `output_text`, everything else `input_text`.
+    for (const item of input) {
+      if (!Array.isArray(item.content)) continue;
+      for (const block of item.content) {
+        if (block.type === "input_text" || block.type === "output_text") {
+          if (item.role === "assistant") {
+            expect(block.type).toBe("output_text");
+          } else {
+            expect(block.type).toBe("input_text");
+          }
+        }
+      }
+    }
+
+    // Sanity: at least one assistant-role item should exist in the serialized
+    // input, and it should be carrying output_text. Otherwise the test above
+    // would vacuously pass if the serializer ever dropped assistant messages
+    // entirely.
+    const assistantItems = input.filter((i: any) => i.role === "assistant" && Array.isArray(i.content));
+    expect(assistantItems.length).toBeGreaterThan(0);
+    expect(assistantItems[0].content[0].type).toBe("output_text");
   });
 
   it("does not nest function_call inside content arrays", async () => {

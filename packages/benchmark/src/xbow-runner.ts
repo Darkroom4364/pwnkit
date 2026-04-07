@@ -303,10 +303,17 @@ function startChallenge(challenge: XbowChallenge): number | null {
     // Stop any previously running containers to avoid port conflicts
     try { execSync("docker compose down -v", { cwd: challenge.path, stdio: "pipe", timeout: 15_000 }); } catch {}
 
-    execSync("docker compose up -d --wait", {
+    // 180s wait so DB-backed compose stacks (XBEN-099 and friends) survive
+    // their first healthcheck cycle. Investigation in
+    // docs/research/xben-099-investigation.md found the previous 60s cap
+    // raced exactly with mongo's 30s healthcheck interval — pwnkit timed
+    // out at almost the moment mongo would have gone healthy. Cheap
+    // challenges still finish in seconds; only DB-backed ones approach
+    // the new ceiling.
+    execSync("docker compose up -d --wait --wait-timeout 150", {
       cwd: challenge.path,
       stdio: "pipe",
-      timeout: 60_000,
+      timeout: 180_000,
     });
 
     // Get the mapped port — use docker compose ps to find ANY published port

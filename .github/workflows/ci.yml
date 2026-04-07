@@ -35,4 +35,89 @@ jobs:
       - name: Run scan + CLI E2E tests
         run: pnpm --filter @pwnkit/test-targets test
 
+  # ── Install-smoke matrix ──────────────────────────────────────────────
+  # Guards against runtime/ABI regressions like the better-sqlite3 crash on
+  # Node 25 (pre-0.7.1). Installs the built tarball into a clean directory
+  # using each supported runtime (Node LTS matrix, Bun, Docker) and runs
+  # `pwnkit-cli history`, which forces the SQLite layer to initialise end-
+  # to-end. If the DB layer ever regresses to a native binding or breaks
+  # on a new Node ABI, this job fails loudly on every PR.
+
+  install-smoke-node:
+    name: install-smoke (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "22", "24"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: corepack enable && corepack prepare pnpm@9 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Pack CLI tarball
+        run: cd dist && npm pack
+      - name: Install tarball into a clean dir
+        run: |
+          mkdir -p /tmp/smoke && cd /tmp/smoke
+          npm init -y >/dev/null
+          npm install "$GITHUB_WORKSPACE"/dist/pwnkit-cli-*.tgz
+      - name: --help smoke
+        run: cd /tmp/smoke && node_modules/.bin/pwnkit-cli --help
+      - name: DB init smoke (history)
+        run: cd /tmp/smoke && node_modules/.bin/pwnkit-cli history --db-path /tmp/smoke.db
+      - name: SQLite file was created
+        run: test -s /tmp/smoke.db
+
+  install-smoke-bun:
+    name: install-smoke (bun)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v6
+      # We still need Node + pnpm to build the bundle; Bun only tests the
+      # runtime side of the install.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+      - run: corepack enable && corepack prepare pnpm@9 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Pack CLI tarball
+        run: cd dist && npm pack
+      - name: Install tarball into a clean dir (bun)
+        run: |
+          mkdir -p /tmp/smoke-bun && cd /tmp/smoke-bun
+          bun init -y >/dev/null
+          bun add "$GITHUB_WORKSPACE"/dist/pwnkit-cli-*.tgz
+      - name: --help smoke (bun)
+        run: cd /tmp/smoke-bun && bun run node_modules/pwnkit-cli/pwnkit.js --help
+      - name: DB init smoke (history, bun)
+        run: cd /tmp/smoke-bun && bun run node_modules/pwnkit-cli/pwnkit.js history --db-path /tmp/smoke-bun.db
+      - name: SQLite file was created
+        run: test -s /tmp/smoke-bun.db
+
+  install-smoke-docker:
+    name: install-smoke (docker)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build image
+        run: docker build -t pwnkit-ci-smoke .
+      - name: --help smoke (docker)
+        run: docker run --rm pwnkit-ci-smoke --help
+      - name: DB init smoke (history, docker)
+        run: |
+          mkdir -p /tmp/pwnkit-docker-smoke
+          docker run --rm \
+            -v /tmp/pwnkit-docker-smoke:/smoke \
+            pwnkit-ci-smoke history --db-path /smoke/pwnkit.db
+          sudo test -s /tmp/pwnkit-docker-smoke/pwnkit.db
+
   # Website auto-deploys via Cloudflare Pages Git integration

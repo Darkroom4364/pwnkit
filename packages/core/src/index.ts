@@ -103,7 +103,9 @@ export type { Remediation, RemediationCodeExample } from "./remediation.js";
 // Scan TUI state reducers (pure, consumed by the CLI's renderScan.ts).
 export {
   appendStageAction,
+  formatStageDetail,
   normalizeStageAction,
+  normalizeStageEndDetail,
   selectVisibleActions,
   truncateStageAction,
   STAGE_ACTION_HISTORY_CAP,
@@ -111,6 +113,7 @@ export {
   COMPACT_ACTIONS_RENDER_CAP,
   COMPACT_ACTION_CHARS,
   VERBOSE_ACTION_CHARS,
+  COMPACT_DETAIL_CHARS,
 } from "./scan-ui-state.js";
 export type { VisibleActions } from "./scan-ui-state.js";
 

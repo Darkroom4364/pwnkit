@@ -4,7 +4,11 @@ import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { VERSION } from "@pwnkit/shared";
-import { appendStageAction, normalizeStageAction } from "@pwnkit/core";
+import {
+  appendStageAction,
+  normalizeStageAction,
+  normalizeStageEndDetail,
+} from "@pwnkit/core";
 import { printBanner } from "./banner.js";
 import { ScanUI } from "./ScanUI.js";
 import { buildShareUrl } from "../utils.js";
@@ -145,15 +149,13 @@ export function renderScanUI(opts: RenderScanOptions): RenderScanResult {
 
     if (event.type === "stage:end") {
       if (!stageId) return;
-      // Clean up detail text — remove noisy prefixes, truncate
-      let detail = msg
-        .replace(/^(Discovery|Attack|Verification|Report)\s*(complete|done|finished):?\s*/i, "")
-        .replace(/^Agent reached max turns.*$/, "done")
-        .trim();
-      if (detail.length > 55) detail = detail.slice(0, 55) + "...";
-      if (!detail) detail = "done";
-      // Keep the full action history for all stages — render-time slicing in
-      // ScanUI decides what to show based on the verbose toggle.
+      // Store the FULL cleaned detail; ScanUI clips at render time based on
+      // the verbose toggle. Previously this site clipped to 55 chars at store
+      // time, which meant the verbose toggle could reveal every per-turn
+      // sub-action but never the final "First attempt (10 turns): no findings.
+      // Retry (10 turns): ..." terminal summary — the piece of text the user
+      // most wants to read when a scan completes with 0 findings.
+      const detail = normalizeStageEndDetail(msg) || "done";
       updateStage(stageId, (s) => ({
         ...s,
         status: "done",

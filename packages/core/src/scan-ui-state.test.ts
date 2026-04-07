@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   appendStageAction,
+  formatStageDetail,
   normalizeStageAction,
+  normalizeStageEndDetail,
   selectVisibleActions,
   truncateStageAction,
   COMPACT_ACTIONS_RENDER_CAP,
+  COMPACT_DETAIL_CHARS,
   VERBOSE_ACTIONS_RENDER_CAP,
   COMPACT_ACTION_CHARS,
   VERBOSE_ACTION_CHARS,
@@ -111,6 +114,77 @@ describe("truncateStageAction", () => {
     const s = "x".repeat(len);
     expect(truncateStageAction(s, true)).toBe(s);
     expect(truncateStageAction(s, false).endsWith("...")).toBe(true);
+  });
+});
+
+describe("normalizeStageEndDetail", () => {
+  it("strips the 'Attack complete:' prefix", () => {
+    expect(normalizeStageEndDetail("Attack complete: 0 findings, reached max turns"))
+      .toBe("0 findings, reached max turns");
+  });
+
+  it("strips the 'Discovery complete:' prefix", () => {
+    expect(normalizeStageEndDetail("Discovery complete: 12 turns, surface mapped"))
+      .toBe("12 turns, surface mapped");
+  });
+
+  it("strips the 'Report:' prefix variant", () => {
+    expect(normalizeStageEndDetail("Report: 0 findings (0 confirmed)"))
+      .toBe("0 findings (0 confirmed)");
+  });
+
+  it("collapses internal whitespace to keep the detail one-line", () => {
+    expect(normalizeStageEndDetail("0 findings,\n  first attempt\n    failed")).toBe("0 findings, first attempt failed");
+  });
+
+  it("does NOT truncate long details — rendering does that at display time", () => {
+    const long = "First attempt (10 turns): no findings. Retry (10 turns): Agent reached max turns (10) without completing.";
+    const out = normalizeStageEndDetail(`Attack complete: 0 findings, ${long}`);
+    expect(out).toBe(`0 findings, ${long}`);
+    expect(out.length).toBeGreaterThan(COMPACT_DETAIL_CHARS);
+  });
+
+  it("handles already-clean messages", () => {
+    expect(normalizeStageEndDetail("done")).toBe("done");
+  });
+});
+
+describe("formatStageDetail", () => {
+  it("returns an empty string when detail is undefined", () => {
+    expect(formatStageDetail(undefined, false)).toBe("");
+    expect(formatStageDetail(undefined, true)).toBe("");
+  });
+
+  it("passes through short details unchanged in both modes", () => {
+    expect(formatStageDetail("done", false)).toBe("done");
+    expect(formatStageDetail("done", true)).toBe("done");
+  });
+
+  it("clips to COMPACT_DETAIL_CHARS in compact mode with an ellipsis", () => {
+    const long = "a".repeat(COMPACT_DETAIL_CHARS + 50);
+    const clipped = formatStageDetail(long, false);
+    expect(clipped.length).toBe(COMPACT_DETAIL_CHARS + 3);
+    expect(clipped.endsWith("...")).toBe(true);
+  });
+
+  it("regression: verbose mode reveals stage-end details that compact clips", () => {
+    // This is the UX bug fix that motivated 0.7.9: the user saw
+    //   ✓ Attack   0 findings, First attempt (10 turns): no findings. Retr...
+    // and could not read the retry explanation even with the verbose toggle
+    // on, because the detail was being clipped at store time. Verbose mode
+    // must now pass the full sentence through.
+    const long = "0 findings, First attempt (10 turns): no findings. Retry (10 turns): Agent reached max turns (10) without completing.";
+    const compact = formatStageDetail(long, false);
+    const verbose = formatStageDetail(long, true);
+    expect(compact.length).toBeLessThanOrEqual(COMPACT_DETAIL_CHARS + 3);
+    expect(verbose).toBe(long);
+    expect(verbose).toContain("Retry (10 turns)");
+    expect(compact).not.toContain("Retry");
+  });
+
+  it("preserves strings at the exact compact cap without adding ellipsis", () => {
+    const exact = "x".repeat(COMPACT_DETAIL_CHARS);
+    expect(formatStageDetail(exact, false)).toBe(exact);
   });
 });
 

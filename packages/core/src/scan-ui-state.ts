@@ -18,6 +18,41 @@ export const COMPACT_ACTIONS_RENDER_CAP = 3;
 export const COMPACT_ACTION_CHARS = 60;
 export const VERBOSE_ACTION_CHARS = 120;
 
+/** Caps for the stage DETAIL line (the short label next to the stage name). */
+export const COMPACT_DETAIL_CHARS = 55;
+
+/**
+ * Normalize a raw stage:end message to a clean detail string. Strips
+ * repetitive prefixes ("Discovery complete: ...", "Report: ...") and
+ * collapses whitespace. This is what the TUI displays on the stage row
+ * once the stage has finished running. It is NOT truncated — display
+ * truncation happens at render time via `formatStageDetail`, so the
+ * verbose toggle can reveal the full terminal summary without having
+ * to re-fetch it from the event log.
+ */
+export function normalizeStageEndDetail(msg: string): string {
+  return msg
+    // "Attack complete: ...", "Discovery complete: ...", "Verification done: ..."
+    .replace(/^(Discovery|Attack|Verification|Report)\s*(complete|done|finished):?\s*/i, "")
+    // Bare stage prefix with a colon: "Report: 0 findings (0 confirmed)"
+    .replace(/^(Discovery|Attack|Verification|Report):\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Format a stage detail for rendering, clipping to a compact-mode cap
+ * when verbose is false. In verbose mode the full text is passed through
+ * so the scan TUI's verbose toggle actually reveals the terminal
+ * summary the user wants to read.
+ */
+export function formatStageDetail(detail: string | undefined, verbose: boolean): string {
+  if (!detail) return "";
+  if (verbose) return detail;
+  if (detail.length <= COMPACT_DETAIL_CHARS) return detail;
+  return detail.slice(0, COMPACT_DETAIL_CHARS) + "...";
+}
+
 /**
  * Clean a raw scan event message for display as a stage action. Strips
  * the repetitive prefixes the scanner emits on every turn so the TUI

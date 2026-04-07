@@ -1,7 +1,11 @@
 import React from "react";
 import { Box, Text } from "ink";
 import Spinner from "ink-spinner";
-import { selectVisibleActions, truncateStageAction } from "@pwnkit/core";
+import {
+  formatStageDetail,
+  selectVisibleActions,
+  truncateStageAction,
+} from "@pwnkit/core";
 
 // ── Types ──
 
@@ -111,8 +115,11 @@ function StageRow({ stage, verbose }: { stage: StageState; verbose: boolean }) {
         {verifyCount ? (
           <Text color={GREEN}>{verifyCount}</Text>
         ) : stage.detail ? (
-          <Text color={stage.status === "done" ? GRAY : undefined} dimColor={stage.status === "done"}>
-            {stage.detail}
+          <Text
+            color={stage.status === "done" ? GRAY : undefined}
+            dimColor={stage.status === "done"}
+          >
+            {formatStageDetail(stage.detail, verbose)}
           </Text>
         ) : null}
         {stage.duration !== undefined && (
@@ -219,6 +226,39 @@ function SummaryBar({ summary }: { summary: ScanSummary }) {
   );
 }
 
+// ── Outcome ──
+
+/**
+ * Per-stage terminal explanation rendered under the summary bar once the
+ * scan finishes. This is where users finally get to read the full
+ * "First attempt (10 turns): no findings. Retry (10 turns): Agent reached
+ * max turns (10) without completing." sentence that the compact stage-row
+ * detail clips at 55 chars. Without this block a 0-findings scan felt
+ * like the agent "just stopped" — the narrative that explains *why* the
+ * agent stopped is now always visible at the end.
+ */
+function OutcomeBlock({ stages }: { stages: StageState[] }) {
+  const withDetail = stages.filter(
+    (s) => s.status === "done" && s.detail && s.detail !== "done",
+  );
+  if (withDetail.length === 0) return null;
+  return (
+    <Box flexDirection="column" marginTop={1} marginLeft={2}>
+      <Text color={GRAY} dimColor>Outcome:</Text>
+      {withDetail.map((s) => (
+        <Box key={s.id} marginLeft={2} flexDirection="column">
+          <Box gap={1}>
+            <Text color={GRAY} bold>{s.label}:</Text>
+          </Box>
+          <Box marginLeft={2}>
+            <Text color={GRAY} dimColor wrap="wrap">{s.detail}</Text>
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 // ── Main ──
 
 export function ScanUI({ stages, summary, thinking, exitHint, verbose = false }: ScanUIProps) {
@@ -235,6 +275,7 @@ export function ScanUI({ stages, summary, thinking, exitHint, verbose = false }:
         </Box>
       )}
       {summary && <SummaryBar summary={summary} />}
+      {summary && <OutcomeBlock stages={stages} />}
       <Box marginTop={1} marginLeft={2} gap={2}>
         <Text color={GRAY} dimColor>
           {verbose ? "verbose on" : "v / ctrl+o"} {verbose ? "" : "verbose"}

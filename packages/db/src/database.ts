@@ -7,7 +7,16 @@ import { eq, desc, and, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  rmSync,
+  statSync,
+  writeSync,
+} from "node:fs";
 import type {
   ArtifactRecord,
   Finding,
@@ -53,6 +62,99 @@ export function resetPwnkitDatabase(dbPath?: string): string {
   return path;
 }
 
+/**
+ * Migrate a pre-0.7.1 WAL-mode SQLite file in-place to legacy rollback mode.
+ *
+ * Why this exists: pwnkit versions <0.7.1 used better-sqlite3 and set the
+ * database to WAL mode (`PRAGMA journal_mode = WAL`). WAL mode writes a
+ * `2` to bytes 18 (file format write version) and 19 (read version) of
+ * the SQLite file header. The WASM-backed engine we switched to in 0.7.1
+ * (node-sqlite3-wasm) uses an Emscripten VFS that does not implement the
+ * shared-memory primitives WAL requires, so any query on a WAL-mode file
+ * fails with `SQLITE_CANTOPEN: unable to open database file` — even though
+ * the file is otherwise perfectly valid.
+ *
+ * Fix: flip bytes 18 and 19 back to `1` (legacy rollback mode). This is
+ * safe as long as there is no non-empty `-wal` sidecar sitting next to
+ * the DB. If there is, it means the previous run crashed with uncommitted
+ * transactions still in the WAL, and those would be discarded by the flip
+ * — we log a warning in that case so the user knows why a (probably
+ * already-lost) mid-scan transaction went away.
+ *
+ * The migration is idempotent: calling it on an already-rollback-mode
+ * file is a no-op.
+ */
+function migrateWalHeaderIfNeeded(path: string): void {
+  if (!existsSync(path)) return;
+  let size: number;
+  try {
+    size = statSync(path).size;
+  } catch {
+    return;
+  }
+  if (size < 20) return; // not large enough to contain a SQLite header
+
+  const header = Buffer.alloc(100);
+  try {
+    const fd = openSync(path, "r");
+    try {
+      readSync(fd, header, 0, 100, 0);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return;
+  }
+
+  // "SQLite format 3\0" is the 16-byte magic.
+  if (header.subarray(0, 15).toString("ascii") !== "SQLite format 3") return;
+
+  // Bytes 18/19 are write_version and read_version. 1 = rollback, 2 = WAL.
+  if (header[18] !== 2 && header[19] !== 2) return;
+
+  const walPath = `${path}-wal`;
+  const shmPath = `${path}-shm`;
+  let hadWalData = false;
+  try {
+    if (existsSync(walPath) && statSync(walPath).size > 0) hadWalData = true;
+  } catch {
+    // Ignore stat failures; we'll still attempt the header flip.
+  }
+
+  try {
+    const fd = openSync(path, "r+");
+    try {
+      writeSync(fd, Buffer.from([1, 1]), 0, 2, 18);
+    } finally {
+      closeSync(fd);
+    }
+  } catch (err) {
+    // If we can't rewrite the header (e.g. readonly FS), let the engine
+    // surface its own error when it tries to open the file.
+    return;
+  }
+
+  // Sidecars are WAL-mode artifacts and would confuse rollback-mode opens.
+  for (const sidecar of [walPath, shmPath]) {
+    if (existsSync(sidecar)) {
+      try {
+        rmSync(sidecar, { force: true });
+      } catch {
+        // Non-fatal.
+      }
+    }
+  }
+
+  if (hadWalData) {
+    // eslint-disable-next-line no-console -- user-facing one-time notice
+    console.warn(
+      `[pwnkit] Migrated ${path} from WAL mode to rollback mode for WASM engine compatibility. ` +
+        `A non-empty WAL sidecar was present and has been removed; any uncommitted transactions ` +
+        `from a prior crashed run were discarded.`,
+    );
+  }
+}
+
 export class pwnkitDB {
   private sqlite: ShimmedDatabase;
   private db: ReturnType<typeof createDrizzleFromShim<typeof schema>>;
@@ -62,6 +164,8 @@ export class pwnkitDB {
     if (!dbPath) {
       mkdirSync(DEFAULT_DB_DIR, { recursive: true });
     }
+    // Auto-migrate pre-0.7.1 WAL-mode files that node-sqlite3-wasm can't read.
+    migrateWalHeaderIfNeeded(path);
     this.sqlite = createShimmedDatabase(path);
     // WAL is intentionally omitted: node-sqlite3-wasm's VFS does not support
     // it, and pwnkit's single-writer CLI workload does not benefit from it.

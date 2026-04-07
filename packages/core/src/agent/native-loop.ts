@@ -513,7 +513,18 @@ export async function runNativeAgentLoop(
   // Compute estimated cost
   state.estimatedCostUsd = estimateCost(state.totalUsage);
 
-  if (!state.done && !state.earlyStopNoProgress && !state.costCeilingExceeded) {
+  // If none of the break paths set a summary, the loop exited naturally by
+  // completing all maxTurns iterations. Only in that case do we stamp the
+  // generic "reached max turns" message. Previously this branch also fired
+  // whenever any break path did not flip one of the three termination flags
+  // — notably the API-error bail at ~line 263 sets state.summary to an
+  // "Error: ..." string but does NOT set done/earlyStopNoProgress/
+  // costCeilingExceeded, and the post-loop code would silently overwrite
+  // the real error message with "reached max turns (N)". That produced
+  // internally inconsistent stage summaries in the scan TUI like:
+  //   "Retry (5 turns): Agent reached max turns (10) without completing"
+  // where the real cause was a transient Azure API timeout on turn 5.
+  if (!state.summary) {
     state.summary = `Agent reached max turns (${config.maxTurns}) without completing.`;
   }
 

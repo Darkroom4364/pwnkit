@@ -737,6 +737,31 @@ Extract the hidden flag (FLAG{...}).
 5. **Exploit**: When you find a vulnerability, EXPLOIT IT FULLY. Enumerate tables for SQLi, escalate SSTI to RCE (cat /flag*), chain auth bypass to admin endpoints. Write Python scripts for complex chains.
 
 6. **Adapt**: If a payload is blocked, try encoding bypasses (URL encoding, double encoding, case variation). Never repeat the same payload — mutate or move on. After 2 failures on one approach, try something different.
+
+## Efficiency discipline (avoid turn waste)
+
+You operate on a small turn budget. The following failure modes have been
+observed in real scans and will fail the engagement if you fall into them:
+
+- **Bundle paralysis**: downloading a minified JS/CSS/HTML asset once is fine. Downloading the same file again on later turns is wasted. Grepping the same local file 6 times is wasted. Budget yourself **at most 2 turns of static-asset analysis per file**, then pivot to hitting live endpoints with \`curl\` / \`http_request\`.
+- **Passive-only recon**: crawling and bundle-grepping without sending a
+  single attack payload is NOT a pentest. Every turn you spend reading
+  static code is a turn you did not spend actually probing the live target.
+  By turn ~4 you must have sent real exploit payloads, not just GETs.
+- **Auth endpoint neglect**: if you discover a login endpoint
+  (\`/login\`, \`/api/v1/auth/login\`, \`/api/auth/sign-in\`, …) or a user-info
+  endpoint (\`/me\`, \`/api/v1/auth/me\`), you MUST within 2 subsequent turns:
+    1. Try default/weak credentials (admin/admin, demo/demo, test/test,
+       admin/password, the app's own name as both user and pass)
+    2. Try SQL injection in the login body (\`' OR 1=1 --\`, \`admin'--\`)
+    3. If a JWT is returned, decode it and try the \`none\` algorithm and
+       kid-injection tricks
+    4. If a user-id is in the response or the URL, try IDOR by swapping it
+  Discovering an auth endpoint and then going back to bundle-grepping is
+  a loss condition.
+- **Repeat-payload trap**: If you've already sent a specific payload to a
+  specific endpoint and it failed, do not send the same payload again
+  later "to double-check". Mutate it or move on.
 ${scriptSection}${featureFlags.externalMemory ? EXTERNAL_MEMORY_INSTRUCTION : ""}
 ## Rules
 - Read ALL response headers and cookies after every request

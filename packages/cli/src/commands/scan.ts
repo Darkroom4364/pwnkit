@@ -111,11 +111,25 @@ export function registerScanCommand(program: Command): void {
         }
       }
 
+      // Auto-detect scan mode from the target URL scheme unless the user
+      // explicitly passed --mode. Before this default, running
+      //   pwnkit-cli scan --target https://example.com
+      // silently used the LLM/AI-agent-focused `attackPrompt` (mode=deep)
+      // against a plain web application, which gave the attack agent no
+      // web-pentest-specific guidance and caused a "bundle paralysis"
+      // failure mode — the agent would download a minified JS bundle once
+      // and then spend 6-8 turns re-grepping it for secrets instead of
+      // actually probing the live API endpoints it had discovered. For
+      // http(s) targets the correct default is the shell-first web-
+      // pentest prompt, which is what `mode: "web"` selects.
+      const targetStr = String(opts.target);
       const mode = (opts.mode
         ? String(opts.mode)
-        : String(opts.target).startsWith("mcp://")
+        : targetStr.startsWith("mcp://")
           ? "mcp"
-          : "deep") as ScanMode;
+          : /^https?:\/\//i.test(targetStr)
+            ? "web"
+            : "deep") as ScanMode;
       const validModes = new Set<ScanMode>(["probe", "deep", "mcp", "web"]);
       if (!validModes.has(mode)) {
         console.error(chalk.red(`Unknown mode '${mode}'. Valid: ${[...validModes].join(", ")}`));

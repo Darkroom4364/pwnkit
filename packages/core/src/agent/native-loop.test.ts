@@ -56,6 +56,49 @@ describe("runNativeAgentLoop", () => {
     expect(state.turnCount).toBe(1);
   });
 
+  it("regression: preserves error summary instead of clobbering with 'reached max turns'", async () => {
+    // Every multi-turn scan that hit a transient Azure/OpenAI API error on
+    // turn N < maxTurns used to end up with an internally inconsistent
+    // stage summary like "Retry (5 turns): Agent reached max turns (10)".
+    // Root cause: the error-bail break at native-loop.ts:~263 set
+    // state.summary = "Error: ..." but did NOT flip done /
+    // earlyStopNoProgress / costCeilingExceeded, and the post-loop code
+    // at line 517 then silently overwrote the real error with the generic
+    // max-turns message. This test forces that path and asserts the error
+    // summary survives.
+    const runtime: NativeRuntime = {
+      type: "api" as const,
+      async executeNative() {
+        return {
+          content: [],
+          stopReason: "error",
+          error: "Azure OpenAI API request timed out",
+          durationMs: 30_000,
+        };
+      },
+      async isAvailable() { return true; },
+    };
+
+    const state = await runNativeAgentLoop({
+      config: {
+        role: "attack",
+        systemPrompt: "test",
+        tools: [],
+        maxTurns: 10,
+        target: "https://example.com",
+        scanId: "test-scan",
+      },
+      runtime,
+      db: null,
+    });
+
+    expect(state.done).toBe(false);
+    expect(state.summary).toMatch(/^Error:/);
+    expect(state.summary).toContain("Azure OpenAI API request timed out");
+    expect(state.summary).not.toContain("reached max turns");
+    expect(state.turnCount).toBeLessThan(10);
+  });
+
   it("enforces max turns limit", async () => {
     // Runtime always returns a tool call (never done), forcing max turns
     let turnNum = 0;

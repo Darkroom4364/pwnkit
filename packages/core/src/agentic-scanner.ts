@@ -7,6 +7,7 @@ import { detectAvailableRuntimes } from "./runtime/registry.js";
 // DB lazy-loaded to avoid native module issues
 import { runAgentLoop } from "./agent/loop.js";
 import { runNativeAgentLoop } from "./agent/native-loop.js";
+import { toolCallPreview } from "./agent/tool-preview.js";
 import { getToolsForRole, TOOL_DEFINITIONS } from "./agent/tools.js";
 import {
   discoveryPrompt,
@@ -1228,19 +1229,23 @@ async function runNativeDiscovery(
     runtime,
     db,
     onTurn: (turn, toolCalls) => {
-      // Per-turn sub-action for the TUI. Uses `stage:start` (not `stage:end`)
-      // because the stage is still running — `stage:end` would prematurely
-      // mark Discover as ✓ done every turn, which is exactly the bug the
-      // old `stage:end` emission caused. The compact view keeps the last 3;
-      // the verbose toggle (`v` / Ctrl+O) reveals the full history.
-      const toolSummary = toolCalls.length > 0
-        ? toolCalls.map((c) => c.name).join(", ")
-        : "thinking";
-      emit({
-        type: "stage:start",
-        stage: "discovery",
-        message: `turn ${turn}: ${toolSummary}`,
-      });
+      // One sub-action per tool call with a real preview of what the tool
+      // was invoked with — e.g. `turn 3: bash: curl -sI https://t/admin`
+      // instead of a useless `turn 3: bash`. Uses `stage:start` (not
+      // `stage:end`) because the stage is still running; `stage:end` would
+      // prematurely mark Discover as ✓ done every turn, which was the exact
+      // bug we carried pre-0.7.7.
+      if (toolCalls.length === 0) {
+        emit({ type: "stage:start", stage: "discovery", message: `turn ${turn}: thinking` });
+      } else {
+        for (const call of toolCalls) {
+          emit({
+            type: "stage:start",
+            stage: "discovery",
+            message: `turn ${turn}: ${toolCallPreview(call)}`,
+          });
+        }
+      }
     },
   });
   return {
@@ -1364,20 +1369,21 @@ async function runNativeAttack(
 
   const cloudSinkCfg = getCloudSinkConfig();
   const onTurnHandler = (turn: number, toolCalls: import("./agent/types.js").ToolCall[]) => {
-    // Per-turn sub-action for the TUI. Compact view shows only the last 3;
-    // verbose toggle (`v` / Ctrl+O) reveals the full history with tool names
-    // joined per turn. Previously this handler only emitted finding events,
-    // so the TUI had zero visibility into what the attack agent was doing
-    // between finding discoveries — the verbose toggle revealed nothing
-    // because nothing was being stored to reveal.
-    const toolSummary = toolCalls.length > 0
-      ? toolCalls.map((c) => c.name).join(", ")
-      : "thinking";
-    emit({
-      type: "stage:start",
-      stage: "attack",
-      message: `turn ${turn}: ${toolSummary}`,
-    });
+    // One sub-action per tool call with a full preview (tool + first-order
+    // argument) so the verbose TUI can show what the attack agent is
+    // actually running on each turn — e.g. `turn 7: bash: nmap -sV t.com`
+    // instead of `turn 7: bash`. Compact view still clips to last 3.
+    if (toolCalls.length === 0) {
+      emit({ type: "stage:start", stage: "attack", message: `turn ${turn}: thinking` });
+    } else {
+      for (const call of toolCalls) {
+        emit({
+          type: "stage:start",
+          stage: "attack",
+          message: `turn ${turn}: ${toolCallPreview(call)}`,
+        });
+      }
+    }
 
     for (const call of toolCalls) {
       if (call.name === "save_finding") {
@@ -1662,18 +1668,20 @@ async function runNativeVerify(
     runtime,
     db,
     onTurn: (turn, toolCalls) => {
-      // Per-turn progress for the verify stage. Without this the TUI
-      // shows the verify stage as "running" with no activity at all,
-      // even under verbose mode, because the verify path never emitted
-      // sub-actions before.
-      const toolSummary = toolCalls.length > 0
-        ? toolCalls.map((c) => c.name).join(", ")
-        : "thinking";
-      emit({
-        type: "stage:start",
-        stage: "verify",
-        message: `turn ${turn}: ${toolSummary}`,
-      });
+      // One sub-action per tool call with a full preview, matching the
+      // discovery and attack handlers. Without this the verify stage is
+      // completely silent in the TUI, even under verbose mode.
+      if (toolCalls.length === 0) {
+        emit({ type: "stage:start", stage: "verify", message: `turn ${turn}: thinking` });
+      } else {
+        for (const call of toolCalls) {
+          emit({
+            type: "stage:start",
+            stage: "verify",
+            message: `turn ${turn}: ${toolCallPreview(call)}`,
+          });
+        }
+      }
     },
   });
 }
@@ -1780,17 +1788,21 @@ async function runLegacyAttack(
     db,
     onTurn: (turn, msg) => {
       const calls = msg.toolCalls ?? [];
-      // Per-turn sub-action so the verbose TUI can show what the attack
-      // agent is doing between finding discoveries. Must be `stage:start`
-      // (not `stage:end`) while the stage is still running.
-      const toolSummary = calls.length > 0
-        ? calls.map((c) => c.name).join(", ")
-        : "thinking";
-      emit({
-        type: "stage:start",
-        stage: "attack",
-        message: `turn ${turn}: ${toolSummary}`,
-      });
+      // One sub-action per tool call with a full preview (tool + first-
+      // order argument), same as the native-API path. Previously this
+      // handler only emitted finding events; the verbose TUI showed an
+      // empty actions list between finding discoveries.
+      if (calls.length === 0) {
+        emit({ type: "stage:start", stage: "attack", message: `turn ${turn}: thinking` });
+      } else {
+        for (const call of calls) {
+          emit({
+            type: "stage:start",
+            stage: "attack",
+            message: `turn ${turn}: ${toolCallPreview(call)}`,
+          });
+        }
+      }
 
       const cloudSinkCfg = getCloudSinkConfig();
       for (const call of calls) {

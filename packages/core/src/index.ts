@@ -113,3 +113,7 @@ export {
   VERBOSE_ACTION_CHARS,
 } from "./scan-ui-state.js";
 export type { VisibleActions } from "./scan-ui-state.js";
+
+// Tool call preview formatter (pure, used by scan TUI sub-action emission
+// in the agentic scanner and reusable by logs / cloud-sink / dashboard).
+export { toolCallPreview, summariseTurnToolCalls } from "./agent/tool-preview.js";

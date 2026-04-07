@@ -6,6 +6,13 @@ const outdir = "dist";
 rmSync(outdir, { force: true, recursive: true });
 mkdirSync(outdir, { recursive: true });
 
+// Read the version from the root package.json once. This is the single
+// source of truth for the published CLI's --version output. The version
+// gets injected into the bundle via esbuild's `define` so the runtime
+// constants.ts can pick it up without a runtime fs read. See
+// packages/shared/src/constants.ts for the matching loader.
+const PKG_VERSION = JSON.parse(readFileSync("package.json", "utf8")).version;
+
 // Stub out optional dev-only dependencies that Ink tries to import
 const stubPlugin = {
   name: "stub-optional",
@@ -45,6 +52,13 @@ await build({
     "playwright",
     "playwright-core",
   ],
+  define: {
+    // Inject the root package.json version as a string literal so the
+    // bundled constants.ts picks it up without a runtime fs read. The
+    // unbundled source/test path falls back to a one-time fs read of
+    // the same root package.json.
+    __PWNKIT_VERSION__: JSON.stringify(PKG_VERSION),
+  },
   plugins: [stubPlugin],
 });
 
@@ -59,7 +73,8 @@ const bundle = readFileSync(bundlePath, "utf8").replace(
 );
 writeFileSync(bundlePath, bundle);
 
-// Write a clean package.json for publishing (no workspace: deps)
+// Write a clean package.json for publishing (no workspace: deps).
+// Re-read here for clarity even though PKG_VERSION already came from this.
 const rootPkg = JSON.parse(readFileSync("package.json", "utf8"));
 const publishPkg = {
   name: rootPkg.name,

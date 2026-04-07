@@ -155,6 +155,60 @@ function migrateWalHeaderIfNeeded(path: string): void {
   }
 }
 
+/**
+ * Clear a stale advisory lock directory left behind by a crashed writer.
+ *
+ * Why this exists: node-sqlite3-wasm's Node VFS implements SQLite's lock
+ * protocol as `mkdirSync("${path}.lock")` for acquire and `rmdirSync` for
+ * release. This is atomic on POSIX, but has *no* recovery path if the
+ * holder crashes or is killed with SIGKILL before releasing — the lock
+ * directory is orphaned and every subsequent open fails with SQLITE_BUSY,
+ * which bubbles up to the user as "database is locked". The better-sqlite3
+ * → WASM migration made this more visible because better-sqlite3 used the
+ * kernel's byte-range locks which the kernel cleans up automatically on
+ * process death; the WASM engine's userspace directory lock does not get
+ * that for free.
+ *
+ * Heuristic: if the lock directory's mtime is older than 10 seconds, we
+ * assume the holder is dead. Legitimate pwnkit operations acquire and
+ * release the lock many times per second (SQLite locks are per-query,
+ * not per-connection), so a 10-second-old lock that nobody has touched
+ * is overwhelmingly likely to be a crash corpse. In the rare case where
+ * this heuristic misfires against a real concurrent writer, the second
+ * writer will race with the lock holder and one of them will retry,
+ * which is already the failure mode SQLite is designed around.
+ *
+ * We do NOT clean up recently-created lock directories, to avoid racing
+ * against a legitimate concurrent writer that has only just acquired
+ * the lock.
+ */
+function clearStaleLockIfAny(path: string): void {
+  const lockPath = `${path}.lock`;
+  let stat;
+  try {
+    stat = statSync(lockPath);
+  } catch {
+    return; // no lock, nothing to do
+  }
+  if (!stat.isDirectory()) return;
+
+  const ageMs = Date.now() - stat.mtimeMs;
+  const STALE_THRESHOLD_MS = 10_000;
+  if (ageMs < STALE_THRESHOLD_MS) return;
+
+  try {
+    rmSync(lockPath, { recursive: true, force: true });
+    // eslint-disable-next-line no-console -- user-facing one-time notice
+    console.warn(
+      `[pwnkit] Removed stale database lock at ${lockPath} ` +
+        `(age ${Math.floor(ageMs / 1000)}s — previous holder likely crashed).`,
+    );
+  } catch {
+    // Non-fatal: node-sqlite3-wasm will surface its own "database is
+    // locked" error and we'll let that propagate.
+  }
+}
+
 export class pwnkitDB {
   private sqlite: ShimmedDatabase;
   private db: ReturnType<typeof createDrizzleFromShim<typeof schema>>;
@@ -166,6 +220,10 @@ export class pwnkitDB {
     }
     // Auto-migrate pre-0.7.1 WAL-mode files that node-sqlite3-wasm can't read.
     migrateWalHeaderIfNeeded(path);
+    // Clear a stale advisory lock left behind by a crashed/killed writer,
+    // if and only if it's old enough that it can't plausibly be held by a
+    // live concurrent process.
+    clearStaleLockIfAny(path);
     this.sqlite = createShimmedDatabase(path);
     // WAL is intentionally omitted: node-sqlite3-wasm's VFS does not support
     // it, and pwnkit's single-writer CLI workload does not benefit from it.

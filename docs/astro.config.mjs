@@ -100,6 +100,7 @@ export default defineConfig({
             { label: "Agent Techniques", slug: "research/agent-techniques" },
             { label: "Finding Triage ML", slug: "research/finding-triage-ml" },
             { label: "FP Reduction Moat", slug: "research/fp-reduction-moat" },
+            { label: "XBEN-099 Investigation", slug: "research/xben-099-investigation" },
           ],
         },
         {

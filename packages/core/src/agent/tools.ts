@@ -16,6 +16,11 @@ import {
   type FetchLike,
 } from "./wp-fingerprint.js";
 import { validateFlagShape } from "./flag-validator.js";
+import {
+  forgeObjectId,
+  forgeObjectIdSequence,
+  parseObjectId,
+} from "./objectid-forge.js";
 
 // ── Tool Registry ──
 
@@ -288,6 +293,31 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
         description: "Skip OSV lookups (for offline or diagnostic runs). Default false.",
       },
     },
+  },
+
+  mongo_objectid: {
+    name: "mongo_objectid",
+    description:
+      "Forge a MongoDB ObjectID (24-char hex) from a timestamp + 5-byte machine ID + 3-byte counter. A MongoDB ObjectId is 12 bytes: 4-byte big-endian timestamp (Unix seconds) + 5-byte machine/random + 3-byte big-endian counter. Use this when the target uses 24-char hex IDs and you suspect IDOR — copy the 5-byte machine ID from any observed ObjectId (chars 8..18 of the hex), set timestamp to the value the server hands you (e.g. appStartTimestamp), and use counter=0 to forge the FIRST user. Optionally pass `count` (and `counter` as the start) to enumerate a sequence of consecutive ObjectIds. Pure computation, no network calls.",
+    parameters: {
+      timestamp: {
+        type: "number",
+        description: "Unix timestamp in seconds (4-byte big-endian prefix). Use the server-provided appStartTimestamp.",
+      },
+      machineId: {
+        type: "string",
+        description: "5-byte machine ID as a 10-char hex string. Extract from chars 8..18 of any observed ObjectId.",
+      },
+      counter: {
+        type: "number",
+        description: "3-byte counter (0..16777215). Use 0 for the 'first user' in an IDOR enumeration. When `count` is set, this is the starting counter.",
+      },
+      count: {
+        type: "number",
+        description: "Optional: if set (>1), forge a sequence of `count` consecutive ObjectIds with counters incrementing from `counter`. Default 1 (single ObjectId).",
+      },
+    },
+    required: ["timestamp", "machineId", "counter"],
   },
 
   done: {
@@ -629,6 +659,8 @@ export class ToolExecutor {
           return await this.spawnAgent(call.arguments);
         case "wp_fingerprint":
           return await this.wpFingerprint(call.arguments);
+        case "mongo_objectid":
+          return this.mongoObjectIdForge(call.arguments);
         case "done":
           return this.markDone(call.arguments);
         default:
@@ -1694,6 +1726,59 @@ export class ToolExecutor {
     }
   }
 
+  // ── MongoDB ObjectID forge (feature-gated, default ON) ──
+
+  private mongoObjectIdForge(args: Record<string, unknown>): ToolResult {
+    if (!featureFlags.mongoObjectIdForge) {
+      return {
+        success: false,
+        output: null,
+        error:
+          "mongo_objectid is disabled. Enable with --features mongo_objectid_forge or PWNKIT_FEATURE_MONGO_OBJECTID_FORGE=1.",
+      };
+    }
+
+    try {
+      const timestamp = args.timestamp as number;
+      const machineId = args.machineId as string;
+      const counter = (args.counter as number) ?? 0;
+      const count = (args.count as number | undefined) ?? 1;
+
+      if (count <= 1) {
+        const oid = forgeObjectId({ timestamp, machineId, counter });
+        const parsed = parseObjectId(oid);
+        return {
+          success: true,
+          output: {
+            objectId: oid,
+            components: parsed,
+            hint: "Paste this 24-char hex string in place of any ObjectId in the target's URL/body to test IDOR. For the 'first user', try counter=0, then 1, 2, ...",
+          },
+        };
+      }
+
+      const sequence = forgeObjectIdSequence({
+        timestamp,
+        machineId,
+        counterStart: counter,
+        count,
+      });
+      return {
+        success: true,
+        output: {
+          objectIds: sequence,
+          count: sequence.length,
+          counterStart: counter,
+          counterEnd: counter + sequence.length - 1,
+          hint: `Forged ${sequence.length} consecutive ObjectIds (counters ${counter}..${counter + sequence.length - 1}). Try them in order to enumerate IDOR victims.`,
+        },
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { success: false, output: null, error: msg };
+    }
+  }
+
   private markDone(args: Record<string, unknown>): ToolResult {
     const summary = (args.summary as string) ?? "Task completed";
 
@@ -1742,7 +1827,8 @@ export function getToolsForRole(role: string, opts?: { hasScope?: boolean; webMo
   const webSearchTools = featureFlags.webSearch ? ["web_search"] : [];
   const ptyTools = featureFlags.ptySession ? ["pty_session"] : [];
   const wpTools = featureFlags.wpFingerprint ? ["wp_fingerprint"] : [];
-  const networkTools = ["http_request", "crawl", "submit_form", "bash", ...browserTools, ...webSearchTools, ...ptyTools, ...wpTools, "send_prompt", "save_finding", "update_finding", "update_target", ...common];
+  const mongoTools = featureFlags.mongoObjectIdForge ? ["mongo_objectid"] : [];
+  const networkTools = ["http_request", "crawl", "submit_form", "bash", ...browserTools, ...webSearchTools, ...ptyTools, ...wpTools, ...mongoTools, "send_prompt", "save_finding", "update_finding", "update_target", ...common];
   const fileTools = ["read_file", "run_command"];
 
   const roleTools: Record<string, string[]> = {

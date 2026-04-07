@@ -428,7 +428,9 @@ When you find a vulnerability:
    - \`for i in $(seq 1 20); do curl -s -b /tmp/cookies "http://target/api/users/$i" | grep -i flag; done\`
 9. Use save_finding for EACH vulnerability with FULL evidence including any flags found.
 10. Do NOT give up after one failed payload — try ALL variations.
-11. Call done with a summary when you have the flag or exhausted the attack surface.${buildAuthPromptBlock(auth)}${featureFlags.externalMemory ? EXTERNAL_MEMORY_INSTRUCTION : ""}`;
+11. Call done with a summary when you have the flag or exhausted the attack surface.
+
+If the target uses MongoDB-style 24-char hex IDs (ObjectIds) and you suspect an IDOR vulnerability, the \`mongo_objectid\` tool can forge IDs with arbitrary timestamp + counter. The 'first user' has counter 0 — copy the 5-byte machine ID from any observed ObjectId.${buildAuthPromptBlock(auth)}${featureFlags.externalMemory ? EXTERNAL_MEMORY_INSTRUCTION : ""}`;
 }
 
 export function verifyPrompt(target: string, findings: Finding[], auth?: AuthConfig): string {

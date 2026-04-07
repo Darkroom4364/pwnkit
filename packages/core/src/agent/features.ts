@@ -65,6 +65,24 @@ export const features = {
   },
 
   /**
+   * MongoDB ObjectID forge tool. Exposes the `mongo_objectid` tool to the
+   * attack agent so it can compute valid 24-char hex ObjectIds with arbitrary
+   * timestamps + counters (e.g. forge the "first user" ObjectId in an IDOR
+   * challenge by setting timestamp = appStartTimestamp and counter = 0).
+   *
+   * Default ON — this is a pure-computation utility with no network or
+   * filesystem side effects, so there's no reason to gate it off. Disable
+   * via PWNKIT_FEATURE_MONGO_OBJECTID_FORGE=0 or `--no-mongo-objectid-forge`
+   * for ablation. Implemented as a getter so the CLI `--features` flag
+   * (which sets the env var inside the command action, AFTER this module
+   * has been imported) is still honored at tool-dispatch time. Matches
+   * the wpFingerprint pattern above. See packages/core/src/agent/objectid-forge.ts.
+   */
+  get mongoObjectIdForge(): boolean {
+    return env("PWNKIT_FEATURE_MONGO_OBJECTID_FORGE", true);
+  },
+
+  /**
    * Anti-honeypot flag-shape validator. When the agent calls the `done`
    * tool with a proposed `FLAG{...}`, the tool runs `validateFlagShape`
    * first; low-confidence ("looks like a decoy") flags are rejected once

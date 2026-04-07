@@ -1227,8 +1227,20 @@ async function runNativeDiscovery(
     },
     runtime,
     db,
-    onTurn: (turn) => {
-      emit({ type: "stage:end", stage: "discovery", message: `Discovery turn ${turn}` });
+    onTurn: (turn, toolCalls) => {
+      // Per-turn sub-action for the TUI. Uses `stage:start` (not `stage:end`)
+      // because the stage is still running — `stage:end` would prematurely
+      // mark Discover as ✓ done every turn, which is exactly the bug the
+      // old `stage:end` emission caused. The compact view keeps the last 3;
+      // the verbose toggle (`v` / Ctrl+O) reveals the full history.
+      const toolSummary = toolCalls.length > 0
+        ? toolCalls.map((c) => c.name).join(", ")
+        : "thinking";
+      emit({
+        type: "stage:start",
+        stage: "discovery",
+        message: `turn ${turn}: ${toolSummary}`,
+      });
     },
   });
   return {
@@ -1351,7 +1363,22 @@ async function runNativeAttack(
   const effectiveMaxTurns = isWeb ? Math.max(maxTurns, 15) : maxTurns;
 
   const cloudSinkCfg = getCloudSinkConfig();
-  const onTurnHandler = (_turn: number, toolCalls: import("./agent/types.js").ToolCall[]) => {
+  const onTurnHandler = (turn: number, toolCalls: import("./agent/types.js").ToolCall[]) => {
+    // Per-turn sub-action for the TUI. Compact view shows only the last 3;
+    // verbose toggle (`v` / Ctrl+O) reveals the full history with tool names
+    // joined per turn. Previously this handler only emitted finding events,
+    // so the TUI had zero visibility into what the attack agent was doing
+    // between finding discoveries — the verbose toggle revealed nothing
+    // because nothing was being stored to reveal.
+    const toolSummary = toolCalls.length > 0
+      ? toolCalls.map((c) => c.name).join(", ")
+      : "thinking";
+    emit({
+      type: "stage:start",
+      stage: "attack",
+      message: `turn ${turn}: ${toolSummary}`,
+    });
+
     for (const call of toolCalls) {
       if (call.name === "save_finding") {
         emit({
@@ -1634,6 +1661,20 @@ async function runNativeVerify(
     },
     runtime,
     db,
+    onTurn: (turn, toolCalls) => {
+      // Per-turn progress for the verify stage. Without this the TUI
+      // shows the verify stage as "running" with no activity at all,
+      // even under verbose mode, because the verify path never emitted
+      // sub-actions before.
+      const toolSummary = toolCalls.length > 0
+        ? toolCalls.map((c) => c.name).join(", ")
+        : "thinking";
+      emit({
+        type: "stage:start",
+        stage: "verify",
+        message: `turn ${turn}: ${toolSummary}`,
+      });
+    },
   });
 }
 
@@ -1675,10 +1716,13 @@ async function runLegacyDiscovery(
     runtime,
     db,
     onTurn: (turn, msg) => {
+      // Sub-action while the stage is still running — must be `stage:start`,
+      // not `stage:end`, or the UI marks Discover as ✓ done every turn.
+      const preview = msg.content.replace(/\s+/g, " ").trim().slice(0, 100);
       emit({
-        type: "stage:end",
+        type: "stage:start",
         stage: "discovery",
-        message: `Discovery turn ${turn}: ${msg.content.slice(0, 100)}...`,
+        message: `turn ${turn}: ${preview}`,
       });
     },
   });
@@ -1736,6 +1780,18 @@ async function runLegacyAttack(
     db,
     onTurn: (turn, msg) => {
       const calls = msg.toolCalls ?? [];
+      // Per-turn sub-action so the verbose TUI can show what the attack
+      // agent is doing between finding discoveries. Must be `stage:start`
+      // (not `stage:end`) while the stage is still running.
+      const toolSummary = calls.length > 0
+        ? calls.map((c) => c.name).join(", ")
+        : "thinking";
+      emit({
+        type: "stage:start",
+        stage: "attack",
+        message: `turn ${turn}: ${toolSummary}`,
+      });
+
       const cloudSinkCfg = getCloudSinkConfig();
       for (const call of calls) {
         if (call.name === "save_finding") {

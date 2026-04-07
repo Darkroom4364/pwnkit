@@ -113,11 +113,10 @@ jobs:
       - name: --help smoke (docker)
         run: docker run --rm pwnkit-ci-smoke --help
       - name: DB init smoke (history, docker)
-        run: |
-          mkdir -p /tmp/pwnkit-docker-smoke
-          docker run --rm \
-            -v /tmp/pwnkit-docker-smoke:/smoke \
-            pwnkit-ci-smoke history --db-path /smoke/pwnkit.db
-          sudo test -s /tmp/pwnkit-docker-smoke/pwnkit.db
+        # Runs inside the container's tmpfs so we don't entangle bind-mount
+        # permissions with node-sqlite3-wasm's Emscripten VFS. A zero exit
+        # code proves the full DB path booted: pwnkitDB constructor,
+        # migrations, and a listScans() query.
+        run: docker run --rm pwnkit-ci-smoke history --db-path /tmp/pwnkit.db
 
   # Website auto-deploys via Cloudflare Pages Git integration

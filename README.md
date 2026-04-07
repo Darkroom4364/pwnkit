@@ -9,16 +9,23 @@
  <em>Fully autonomous agentic pentesting framework.</em>
 </p>
 
+<!-- Row 1 — the proof: what the agent actually does on public benchmarks.
+     Bold crimson e63946 across all three so they read as one wall of impact. -->
 <p align="center">
- <a href="https://www.npmjs.com/package/pwnkit-cli"><img src="https://img.shields.io/npm/v/pwnkit-cli?color=crimson&style=flat-square" alt="npm version" /></a>
- <img src="https://img.shields.io/badge/runs%20with-npx%20%C2%B7%20bunx%20%C2%B7%20docker-2a9d8f?style=flat-square" alt="runs with npx, bunx, docker" />
- <a href="https://github.com/peaktwilight/pwnkit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="license" /></a>
- <a href="https://github.com/peaktwilight/pwnkit/actions"><img src="https://img.shields.io/github/actions/workflow/status/peaktwilight/pwnkit/ci.yml?style=flat-square" alt="CI" /></a>
- <a href="https://github.com/peaktwilight/pwnkit/stargazers"><img src="https://img.shields.io/github/stars/peaktwilight/pwnkit?style=flat-square&color=gold" alt="stars" /></a>
- <img src="https://img.shields.io/badge/XBOW%20best--of--N-92.3%25%20(96%2F104)-e63946?style=flat-square" alt="XBOW best-of-N score" />
- <img src="https://img.shields.io/badge/XBOW%20black--box-87.5%25%20(91%2F104)-e63946?style=flat-square" alt="XBOW black-box score" />
- <img src="https://img.shields.io/badge/Cybench-80%25%20(8%2F10)-e63946?style=flat-square" alt="Cybench score" />
- <img src="https://img.shields.io/badge/tests-340%2B%20passing-2a9d8f?style=flat-square" alt="tests" />
+ <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/XBOW%20best--of--N-92.3%25%20(96%2F104)-e63946?style=flat-square&labelColor=2b2d42" alt="XBOW best-of-N score" /></a>
+ <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/XBOW%20black--box-87.5%25%20(91%2F104)-e63946?style=flat-square&labelColor=2b2d42" alt="XBOW black-box score" /></a>
+ <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/Cybench-80%25%20(8%2F10)-e63946?style=flat-square&labelColor=2b2d42" alt="Cybench score" /></a>
+</p>
+
+<!-- Row 2 — identity, install, license, build. Coordinated muted palette
+     so Row 2 visually recedes behind Row 1's red proof. Charcoal label
+     across the row, varied accent colors per badge. -->
+<p align="center">
+ <a href="https://www.npmjs.com/package/pwnkit-cli"><img src="https://img.shields.io/npm/v/pwnkit-cli?color=e63946&style=flat-square&labelColor=2b2d42" alt="npm version" /></a>
+ <a href="https://github.com/peaktwilight/pwnkit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-1d3557?style=flat-square&labelColor=2b2d42" alt="license" /></a>
+ <img src="https://img.shields.io/badge/runtime-npx%20%C2%B7%20bunx%20%C2%B7%20docker-2a9d8f?style=flat-square&labelColor=2b2d42" alt="runs with npx, bunx, docker" />
+ <img src="https://img.shields.io/badge/native%20deps-zero-457b9d?style=flat-square&labelColor=2b2d42" alt="zero native modules" />
+ <a href="https://github.com/peaktwilight/pwnkit/actions"><img src="https://img.shields.io/github/actions/workflow/status/peaktwilight/pwnkit/ci.yml?style=flat-square&labelColor=2b2d42&label=build" alt="build" /></a>
 </p>
 
 <p align="center">

@@ -226,16 +226,16 @@ export function collectFromNpmBench(resultsPath: string): TriageSample[] {
 
 function collectFromDb(dbPath: string): TriageSample[] {
   const resolved = resolveInputPath(dbPath);
-  // Dynamic import to avoid hard dep on better-sqlite3
+  // Dynamic import to keep node-sqlite3-wasm off the benchmark's hot path.
   let Database: any;
   try {
-    Database = require("better-sqlite3");
+    ({ Database } = require("node-sqlite3-wasm"));
   } catch {
-    console.error("better-sqlite3 not available, skipping DB collection");
+    console.error("node-sqlite3-wasm not available, skipping DB collection");
     return [];
   }
 
-  const db = new Database(resolved, { readonly: true });
+  const db = new Database(resolved, { readOnly: true });
   const samples: TriageSample[] = [];
 
   try {

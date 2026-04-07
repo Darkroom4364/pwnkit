@@ -169,10 +169,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
       const cause = err instanceof Error ? err.message : String(err);
       throw new Error(
         `pwnkit: failed to initialize the local database (@pwnkit/db). ` +
-        `Agentic scans require SQLite persistence. ` +
-        `This usually means the native 'better-sqlite3' binding could not load on your platform. ` +
-        `Try: rm -rf ~/.npm/_npx && npx --yes pwnkit-cli@latest, or install locally with 'npm i -g pwnkit-cli' so native modules rebuild. ` +
-        `Underlying error: ${cause}`,
+        `Agentic scans require SQLite persistence. Underlying error: ${cause}`,
       );
     }
   })();

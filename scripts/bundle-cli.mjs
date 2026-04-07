@@ -34,7 +34,11 @@ await build({
     js: '#!/usr/bin/env node\nimport { createRequire as __pwnkitCreateRequire } from "node:module";\nconst require = __pwnkitCreateRequire(import.meta.url);',
   },
   external: [
-    "better-sqlite3",
+    // node-sqlite3-wasm ships a .wasm sidecar that is resolved relative to
+    // its own package dir at runtime; marking it external keeps that sidecar
+    // addressable via the installed node_modules tree instead of trying to
+    // inline it.
+    "node-sqlite3-wasm",
     "drizzle-orm",
     "drizzle-orm/*",
     "cfonts",
@@ -72,9 +76,9 @@ const publishPkg = {
   license: rootPkg.license,
   engines: { node: ">=20" },
   dependencies: {
-    "better-sqlite3": rootPkg.dependencies["better-sqlite3"],
     "cfonts": "^3.3.1",
     "drizzle-orm": rootPkg.dependencies["drizzle-orm"],
+    "node-sqlite3-wasm": rootPkg.dependencies["node-sqlite3-wasm"],
   },
 };
 writeFileSync(`${outdir}/package.json`, JSON.stringify(publishPkg, null, 2) + "\n");

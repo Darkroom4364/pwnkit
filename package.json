@@ -1,7 +1,7 @@
 {
   "name": "pwnkit-cli",
   "type": "module",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "The leading open-source agentic AI pentest framework. Autonomously discover, exploit, and verify vulnerabilities in web apps, AI/LLM apps, npm packages, and source code.",
   "bin": {
     "pwnkit-cli": "dist/pwnkit.js"
@@ -51,8 +51,8 @@
   },
   "dependencies": {
     "@types/pdfkit": "^0.13.9",
-    "better-sqlite3": "^12.8.0",
     "drizzle-orm": "^0.44.0",
+    "node-sqlite3-wasm": "^0.8.55",
     "pdfkit": "^0.15.2"
   },
   "devDependencies": {

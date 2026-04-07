@@ -1,5 +1,8 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import {
+  createShimmedDatabase,
+  createDrizzleFromShim,
+  type ShimmedDatabase,
+} from "./wasm-shim.js";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
@@ -51,18 +54,19 @@ export function resetPwnkitDatabase(dbPath?: string): string {
 }
 
 export class pwnkitDB {
-  private sqlite: Database.Database;
-  private db: ReturnType<typeof drizzle>;
+  private sqlite: ShimmedDatabase;
+  private db: ReturnType<typeof createDrizzleFromShim<typeof schema>>;
 
   constructor(dbPath?: string) {
     const path = resolvePwnkitDbPath(dbPath);
     if (!dbPath) {
       mkdirSync(DEFAULT_DB_DIR, { recursive: true });
     }
-    this.sqlite = new Database(path);
-    this.sqlite.pragma("journal_mode = WAL");
+    this.sqlite = createShimmedDatabase(path);
+    // WAL is intentionally omitted: node-sqlite3-wasm's VFS does not support
+    // it, and pwnkit's single-writer CLI workload does not benefit from it.
     this.sqlite.pragma("foreign_keys = ON");
-    this.db = drizzle(this.sqlite, { schema });
+    this.db = createDrizzleFromShim(this.sqlite, { schema });
 
     // Create base tables first, then migrate older schemas before adding indexes.
     this.sqlite.exec(SCHEMA_TABLES_SQL);

@@ -1,4 +1,9 @@
-export const VERSION = "0.7.0";
+// IMPORTANT: keep in lockstep with the root package.json "version" field.
+// The CLI surfaces this constant via `pwnkit-cli --version`, while npm
+// reads the package.json. v0.7.1 shipped to npm with a stale "0.7.0" here
+// because only package.json was bumped — the version-sync.test.ts case
+// in this package fails the build if they ever drift again.
+export const VERSION = "0.7.2";
 
 export const DEFAULT_MODEL = "claude-sonnet-4-20250514";
 export const DEFAULT_TIMEOUT_MS = 30_000;

@@ -68,6 +68,10 @@ export function registerScanCommand(program: Command): void {
       "--features <list>",
       "Comma-separated list of opt-in feature flags to enable for this scan (e.g. 'wp_fingerprint,web_search'). Each flag maps to the corresponding PWNKIT_FEATURE_<NAME> environment variable.",
     )
+    .option(
+      "--no-decoy-detection",
+      "Disable the anti-honeypot flag-shape validator (default: on). When enabled, the `done` tool rejects low-confidence flags (e.g. `FLAG{I'm_a_Script_Kiddie}`) once with a hint to keep exploring. See GitHub issue #82.",
+    )
     .option("--verbose", "Show detailed output", false)
     .option("--replay", "Replay the last scan's results", false)
     .action(async (opts) => {
@@ -133,6 +137,14 @@ export function registerScanCommand(program: Command): void {
           const envName = `PWNKIT_FEATURE_${token.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
           process.env[envName] = "1";
         }
+      }
+
+      // --no-decoy-detection → disable the anti-honeypot validator. The
+      // core `features.decoyDetection` flag is a getter, so flipping this
+      // env var inside the action handler is still honored at tool-dispatch
+      // time. See GitHub issue #82.
+      if (opts.decoyDetection === false) {
+        process.env.PWNKIT_FEATURE_DECOY_DETECTION = "0";
       }
 
       // Parse --auth flag if provided

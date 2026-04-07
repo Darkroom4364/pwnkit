@@ -416,7 +416,7 @@ When you find a vulnerability:
 
 3. **CHAIN EXPLOITS.** Don't stop at one finding. If you can escalate from user to admin, DO IT. Then check what admin can see that users can't — the flag is usually in admin-only data.
 
-4. **EXTRACT THE FLAG.** The goal is not just to find vulns — it's to extract FLAG{...}. Every scan should end with either the flag found or all attack vectors exhausted.
+4. **EXTRACT THE FLAG.** The goal is not just to find vulns — it's to extract FLAG{...}. Every scan should end with either the flag found or all attack vectors exhausted. If you find a flag-shaped string, do not immediately call \`done\`. Verify the shape matches the suite's expected format (typically hex/uuid). Defenders sometimes plant decoy flags in obvious locations to catch script kiddies.
 
 5. Use submit_form for login forms and form submissions (application/x-www-form-urlencoded).
 6. Use http_request for API calls and GET requests. Include Cookie headers from login responses.

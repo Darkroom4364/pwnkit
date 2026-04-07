@@ -15,6 +15,7 @@ import {
   summarizeWpFingerprint,
   type FetchLike,
 } from "./wp-fingerprint.js";
+import { validateFlagShape } from "./flag-validator.js";
 
 // ── Tool Registry ──
 
@@ -526,6 +527,13 @@ export class ToolExecutor {
   private _browserConsole: string[] = [];
   private _playwrightAvailable: boolean | null = null;
   private _ptyManager: PtySessionManager | null = null;
+  /**
+   * Set of proposed flag strings that the `done` tool rejected once as
+   * likely decoys. A second `done` call with the same flag passes through
+   * — the anti-honeypot heuristic is a speed bump, not a hard wall.
+   * See GitHub issue #82.
+   */
+  private _rejectedDecoyFlags: Set<string> = new Set();
 
   constructor(ctx: ToolContext, db: pwnkitDB | null = null) {
     this.ctx = ctx;
@@ -1687,9 +1695,41 @@ export class ToolExecutor {
   }
 
   private markDone(args: Record<string, unknown>): ToolResult {
+    const summary = (args.summary as string) ?? "Task completed";
+
+    // ── Anti-honeypot heuristic (GitHub #82) ──
+    // Scan the summary for a FLAG{...} token; if one is present and the
+    // decoyDetection feature is enabled, validate its shape. Low-confidence
+    // flags (looks like a decoy: sentence content, "DECOY"/"FAKE" markers,
+    // too short, too long) are rejected once with a hint. A second call with
+    // the same flag passes through.
+    if (featureFlags.decoyDetection) {
+      const flagMatch = summary.match(/FLAG\{[^}]*\}/i);
+      if (flagMatch) {
+        const proposedFlag = flagMatch[0];
+        const validation = validateFlagShape(proposedFlag);
+        if (!validation.ok && !this._rejectedDecoyFlags.has(proposedFlag)) {
+          this._rejectedDecoyFlags.add(proposedFlag);
+          return {
+            success: false,
+            output: null,
+            error:
+              `The flag \`${proposedFlag}\` has low shape confidence ` +
+              `(${validation.confidence.toFixed(2)}) — looks like a decoy. ` +
+              `${validation.reason} ` +
+              `Continue exploring for at least one more layer; defenders sometimes plant ` +
+              `fake flags in obvious locations (e.g. the first file a naive LFI exploit ` +
+              `lands on). Verify the shape matches the suite's expected format (typically ` +
+              `hex/uuid). If you genuinely cannot find another candidate, retry \`done\` ` +
+              `with the same flag and it will be accepted.`,
+          };
+        }
+      }
+    }
+
     return {
       success: true,
-      output: { done: true, summary: (args.summary as string) ?? "Task completed" },
+      output: { done: true, summary },
     };
   }
 }

@@ -64,6 +64,28 @@ export const features = {
     return env("PWNKIT_FEATURE_WP_FINGERPRINT", false);
   },
 
+  /**
+   * Anti-honeypot flag-shape validator. When the agent calls the `done`
+   * tool with a proposed `FLAG{...}`, the tool runs `validateFlagShape`
+   * first; low-confidence ("looks like a decoy") flags are rejected once
+   * with a hint to keep exploring. The agent can override by retrying the
+   * same flag — the heuristic is a speed bump, not a hard wall.
+   *
+   * Default ON because legitimate flags pass the shape check trivially
+   * and the false-positive rate on real flags should be near zero. Turn
+   * off via `PWNKIT_FEATURE_DECOY_DETECTION=0` or the CLI flag
+   * `--no-decoy-detection` for ablation/testing.
+   *
+   * Implemented as a getter so the CLI flag (which flips the env var
+   * inside the command action, AFTER this module has been imported) is
+   * still honored at tool-dispatch time. Matches the wpFingerprint
+   * pattern above. See GitHub issue #82 and
+   * packages/core/src/agent/flag-validator.ts.
+   */
+  get decoyDetection(): boolean {
+    return env("PWNKIT_FEATURE_DECOY_DETECTION", true);
+  },
+
   // ── Always-on triage filters (default ON, ablatable for A/B testing) ──
 
   /**

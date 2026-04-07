@@ -45,17 +45,20 @@ These are the next four things in priority order. Each one is small enough to sh
 
 This is a small, falsifiable change. If it lands XBEN-079 it almost certainly catches a class of similar honeypots in real engagements.
 
-### 2. Lean scaffolding default for long-horizon white-box
+### 2. Statistical evaluation methodology — n=10 runs per cell
 
-**Goal:** make the configuration that solved XBEN-061 in 8 turns the default for long-horizon white-box runs.
+**Goal:** replace single-shot benchmark anecdotes with measured per-attempt success rates and confidence intervals.
 
-**Why:** the v1 sweep proved that `handoff,no-hiw,no-evidence` (cross-agent handoff enabled, human-in-the-loop disabled, evidence pass disabled) cracked a stalled challenge in a fraction of the turns the baseline used. The hypothesis is that over-careful scaffolding was crowding the context window and starving the model of attention budget for the actual exploit.
+**Why:** the v1 sweep produced a single solve on XBEN-061 with a `handoff,no-hiw,no-evidence` combo that looked like a generalisable winning configuration. The v2 sweep ran the same combo against the same challenge as a regression test the next afternoon. **It failed.** The v1 solve was noise inside a 20–40% per-attempt success rate, not a signal worth defaulting on. This is the methodology lesson: a single XBOW solve is an anecdote, and any configuration recommendation that comes from a single solve is unsafe to promote.
 
 **Deliverables:**
 
-- promote the lean combo to `--profile long-horizon` instead of a feature-flag stack
-- run the v2 sweep against XBEN-066 and XBEN-092 (both long-horizon white-box stalls) under the same combo
-- if v2 confirms generalisation, switch the white-box default
+- benchmark harness flag for `--repeat N` that runs each (challenge, configuration) cell N times and reports the success rate plus confidence interval
+- default protocol going forward: n=10 per cell when evaluating a new feature combination, before any promotion to default
+- per-cell cost ceiling so the n=10 protocol stays under ~$5 per cell
+- a separate methodology page in the docs explaining the difference between best-of-N (what XBOW reports) and per-attempt success rate (what we now measure internally)
+
+**Note:** this change demoted the previous "lean scaffolding default for long-horizon white-box" priority that was here in the morning version of this roadmap. The lean combo is now treated as a hypothesis to test under the new protocol, not a default to promote.
 
 ### 3. Resumable scans
 

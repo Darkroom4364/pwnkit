@@ -14,7 +14,7 @@
  <a href="https://github.com/peaktwilight/pwnkit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="license" /></a>
  <a href="https://github.com/peaktwilight/pwnkit/actions"><img src="https://img.shields.io/github/actions/workflow/status/peaktwilight/pwnkit/ci.yml?style=flat-square" alt="CI" /></a>
  <a href="https://github.com/peaktwilight/pwnkit/stargazers"><img src="https://img.shields.io/github/stars/peaktwilight/pwnkit?style=flat-square&color=gold" alt="stars" /></a>
- <img src="https://img.shields.io/badge/XBOW%20best--of--N-91.3%25%20(95%2F104)-e63946?style=flat-square" alt="XBOW best-of-N score" />
+ <img src="https://img.shields.io/badge/XBOW%20best--of--N-92.3%25%20(96%2F104)-e63946?style=flat-square" alt="XBOW best-of-N score" />
  <img src="https://img.shields.io/badge/XBOW%20black--box-87.5%25%20(91%2F104)-e63946?style=flat-square" alt="XBOW black-box score" />
  <img src="https://img.shields.io/badge/Cybench-80%25%20(8%2F10)-e63946?style=flat-square" alt="Cybench score" />
  <img src="https://img.shields.io/badge/tests-206%20passing-2a9d8f?style=flat-square" alt="tests" />
@@ -107,11 +107,11 @@ npm i -g pwnkit-cli
 ## Snapshot
 
 - XBOW (black-box): 91/104 = 87.5%
-- XBOW (white-box best-of-N aggregate): 95/104 = 91.3%
+- XBOW (white-box best-of-N aggregate): 96/104 = 92.3%
 - Cybench: 8/10 = 80%
 - AI / LLM regression set: 10/10
 
-Both XBOW numbers are reported separately — no methodology blending. The 4 white-box-only flags (XBEN-023, 056, 063, 075) come from the best-of-N aggregate across `features=none` / `features=experimental` / `features=all` runs with `--repo` source access. Same model, same tools, only the source-access flag differs. For the full benchmark methodology, caveats, and historical runs, use the benchmark docs page instead of the README.
+Both XBOW numbers are reported separately — no methodology blending. The 5 white-box-only flags (XBEN-023, 056, 063, 075, 061) come from the best-of-N aggregate across `features=none` / `features=experimental` / `features=all` runs with `--repo` source access. Same model, same tools, only the source-access flag differs. For the full benchmark methodology, caveats, and historical runs, use the benchmark docs page instead of the README.
 
 ## GitHub Action
 

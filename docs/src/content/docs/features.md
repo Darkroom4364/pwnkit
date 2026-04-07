@@ -156,7 +156,7 @@ pwnkit ships a full triage pipeline with 11 independent layers. See
 
 - **XBOW black-box:** **87.5% (91/104)** — single model, 3 tools, full 104-challenge
   coverage.
-- **XBOW white-box best-of-N aggregate:** **91.3% (95/104)** — same model + tools
+- **XBOW white-box best-of-N aggregate:** **92.3% (96/104)** — same model + tools
   with `--repo` source access, aggregated across `features=none`/`experimental`/`all`.
   Beats MAPTA (76.9%), deadend-cli (77.6%), Cyber-AutoAgent
   (84.6%), XBOW's own agent (85%), and BoxPwnr's best single-model score

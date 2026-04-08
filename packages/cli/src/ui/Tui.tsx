@@ -24,6 +24,7 @@ type ScanRow = {
 type FindingRow = {
   id: string;
   scanId: string;
+  templateId: string;
   title: string;
   description: string;
   severity: string;
@@ -113,6 +114,55 @@ function truncate(value: string | undefined | null, max = 120): string {
   const compact = value.replace(/\s+/g, " ").trim();
   if (compact.length <= max) return compact;
   return `${compact.slice(0, max - 1)}…`;
+}
+
+function originTags(finding: FindingRow): string[] {
+  const tags: string[] = [];
+  const templateId = finding.templateId ?? "";
+  const triageNote = (finding.triageNote ?? "").toLowerCase();
+
+  if (templateId === "known-package-advisories") {
+    tags.push("deterministic advisory");
+  } else if (templateId === "malicious-known-compromise") {
+    tags.push("historical compromise");
+  } else if (templateId === "malicious-typosquat") {
+    tags.push("typosquat oracle");
+  } else if (templateId === "malicious-install-hook") {
+    tags.push("install-hook oracle");
+  } else if (templateId.startsWith("manual-")) {
+    tags.push("manual package finding");
+  } else if (templateId.startsWith("custom-")) {
+    tags.push("custom finding");
+  } else if (templateId === "audit-agent") {
+    tags.push("agent finding");
+  }
+
+  if (triageNote.includes("suppressed documented extension") || triageNote.includes("suppress")) {
+    tags.push("suppressor");
+  }
+  if (triageNote.includes("downgraded")) {
+    tags.push("downgraded");
+  }
+  if (finding.triageStatus === "accepted") {
+    tags.push("accepted");
+  } else if (finding.triageStatus === "suppressed") {
+    tags.push("suppressed");
+  } else {
+    tags.push("new");
+  }
+
+  return [...new Set(tags)];
+}
+
+function badgeColor(tag: string): string {
+  if (tag === "accepted") return "#22C55E";
+  if (tag === "suppressed") return "#6B7280";
+  if (tag === "downgraded") return "#EAB308";
+  if (tag === "deterministic advisory") return "#06B6D4";
+  if (tag === "historical compromise") return "#DC2626";
+  if (tag === "typosquat oracle" || tag === "install-hook oracle") return "#F97316";
+  if (tag === "suppressor") return "#A855F7";
+  return "#9CA3AF";
 }
 
 async function loadState(dbPath?: string): Promise<{
@@ -281,6 +331,14 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
       lines.push({
         color: severityColor(selectedFinding.severity),
         text: `${selectedFinding.severity.toUpperCase()} · ${selectedFinding.category}`,
+      });
+      lines.push({
+        color: "#6B7280",
+        text: `provenance: ${originTags(selectedFinding).join(" · ")}`,
+      });
+      lines.push({
+        color: "#6B7280",
+        text: `template: ${selectedFinding.templateId}`,
       });
       if (selectedFinding.triageStatus || selectedFinding.triageNote) {
         lines.push({
@@ -586,6 +644,13 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
                             {finding.triageStatus ?? "new"}
                           </Text>
                         </Text>
+                        <Box flexDirection="row" flexWrap="wrap">
+                          {originTags(finding).slice(0, 3).map((tag) => (
+                            <Box key={tag} marginRight={1}>
+                              <Text color={badgeColor(tag)}>[{tag}]</Text>
+                            </Box>
+                          ))}
+                        </Box>
                         {finding.triageNote ? (
                           <Text color="#6B7280">{truncate(finding.triageNote, 40)}</Text>
                         ) : null}

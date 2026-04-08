@@ -43,14 +43,17 @@ export PWNKIT_DOCKER_IMAGE=kalilinux/kali-rolling
 export PWNKIT_DOCKER_BOOTSTRAP_TOOLS=1
 ```
 
-## Audit an npm package for security issues
+## Audit a package for security issues
 
 ```bash
-# Default audit (latest version)
+# Default npm audit (latest version)
 npx pwnkit-cli audit express
 
-# Pin a specific version
+# Pin a specific npm version
 npx pwnkit-cli audit express --version 4.18.2
+
+# Audit a PyPI package
+npx pwnkit-cli audit requests --ecosystem pypi
 
 # Deep audit with the Claude Code CLI runtime
 npx pwnkit-cli audit left-pad --depth deep --runtime claude

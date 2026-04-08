@@ -13,7 +13,7 @@ For deep dives, follow the linked pages.
 |--------|---------|-------------------|
 | Web apps | `scan --target <url> --mode web` | SQLi, IDOR, SSTI, XSS, auth bypass, SSRF, LFI, RCE, file upload, deserialization, request smuggling |
 | AI / LLM apps | `scan --target <url>` | Prompt injection, jailbreaks, system-prompt extraction, PII leakage, MCP tool abuse |
-| npm packages | `audit <pkg>` | Malicious code, known CVEs, supply-chain attacks |
+| Package registries | `audit <pkg>` / `audit <pkg> --ecosystem pypi` | Malicious code, known CVEs, supply-chain attacks |
 | Source code | `review <path>` | SAST-style vulnerabilities via static analysis + AI review |
 | White-box | `scan --target <url> --repo <path>` | Source-aware scanning — reads code before attacking |
 | MCP servers | `scan --target mcp://…` | Tool poisoning and schema abuse |

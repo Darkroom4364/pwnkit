@@ -47,6 +47,13 @@ function classifyPackageAuditFinding(finding: Finding): PostProcessDecision | nu
     };
   }
 
+  if (isBenignInstallHookNoise(text)) {
+    return {
+      action: "suppress",
+      note: "package-audit: suppressed generic install-hook finding with no suspicious pattern matches",
+    };
+  }
+
   if (isCallerControlledRegexNoise(text)) {
     return {
       action: "downgrade",
@@ -104,6 +111,11 @@ function isPureCliSelfDosNoise(text: string): boolean {
   if (!/\b(cli|command[- ]line|argv|process\.argv)\b/.test(text)) return false;
   if (!/--(?:size|count|length)\b/.test(text)) return false;
   return /\b(self-dos|self dos|dos|denial of service|resource exhaustion|memory exhaustion|cpu exhaustion|hang)\b/.test(text);
+}
+
+function isBenignInstallHookNoise(text: string): boolean {
+  if (!/\bpackage executes \d+ install-time hook/.test(text)) return false;
+  return /\bno suspicious patterns matched\b/.test(text) || /\b0 pattern matches\b/.test(text);
 }
 
 function isObjectScopedPrototypeMutation(text: string): boolean {

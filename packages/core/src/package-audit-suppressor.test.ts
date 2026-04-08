@@ -68,6 +68,19 @@ describe("postProcessPackageAuditFindings", () => {
     expect(postProcessPackageAuditFindings(findings)).toEqual([]);
   });
 
+  it("suppresses generic install-hook findings with no suspicious matches", () => {
+    const findings = [
+      makeFinding(
+        "Package executes 1 install-time hook (postinstall)",
+        "A package defines a postinstall hook. No suspicious patterns matched in the script content. Manual review still recommended.",
+        "medium",
+        "supply-chain" as AttackCategory,
+      ),
+    ];
+
+    expect(postProcessPackageAuditFindings(findings)).toEqual([]);
+  });
+
   it("keeps likely real package findings intact", () => {
     const findings = [
       makeFinding(

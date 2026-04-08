@@ -228,8 +228,10 @@ export interface TyposquatHit {
  * audited the real package).
  */
 export function checkTyposquat(packageName: string): TyposquatHit | null {
-  // Strip any version, scope, and lowercase
-  const name = packageName.replace(/^@[^/]+\//, "").toLowerCase();
+  // Keep the scope for exact-match / distance purposes. Stripping it causes
+  // legitimate packages like @types/node to collapse to "node" and spuriously
+  // match unrelated popular package names.
+  const name = packageName.toLowerCase();
   if (TYPOSQUAT_TARGETS_SET.has(name)) return null;
 
   let best: TyposquatHit | null = null;

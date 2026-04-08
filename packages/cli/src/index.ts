@@ -13,6 +13,7 @@ import {
   registerAuditCommand,
   registerDoctorCommand,
   registerDashboardCommand,
+  registerTuiCommand,
   registerOrchestrateCommand,
   registerDbCommand,
   registerMcpServerCommand,
@@ -40,6 +41,7 @@ registerReviewCommand(program);
 registerAuditCommand(program);
 registerDoctorCommand(program);
 registerDashboardCommand(program);
+registerTuiCommand(program);
 registerOrchestrateCommand(program);
 registerDbCommand(program);
 registerMcpServerCommand(program);
@@ -89,7 +91,7 @@ async function showInteractiveMenu(): Promise<void> {
 
 // ── Entry point ──
 const userArgs = process.argv.slice(2);
-const knownCommands = ["scan", "resume", "replay", "history", "findings", "review", "audit", "doctor", "dashboard", "orchestrate", "db", "mcp-server", "help"];
+const knownCommands = ["scan", "resume", "replay", "history", "findings", "review", "audit", "doctor", "dashboard", "tui", "orchestrate", "db", "mcp-server", "help"];
 
 if (userArgs.length === 0) {
   showInteractiveMenu().catch((err) => {

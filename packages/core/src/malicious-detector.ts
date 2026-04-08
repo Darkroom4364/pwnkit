@@ -455,17 +455,13 @@ export function scanForMaliciousPatterns(opts: MaliciousScanOptions): Finding[] 
 
   // 3. Install-script reader + suspicious pattern scanner
   const inspection = inspectInstallScripts(packagePath);
-  if (inspection.hasInstallHook) {
-    // Always emit a high-severity finding when install-time hooks exist
-    // (developers should know these run on `npm install`).
+  if (inspection.hasInstallHook && inspection.matches.length > 0) {
     const matchSummary =
-      inspection.matches.length > 0
-        ? "\n\n**Suspicious patterns matched:**\n" +
-          inspection.matches
-            .slice(0, 10)
-            .map((m) => `- \`${m.source}\` — ${m.label}\n  \`${m.snippet}\``)
-            .join("\n")
-        : "\n\n_No suspicious patterns matched in the script content. Manual review still recommended._";
+      "\n\n**Suspicious patterns matched:**\n" +
+      inspection.matches
+        .slice(0, 10)
+        .map((m) => `- \`${m.source}\` — ${m.label}\n  \`${m.snippet}\``)
+        .join("\n");
 
     findings.push({
       id: randomUUID(),
@@ -477,8 +473,7 @@ export function scanForMaliciousPatterns(opts: MaliciousScanOptions): Finding[] 
         `**Hooks declared:**\n` +
         inspection.hooks.map((h) => `- \`${h.name}\` → \`${h.command}\``).join("\n") +
         matchSummary,
-      // High severity if any suspicious pattern matched, medium otherwise
-      severity: inspection.matches.length > 0 ? "high" : "medium",
+      severity: "high",
       category: "supply-chain" as any,
       status: "open" as any,
       evidence: {
@@ -490,7 +485,7 @@ export function scanForMaliciousPatterns(opts: MaliciousScanOptions): Finding[] 
         ),
         analysis: `Static install-script reader (no LLM) — npm install --ignore-scripts prevented execution but the script source is on disk and was scanned for suspicious patterns. ${inspection.matches.length} pattern matches.`,
       },
-      confidence: inspection.matches.length > 0 ? 0.9 : 0.6,
+      confidence: 0.9,
       timestamp: now,
     });
   }

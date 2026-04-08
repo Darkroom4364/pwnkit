@@ -1,5 +1,5 @@
-import { execFileSync, execSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join, resolve, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -17,17 +17,22 @@ import type { ScanListener } from "./scanner.js";
 import { runAnalysisAgent } from "./agent-runner.js";
 import { auditAgentPrompt, reviewAgentPrompt } from "./analysis-prompts.js";
 import { researchPrompt, blindVerifyPrompt } from "./agent/prompts.js";
-import { runSemgrepScan, bufferToString } from "./shared-analysis.js";
+import { runSemgrepScan } from "./shared-analysis.js";
 import { detectAvailableRuntimes } from "./runtime/registry.js";
 import type { RuntimeType } from "./runtime/types.js";
 import { LlmApiRuntime } from "./runtime/llm-api.js";
 import type { ApiRuntimeDiagnostics } from "./runtime/llm-api.js";
+import {
+  installPackageForEcosystem,
+  runDependencyAuditForEcosystem,
+  type InstalledPackage,
+} from "./package-ecosystems.js";
 
 // ── Public types ──
 
 export interface PipelineOptions {
   target: string;
-  targetType?: "npm-package" | "source-code" | "url" | "web-app";
+  targetType?: "npm-package" | "pypi-package" | "source-code" | "url" | "web-app";
   depth: ScanDepth;
   format: OutputFormat;
   runtime?: RuntimeMode;
@@ -74,9 +79,10 @@ export interface PipelineReport {
 interface PrepareResult {
   scopePath: string;
   resolvedTarget: string;
-  resolvedType: "npm-package" | "source-code" | "url" | "web-app";
+  resolvedType: "npm-package" | "pypi-package" | "source-code" | "url" | "web-app";
   packageName?: string;
   packageVersion?: string;
+  packageEcosystem?: "npm" | "pypi";
   tempDir?: string;
   needsCleanup: boolean;
 }
@@ -103,7 +109,7 @@ function detectTargetType(target: string): "npm-package" | "source-code" | "url"
 /**
  * Phase 1: Prepare the target for analysis.
  *
- * - npm-package: install in temp dir
+ * - npm-package / pypi-package: install in temp dir
  * - source-code: clone if URL, resolve if local path
  * - url/web-app: no-op (target is the URL itself)
  */
@@ -115,6 +121,10 @@ function prepareTarget(
 
   if (targetType === "npm-package") {
     return prepareNpmPackage(opts.target, opts.packageVersion, emit);
+  }
+
+  if (targetType === "pypi-package") {
+    return preparePythonPackage(opts.target, opts.packageVersion, emit);
   }
 
   if (targetType === "source-code") {
@@ -146,49 +156,34 @@ function prepareNpmPackage(
     version = version ?? rawPackageName.slice(atIdx + 1);
   }
 
-  const tempDir = join(tmpdir(), `pwnkit-pipeline-${randomUUID().slice(0, 8)}`);
-  mkdirSync(tempDir, { recursive: true });
-
-  const spec = version ? `${packageName}@${version}` : `${packageName}@latest`;
-
-  emit({ type: "stage:start", stage: "prepare", message: `Installing ${spec}...` });
-
-  try {
-    execFileSync("npm", ["init", "-y", "--silent"], {
-      cwd: tempDir,
-      timeout: 15_000,
-      stdio: "pipe",
-    });
-    execFileSync("npm", ["install", spec, "--ignore-scripts", "--no-audit", "--no-fund"], {
-      cwd: tempDir,
-      timeout: 120_000,
-      stdio: "pipe",
-    });
-  } catch (err) {
-    rmSync(tempDir, { recursive: true, force: true });
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`Failed to install ${spec}: ${msg}`);
-  }
-
-  const pkgJsonPath = join(tempDir, "node_modules", packageName, "package.json");
-  if (!existsSync(pkgJsonPath)) {
-    rmSync(tempDir, { recursive: true, force: true });
-    throw new Error(`Package ${packageName} not found after install. Check the package name.`);
-  }
-
-  const pkgJson = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
-  const installedVersion = pkgJson.version as string;
-  const packagePath = join(tempDir, "node_modules", packageName);
-
-  emit({ type: "stage:end", stage: "prepare", message: `Installed ${packageName}@${installedVersion}` });
+  const pkg = installPackageForEcosystem("npm", packageName, version, emit);
 
   return {
-    scopePath: packagePath,
-    resolvedTarget: `npm:${packageName}@${installedVersion}`,
+    scopePath: pkg.path,
+    resolvedTarget: `npm:${pkg.name}@${pkg.version}`,
     resolvedType: "npm-package",
-    packageName,
-    packageVersion: installedVersion,
-    tempDir,
+    packageName: pkg.name,
+    packageVersion: pkg.version,
+    packageEcosystem: "npm",
+    tempDir: pkg.tempDir,
+    needsCleanup: true,
+  };
+}
+
+function preparePythonPackage(
+  packageName: string,
+  requestedVersion: string | undefined,
+  emit: ScanListener,
+): PrepareResult {
+  const pkg = installPackageForEcosystem("pypi", packageName, requestedVersion, emit);
+  return {
+    scopePath: pkg.path,
+    resolvedTarget: `pypi:${pkg.name}@${pkg.version}`,
+    resolvedType: "pypi-package",
+    packageName: pkg.name,
+    packageVersion: pkg.version,
+    packageEcosystem: "pypi",
+    tempDir: pkg.tempDir,
     needsCleanup: true,
   };
 }
@@ -242,112 +237,6 @@ function prepareSourceCode(target: string, emit: ScanListener): PrepareResult {
   };
 }
 
-/**
- * Run npm audit against the project directory.
- */
-function runNpmAudit(projectDir: string, emit: ScanListener): NpmAuditFinding[] {
-  emit({ type: "stage:start", stage: "analyze", message: "Running npm audit..." });
-
-  let rawOutput = "";
-  try {
-    rawOutput = execSync("npm audit --json", {
-      cwd: projectDir,
-      timeout: 120_000,
-      stdio: "pipe",
-    }).toString("utf-8");
-  } catch (err) {
-    const stdout =
-      err && typeof err === "object" && "stdout" in err
-        ? (err.stdout as Buffer | string | undefined)
-        : undefined;
-    const stderr =
-      err && typeof err === "object" && "stderr" in err
-        ? (err.stderr as Buffer | string | undefined)
-        : undefined;
-    rawOutput = bufferToString(stdout) || bufferToString(stderr) || "";
-  }
-
-  const findings = parseNpmAuditOutput(rawOutput);
-
-  emit({ type: "stage:end", stage: "analyze", message: `npm audit: ${findings.length} advisories` });
-
-  return findings;
-}
-
-function parseNpmAuditOutput(rawOutput: string): NpmAuditFinding[] {
-  if (!rawOutput.trim()) return [];
-
-  try {
-    const raw = JSON.parse(rawOutput) as {
-      vulnerabilities?: Record<
-        string,
-        {
-          name?: string;
-          severity?: string;
-          via?: Array<string | Record<string, unknown>>;
-          range?: string;
-          fixAvailable?: boolean | { name?: string; version?: string } | string;
-        }
-      >;
-    };
-
-    return Object.entries(raw.vulnerabilities ?? {}).map(([pkgName, vuln]) => {
-      const via = (vuln.via ?? []).map((entry) => {
-        if (typeof entry === "string") return entry;
-        const source = typeof entry.source === "number" ? `GHSA:${entry.source}` : null;
-        const title = typeof entry.title === "string" ? entry.title : null;
-        const name = typeof entry.name === "string" ? entry.name : null;
-        return [name, title, source].filter(Boolean).join(" - ") || "unknown advisory";
-      });
-
-      const firstObjectVia = (vuln.via ?? []).find(
-        (entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null,
-      );
-
-      return {
-        name: vuln.name ?? pkgName,
-        severity: normalizeSeverity(vuln.severity),
-        title:
-          (typeof firstObjectVia?.title === "string" && firstObjectVia.title) ||
-          via[0] ||
-          "npm audit advisory",
-        range: vuln.range,
-        source:
-          typeof firstObjectVia?.source === "number" || typeof firstObjectVia?.source === "string"
-            ? (firstObjectVia.source as number | string)
-            : undefined,
-        url: typeof firstObjectVia?.url === "string" ? firstObjectVia.url : undefined,
-        via,
-        fixAvailable: formatFixAvailable(vuln.fixAvailable),
-      };
-    });
-  } catch {
-    return [];
-  }
-}
-
-function normalizeSeverity(value: string | undefined): "critical" | "high" | "medium" | "low" | "info" {
-  switch ((value ?? "").toLowerCase()) {
-    case "critical": return "critical";
-    case "high": return "high";
-    case "moderate":
-    case "medium": return "medium";
-    case "low": return "low";
-    default: return "info";
-  }
-}
-
-function formatFixAvailable(
-  fixAvailable: boolean | { name?: string; version?: string } | string | undefined,
-): boolean | string {
-  if (typeof fixAvailable === "string" || typeof fixAvailable === "boolean") return fixAvailable;
-  if (fixAvailable && typeof fixAvailable === "object") {
-    const next = [fixAvailable.name, fixAvailable.version].filter(Boolean).join("@");
-    return next || true;
-  }
-  return false;
-}
-
 // ── CLI prompt builders (for CLI runtime fast path) ──
 
 function buildCliPrompt(
@@ -355,6 +244,7 @@ function buildCliPrompt(
   semgrepFindings: SemgrepFinding[],
   npmAuditFindings: NpmAuditFinding[],
   label: string,
+  advisoryLabel: string,
   changedFiles?: string[],
   changedOnly = false,
 ): string {
@@ -386,7 +276,7 @@ ${changedOnly ? "\nThis is a diff-aware review. Focus findings on vulnerabilitie
 Semgrep already found these leads:
 ${semgrepContext}
 
-npm audit found these advisories:
+${advisoryLabel} found these advisories:
 ${npmContext}
 
 For EACH confirmed vulnerability, output a block in this exact format:
@@ -520,7 +410,7 @@ function assertApiRuntimeSelection(
  *
  * Pipeline:
  *   Phase 1: PREPARE   — detect target type, install/clone/resolve
- *   Phase 2: ANALYZE   — semgrep + npm audit (static analysis)
+ *   Phase 2: ANALYZE   — semgrep + dependency audit (static analysis)
  *   Phase 3: RESEARCH  — single AI agent discovers, attacks, and writes PoCs
  *   Phase 4: VERIFY    — parallel blind agents independently verify each finding
  *
@@ -654,13 +544,17 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
       }
     }
 
-    // Semgrep scan (source-code and npm-package targets)
-    if (prepared.resolvedType === "source-code" || prepared.resolvedType === "npm-package") {
+    // Semgrep scan (source-code and package targets)
+    if (
+      prepared.resolvedType === "source-code" ||
+      prepared.resolvedType === "npm-package" ||
+      prepared.resolvedType === "pypi-package"
+    ) {
       try {
         semgrepFindings = runSemgrepScan(
           prepared.scopePath,
           analyzeEmit,
-          prepared.resolvedType === "npm-package"
+          prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package"
             ? { noGitIgnore: true }
             : opts.changedOnly && changedFiles.length > 0
               ? { paths: changedFiles.map((path) => join(prepared.scopePath, path)) }
@@ -673,21 +567,25 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
       }
     }
 
-    // npm audit (npm-package targets only, need the temp project dir)
-    if (prepared.resolvedType === "npm-package" && prepared.tempDir) {
+    // dependency audit (package targets only, need the temp project dir)
+    if (
+      (prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package") &&
+      prepared.tempDir &&
+      prepared.packageEcosystem
+    ) {
       try {
-        npmAuditFindings = runNpmAudit(prepared.tempDir, emit);
+        npmAuditFindings = runDependencyAuditForEcosystem(prepared.packageEcosystem, prepared.tempDir, emit);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        warnings.push({ stage: "analyze", message: `npm audit failed: ${msg}` });
-        logPipelineEvent("analyze", "warning", { message: `npm audit failed: ${msg}` });
+        warnings.push({ stage: "analyze", message: `dependency audit failed: ${msg}` });
+        logPipelineEvent("analyze", "warning", { message: `dependency audit failed: ${msg}` });
       }
     }
 
     emit({
       type: "stage:end",
       stage: "analyze",
-      message: `Analysis complete: ${semgrepFindings.length} semgrep findings, ${npmAuditFindings.length} npm advisories`,
+      message: `Analysis complete: ${semgrepFindings.length} semgrep findings, ${npmAuditFindings.length} dependency advisories`,
     });
     logPipelineEvent("analyze", "stage_complete", {
       semgrepFindings: semgrepFindings.length,
@@ -736,7 +634,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
     let findings: Finding[] = [];
 
     if (canUseAiRuntime) {
-    const existingResearchSession = opts.resumeScanId ? db?.getSession(persistedScanId, prepared.resolvedType === "npm-package" ? "audit" : "review") : null;
+    const existingResearchSession = opts.resumeScanId ? db?.getSession(persistedScanId, prepared.resolvedType === "source-code" ? "review" : "audit") : null;
     const existingPersistedFindings = opts.resumeScanId
       ? ((db?.getFindings(persistedScanId) ?? []).map((row: any) => restorePersistedFinding(row)) as Finding[])
       : [];
@@ -768,16 +666,22 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
 
     if (canSkipResearch) {
       findings = existingPersistedFindings;
-    } else if (prepared.resolvedType === "npm-package" || prepared.resolvedType === "source-code") {
-      const targetLabel = prepared.resolvedType === "npm-package"
-        ? `npm package ${prepared.packageName}@${prepared.packageVersion}`
-        : "repository";
+    } else if (
+      prepared.resolvedType === "npm-package" ||
+      prepared.resolvedType === "pypi-package" ||
+      prepared.resolvedType === "source-code"
+    ) {
+      const targetLabel = prepared.resolvedType === "source-code"
+        ? "repository"
+        : `${prepared.packageEcosystem === "pypi" ? "PyPI" : "npm"} package ${prepared.packageName}@${prepared.packageVersion}`;
+      const advisoryLabel = prepared.packageEcosystem === "pypi" ? "pip-audit / dependency audit" : "npm audit";
 
       const agentSystemPrompt = researchPrompt(
         prepared.scopePath,
         semgrepFindings.map(f => ({ ruleId: f.ruleId, message: f.message, path: f.path, startLine: f.startLine })),
         npmAuditFindings.map(f => ({ name: f.name, severity: f.severity, title: f.title })),
         targetLabel,
+        advisoryLabel,
       );
 
       const effectiveSystemPrompt = prepared.resolvedType === "source-code"
@@ -786,7 +690,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
 
       try {
         const agentResult = await runAnalysisAgent({
-          role: prepared.resolvedType === "npm-package" ? "audit" : "review",
+          role: prepared.resolvedType === "source-code" ? "review" : "audit",
           scopePath: prepared.scopePath,
           target: prepared.resolvedTarget,
           scanId: persistedScanId,
@@ -806,6 +710,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
             semgrepFindings,
             npmAuditFindings,
             targetLabel,
+            advisoryLabel,
             changedFiles,
             !!opts.changedOnly,
           ),
@@ -838,7 +743,10 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
     logPipelineEvent("research", "stage_complete", { findings: findings.length });
 
     // ── PHASE 4: VERIFY (parallel blind agents) ──
-    if (findings.length > 0 && (prepared.resolvedType === "source-code" || prepared.resolvedType === "npm-package")) {
+    if (
+      findings.length > 0 &&
+      (prepared.resolvedType === "source-code" || prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package")
+    ) {
       const canSkipVerify = existingVerifiedFindings.length === findings.length && findings.length > 0;
       emit({
         type: "stage:start",
@@ -997,7 +905,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
       findings: confirmedFindings,
       warnings,
       // Backwards-compat extras
-      ...(prepared.resolvedType === "npm-package"
+      ...(prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package"
         ? {
             package: prepared.packageName,
             version: prepared.packageVersion,

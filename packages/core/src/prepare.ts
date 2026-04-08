@@ -1,21 +1,21 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join, resolve, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import type { ScanListener } from "./scanner.js";
-import { restoreHistoricalPackageFixture, shouldUseHistoricalPackageFallback } from "./historical-package-fallback.js";
+import { installPackageForEcosystem } from "./package-ecosystems.js";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type TargetType = "npm-package" | "source-code" | "url" | "web-app";
+export type TargetType = "npm-package" | "pypi-package" | "source-code" | "url" | "web-app";
 
 export interface PrepareResult {
   targetType: TargetType;
   resolvedTarget: string; // local path or URL
-  packageInfo?: { name: string; version: string; path: string; tempDir: string };
+  packageInfo?: { name: string; version: string; path: string; tempDir: string; ecosystem: "npm" | "pypi" };
   repoPath?: string;
   cleanup: () => void;
 }
@@ -53,6 +53,7 @@ export function detectTargetType(target: string): TargetType {
 // ---------------------------------------------------------------------------
 
 interface InstalledPackage {
+  ecosystem: "npm" | "pypi";
   name: string;
   version: string;
   path: string;
@@ -60,116 +61,15 @@ interface InstalledPackage {
 }
 
 /**
- * Install an npm package in a temporary directory and return its metadata.
- * Extracted from audit.ts `installPackage()`.
+ * Install a package in a temporary directory and return its metadata.
  */
 function installPackage(
+  ecosystem: "npm" | "pypi",
   packageName: string,
   requestedVersion: string | undefined,
   emit: ScanListener,
 ): InstalledPackage {
-  const tempDir = join(tmpdir(), `pwnkit-audit-${randomUUID().slice(0, 8)}`);
-  mkdirSync(tempDir, { recursive: true });
-
-  const spec = requestedVersion
-    ? `${packageName}@${requestedVersion}`
-    : `${packageName}@latest`;
-
-  emit({
-    type: "stage:start",
-    stage: "discovery",
-    message: `Installing ${spec}...`,
-  });
-
-  try {
-    execFileSync("npm", ["init", "-y", "--silent"], {
-      cwd: tempDir,
-      timeout: 15_000,
-      stdio: "pipe",
-    });
-
-    let installError: string | null = null;
-    try {
-      execFileSync(
-        "npm",
-        ["install", spec, "--ignore-scripts", "--no-audit", "--no-fund"],
-        {
-          cwd: tempDir,
-          timeout: 120_000,
-          stdio: "pipe",
-        },
-      );
-    } catch (firstErr) {
-      // Retry with --legacy-peer-deps when the first install fails
-      // with what looks like a peer-dependency conflict. Modern npm
-      // (v7+) is strict about peer deps and rejects packages like
-      // nuxt that would have installed cleanly under npm 6. The
-      // retry is harmless when the original error is something else
-      // (it will fail the same way).
-      const firstMsg = firstErr instanceof Error ? firstErr.message : String(firstErr);
-      const looksLikePeerDep =
-        /ERESOLVE|peer dep|peerDep|peer dependency/i.test(firstMsg);
-      if (!looksLikePeerDep) {
-        installError = firstMsg;
-      } else {
-        try {
-          execFileSync(
-            "npm",
-            ["install", spec, "--ignore-scripts", "--no-audit", "--no-fund", "--legacy-peer-deps"],
-            {
-              cwd: tempDir,
-              timeout: 120_000,
-              stdio: "pipe",
-            },
-          );
-        } catch (secondErr) {
-          installError = secondErr instanceof Error ? secondErr.message : String(secondErr);
-        }
-      }
-    }
-
-    if (installError) {
-      if (shouldUseHistoricalPackageFallback(installError)) {
-        const restored = restoreHistoricalPackageFixture(packageName, tempDir, emit);
-        if (restored) {
-          return {
-            ...restored,
-            tempDir,
-          };
-        }
-      }
-      throw new Error(installError);
-    }
-  } catch (err) {
-    rmSync(tempDir, { recursive: true, force: true });
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`Failed to install ${spec}: ${msg}`);
-  }
-
-  const pkgJsonPath = join(tempDir, "node_modules", packageName, "package.json");
-  if (!existsSync(pkgJsonPath)) {
-    rmSync(tempDir, { recursive: true, force: true });
-    throw new Error(
-      `Package ${packageName} not found after install. Check the package name.`,
-    );
-  }
-
-  const pkgJson = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
-  const installedVersion = pkgJson.version as string;
-  const packagePath = join(tempDir, "node_modules", packageName);
-
-  emit({
-    type: "stage:end",
-    stage: "discovery",
-    message: `Installed ${packageName}@${installedVersion}`,
-  });
-
-  return {
-    name: packageName,
-    version: installedVersion,
-    path: packagePath,
-    tempDir,
-  };
+  return installPackageForEcosystem(ecosystem, packageName, requestedVersion, emit);
 }
 
 /**
@@ -281,7 +181,23 @@ export async function prepare(
         version = version ?? target.slice(atIdx + 1);
       }
 
-      const pkg = installPackage(packageName, version, emit);
+      const pkg = installPackage("npm", packageName, version, emit);
+      return {
+        targetType: type,
+        resolvedTarget: pkg.path,
+        packageInfo: pkg,
+        cleanup: () => {
+          try {
+            rmSync(pkg.tempDir, { recursive: true, force: true });
+          } catch {
+            // ignore
+          }
+        },
+      };
+    }
+
+    case "pypi-package": {
+      const pkg = installPackage("pypi", target, opts.packageVersion, emit);
       return {
         targetType: type,
         resolvedTarget: pkg.path,

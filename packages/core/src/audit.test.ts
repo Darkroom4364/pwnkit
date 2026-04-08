@@ -69,6 +69,23 @@ describe("queryOsvAdvisories", () => {
     expect(findings[0]?.severity).toBe("critical");
   });
 
+  it("queries OSV with the PyPI ecosystem when requested", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ vulns: [] }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await queryOsvAdvisories("requests", "2.32.0", "pypi");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      package: { ecosystem: "PyPI", name: "requests" },
+      version: "2.32.0",
+    });
+  });
+
   it("fails closed on network errors", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => {
       throw new Error("network down");
@@ -83,6 +100,7 @@ describe("summarizeKnownAdvisoriesFinding", () => {
   it("emits a deterministic finding for root-package advisories", () => {
     const finding = summarizeKnownAdvisoriesFinding(
       {
+        ecosystem: "npm",
         name: "lodash",
         version: "4.17.20",
         path: "/tmp/pkg",
@@ -121,6 +139,7 @@ describe("summarizeKnownAdvisoriesFinding", () => {
   it("returns null when there are no advisories", () => {
     const finding = summarizeKnownAdvisoriesFinding(
       {
+        ecosystem: "npm",
         name: "express",
         version: "latest",
         path: "/tmp/pkg",

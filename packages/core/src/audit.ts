@@ -1,8 +1,6 @@
-import { execFileSync, execSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { rmSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { randomUUID } from "node:crypto";
-import { tmpdir } from "node:os";
 import type {
   AuditConfig,
   AuditReport,
@@ -15,21 +13,20 @@ import type {
 import type { ScanEvent, ScanListener } from "./scanner.js";
 import { auditAgentPrompt } from "./analysis-prompts.js";
 import { runAnalysisAgent } from "./agent-runner.js";
-import { restoreHistoricalPackageFixture, shouldUseHistoricalPackageFallback } from "./historical-package-fallback.js";
-import { bufferToString, runSemgrepScan } from "./shared-analysis.js";
+import { runSemgrepScan } from "./shared-analysis.js";
 import { scanForMaliciousPatterns } from "./malicious-detector.js";
 import { postProcessPackageAuditFindings } from "./package-audit-suppressor.js";
+import {
+  installPackageForEcosystem,
+  normalizeSeverity,
+  formatFixAvailable,
+  runDependencyAuditForEcosystem,
+  type InstalledPackage,
+} from "./package-ecosystems.js";
 
 export interface PackageAuditOptions {
   config: AuditConfig;
   onEvent?: ScanListener;
-}
-
-interface InstalledPackage {
-  name: string;
-  version: string;
-  path: string;
-  tempDir: string;
 }
 
 interface OsvVulnerability {
@@ -46,214 +43,6 @@ interface OsvVulnerability {
       events?: Array<{ introduced?: string; fixed?: string; last_affected?: string }>;
     }>;
   }>;
-}
-
-/**
- * Install an npm package in a temporary directory and return its path.
- */
-function installPackage(
-  packageName: string,
-  requestedVersion: string | undefined,
-  emit: ScanListener,
-): InstalledPackage {
-  const tempDir = join(tmpdir(), `pwnkit-audit-${randomUUID().slice(0, 8)}`);
-  mkdirSync(tempDir, { recursive: true });
-
-  const spec = requestedVersion
-    ? `${packageName}@${requestedVersion}`
-    : `${packageName}@latest`;
-
-  emit({
-    type: "stage:start",
-    stage: "discovery",
-    message: `Installing ${spec}...`,
-  });
-
-  try {
-    // Initialize a minimal package.json so npm install works cleanly
-    execFileSync("npm", ["init", "-y", "--silent"], {
-      cwd: tempDir,
-      timeout: 15_000,
-      stdio: "pipe",
-    });
-
-    execFileSync("npm", ["install", spec, "--ignore-scripts", "--no-audit", "--no-fund"], {
-      cwd: tempDir,
-      timeout: 120_000,
-      stdio: "pipe",
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (shouldUseHistoricalPackageFallback(msg)) {
-      const restored = restoreHistoricalPackageFixture(packageName, tempDir, emit);
-      if (restored) {
-        return {
-          ...restored,
-          tempDir,
-        };
-      }
-    }
-    rmSync(tempDir, { recursive: true, force: true });
-    throw new Error(`Failed to install ${spec}: ${msg}`);
-  }
-
-  // Resolve actual installed version from package.json
-  const pkgJsonPath = join(tempDir, "node_modules", packageName, "package.json");
-  if (!existsSync(pkgJsonPath)) {
-    // Try scoped package path
-    rmSync(tempDir, { recursive: true, force: true });
-    throw new Error(
-      `Package ${packageName} not found after install. Check the package name.`,
-    );
-  }
-
-  const pkgJson = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
-  const installedVersion = pkgJson.version as string;
-  const packagePath = join(tempDir, "node_modules", packageName);
-
-  emit({
-    type: "stage:end",
-    stage: "discovery",
-    message: `Installed ${packageName}@${installedVersion}`,
-  });
-
-  return {
-    name: packageName,
-    version: installedVersion,
-    path: packagePath,
-    tempDir,
-  };
-}
-
-function runNpmAudit(
-  projectDir: string,
-  emit: ScanListener,
-): NpmAuditFinding[] {
-  emit({
-    type: "stage:start",
-    stage: "discovery",
-    message: "Running npm audit...",
-  });
-
-  let rawOutput = "";
-
-  try {
-    rawOutput = execSync("npm audit --json", {
-      cwd: projectDir,
-      timeout: 120_000,
-      stdio: "pipe",
-    }).toString("utf-8");
-  } catch (err) {
-    const stdout =
-      err && typeof err === "object" && "stdout" in err
-        ? (err.stdout as Buffer | string | undefined)
-        : undefined;
-    const stderr =
-      err && typeof err === "object" && "stderr" in err
-        ? (err.stderr as Buffer | string | undefined)
-        : undefined;
-
-    rawOutput = bufferToString(stdout) || bufferToString(stderr) || "";
-  }
-
-  const findings = parseNpmAuditOutput(rawOutput);
-
-  emit({
-    type: "stage:end",
-    stage: "discovery",
-    message: `npm audit: ${findings.length} advisories`,
-  });
-
-  return findings;
-}
-
-function parseNpmAuditOutput(rawOutput: string): NpmAuditFinding[] {
-  if (!rawOutput.trim()) {
-    return [];
-  }
-
-  try {
-    const raw = JSON.parse(rawOutput) as {
-      vulnerabilities?: Record<
-        string,
-        {
-          name?: string;
-          severity?: string;
-          via?: Array<string | Record<string, unknown>>;
-          range?: string;
-          fixAvailable?: boolean | { name?: string; version?: string } | string;
-        }
-      >;
-    };
-
-    return Object.entries(raw.vulnerabilities ?? {}).map(([pkgName, vuln]) => {
-      const via = (vuln.via ?? []).map((entry) => {
-        if (typeof entry === "string") {
-          return entry;
-        }
-
-        const source = typeof entry.source === "number" ? `GHSA:${entry.source}` : null;
-        const title = typeof entry.title === "string" ? entry.title : null;
-        const name = typeof entry.name === "string" ? entry.name : null;
-
-        return [name, title, source].filter(Boolean).join(" - ") || "unknown advisory";
-      });
-
-      const firstObjectVia = (vuln.via ?? []).find(
-        (entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null,
-      );
-
-      return {
-        name: vuln.name ?? pkgName,
-        severity: normalizeSeverity(vuln.severity),
-        title:
-          (typeof firstObjectVia?.title === "string" && firstObjectVia.title) ||
-          via[0] ||
-          "npm audit advisory",
-        range: vuln.range,
-        source:
-          typeof firstObjectVia?.source === "number" || typeof firstObjectVia?.source === "string"
-            ? (firstObjectVia.source as number | string)
-            : undefined,
-        url: typeof firstObjectVia?.url === "string" ? firstObjectVia.url : undefined,
-        via,
-        fixAvailable: formatFixAvailable(vuln.fixAvailable),
-      };
-    });
-  } catch {
-    return [];
-  }
-}
-
-function normalizeSeverity(value: string | undefined): Severity {
-  switch ((value ?? "").toLowerCase()) {
-    case "critical":
-      return "critical";
-    case "high":
-      return "high";
-    case "moderate":
-    case "medium":
-      return "medium";
-    case "low":
-      return "low";
-    default:
-      return "info";
-  }
-}
-
-function formatFixAvailable(
-  fixAvailable: boolean | { name?: string; version?: string } | string | undefined,
-): boolean | string {
-  if (typeof fixAvailable === "string" || typeof fixAvailable === "boolean") {
-    return fixAvailable;
-  }
-
-  if (fixAvailable && typeof fixAvailable === "object") {
-    const next = [fixAvailable.name, fixAvailable.version].filter(Boolean).join("@");
-    return next || true;
-  }
-
-  return false;
 }
 
 function parseCvssSeverity(score: string | undefined): Severity | undefined {
@@ -346,12 +135,13 @@ export function parseOsvAdvisories(
 export async function queryOsvAdvisories(
   packageName: string,
   version: string,
+  ecosystem: "npm" | "pypi" = "npm",
   emit?: ScanListener,
 ): Promise<NpmAuditFinding[]> {
   emit?.({
     type: "stage:start",
     stage: "discovery",
-    message: `Querying OSV for ${packageName}@${version}...`,
+    message: `Querying OSV for ${ecosystem}:${packageName}@${version}...`,
   });
 
   try {
@@ -359,7 +149,7 @@ export async function queryOsvAdvisories(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        package: { ecosystem: "npm", name: packageName },
+        package: { ecosystem: ecosystem === "pypi" ? "PyPI" : "npm", name: packageName },
         version,
       }),
     });
@@ -463,7 +253,7 @@ export function summarizeKnownAdvisoriesFinding(
         .map((advisory) => `${advisory.title} | ${advisory.source ?? "unknown"} | ${advisory.url ?? "no-url"}`)
         .join("\n"),
       analysis:
-        "Deterministic root-package advisory match (OSV/npm audit). This finding does not depend on the LLM reading the source code or rediscovering the issue manually.",
+        "Deterministic root-package advisory match from registry/dependency advisory sources. This finding does not depend on the LLM reading the source code or rediscovering the issue manually.",
     },
     confidence: 0.95,
     timestamp: Date.now(),
@@ -475,6 +265,7 @@ function buildCliAuditPrompt(
   semgrepFindings: SemgrepFinding[],
   npmAuditFindings: NpmAuditFinding[],
 ): string {
+  const auditLabel = pkg.ecosystem === "pypi" ? "pip-audit / dependency audit" : "npm audit";
   const semgrepContext = semgrepFindings.length > 0
     ? semgrepFindings
         .slice(0, 30)
@@ -489,14 +280,14 @@ function buildCliAuditPrompt(
         .join("\n")
     : "  None.";
 
-  return `Audit the npm package at ${pkg.path} (${pkg.name}@${pkg.version}).
+  return `Audit the ${pkg.ecosystem === "pypi" ? "PyPI package" : "npm package"} at ${pkg.path} (${pkg.name}@${pkg.version}).
 
 Read the source code, look for: prototype pollution, ReDoS, path traversal, injection, unsafe deserialization, missing validation. Map data flow from untrusted input to sensitive operations. Report any security findings with severity and PoC suggestions.
 
 Semgrep already found these leads:
 ${semgrepContext}
 
-npm audit found these advisories:
+${auditLabel} found these advisories:
 ${npmContext}
 
 For EACH confirmed vulnerability, output a block in this exact format:
@@ -563,6 +354,7 @@ function buildDirectApiAuditPrompt(
   semgrepFindings: SemgrepFinding[],
   npmAuditFindings: NpmAuditFinding[],
 ): string {
+  const auditLabel = pkg.ecosystem === "pypi" ? "Dependency audit" : "npm audit";
   const sourceFiles = collectSourceFiles(pkg.path);
   const sourceBlocks: string[] = [];
   let totalChars = 0;
@@ -595,12 +387,12 @@ function buildDirectApiAuditPrompt(
         .join("\n")
     : "  None.";
 
-  return `You are a security researcher performing an authorized source code audit of the npm package "${pkg.name}@${pkg.version}".
+  return `You are a security researcher performing an authorized source code audit of the ${pkg.ecosystem === "pypi" ? "PyPI package" : "npm package"} "${pkg.name}@${pkg.version}".
 
 ## Semgrep findings:
 ${semgrepContext}
 
-## npm audit advisories:
+## ${auditLabel} advisories:
 ${npmContext}
 
 ## Source code:
@@ -651,7 +443,7 @@ async function runAuditAgent(
   return runAnalysisAgent({
     role: "audit",
     scopePath: pkg.path,
-    target: `npm:${pkg.name}@${pkg.version}`,
+    target: `${pkg.ecosystem}:${pkg.name}@${pkg.version}`,
     scanId,
     config,
     db,
@@ -663,8 +455,10 @@ async function runAuditAgent(
       pkg.path,
       semgrepFindings,
       npmAuditFindings,
+      pkg.ecosystem === "pypi" ? "PyPI package" : "npm package",
+      pkg.ecosystem === "pypi" ? "pip-audit / dependency audit" : "npm audit",
     ),
-    cliSystemPrompt: "You are a security researcher performing an authorized npm package audit. Be thorough and precise. Only report real, exploitable vulnerabilities.",
+    cliSystemPrompt: `You are a security researcher performing an authorized ${pkg.ecosystem === "pypi" ? "PyPI" : "npm"} package audit. Be thorough and precise. Only report real, exploitable vulnerabilities.`,
     directApiPrompt: buildDirectApiAuditPrompt(pkg, semgrepFindings, npmAuditFindings),
   });
 }
@@ -685,14 +479,15 @@ export async function packageAudit(
   const { config, onEvent } = opts;
   const emit: ScanListener = onEvent ?? (() => {});
   const startTime = Date.now();
+  const ecosystem = config.ecosystem ?? "npm";
 
   // Step 1: Install package
-  const pkg = installPackage(config.package, config.version, emit);
+  const pkg = installPackageForEcosystem(ecosystem, config.package, config.version, emit);
 
   // Initialize DB and create scan record
   const db = await (async () => { try { const { pwnkitDB } = await import("@pwnkit/db"); return new pwnkitDB(config.dbPath); } catch { return null as any; } })() as any;
   const scanConfig: ScanConfig = {
-    target: `npm:${pkg.name}@${pkg.version}`,
+    target: `${pkg.ecosystem}:${pkg.name}@${pkg.version}`,
     depth: config.depth,
     format: config.format,
     runtime: config.runtime ?? "api",
@@ -701,10 +496,10 @@ export async function packageAudit(
   const scanId = db?.createScan(scanConfig) ?? "no-db";
 
   try {
-    // Step 2: npm audit + Semgrep scan
+    // Step 2: dependency audit + Semgrep scan
     const npmAuditFindings = mergeAdvisories(
-      runNpmAudit(pkg.tempDir, emit),
-      await queryOsvAdvisories(pkg.name, pkg.version, emit),
+      runDependencyAuditForEcosystem(pkg.ecosystem, pkg.tempDir, emit),
+      await queryOsvAdvisories(pkg.name, pkg.version, pkg.ecosystem, emit),
     );
     const semgrepFindings = runSemgrepScan(pkg.path, emit, { noGitIgnore: true });
     const advisoryFinding = summarizeKnownAdvisoriesFinding(pkg, npmAuditFindings);
@@ -714,20 +509,26 @@ export async function packageAudit(
     // attack patterns the LLM prompt is structurally blind to: typosquats,
     // install-script payloads, credential-theft hooks. Their findings are
     // appended to the report alongside the agent findings.
-    emit({
-      type: "stage:start",
-      stage: "discovery",
-      message: "Running deterministic malicious-package oracles...",
-    });
-    const maliciousFindings = scanForMaliciousPatterns({
-      packageName: pkg.name,
-      packagePath: pkg.path,
-    });
-    emit({
-      type: "stage:end",
-      stage: "discovery",
-      message: `Malicious-package oracles: ${maliciousFindings.length} finding${maliciousFindings.length === 1 ? "" : "s"}`,
-    });
+    const maliciousFindings =
+      pkg.ecosystem === "npm"
+        ? (() => {
+            emit({
+              type: "stage:start",
+              stage: "discovery",
+              message: "Running deterministic malicious-package oracles...",
+            });
+            const findings = scanForMaliciousPatterns({
+              packageName: pkg.name,
+              packagePath: pkg.path,
+            });
+            emit({
+              type: "stage:end",
+              stage: "discovery",
+              message: `Malicious-package oracles: ${findings.length} finding${findings.length === 1 ? "" : "s"}`,
+            });
+            return findings;
+          })()
+        : [];
 
     // Step 3: AI agent analysis
     const agentResult = await runAuditAgent(
@@ -767,12 +568,13 @@ export async function packageAudit(
     emit({
       type: "stage:end",
       stage: "report",
-      message: `Audit complete: ${summary.totalFindings} findings (${npmAuditFindings.length} npm advisories, ${semgrepFindings.length} semgrep findings)`,
+      message: `Audit complete: ${summary.totalFindings} findings (${npmAuditFindings.length} dependency advisories, ${semgrepFindings.length} semgrep findings)`,
     });
 
     const report: AuditReport & { usage?: { inputTokens: number; outputTokens: number }; estimatedCostUsd?: number } = {
       package: pkg.name,
       version: pkg.version,
+      ecosystem: pkg.ecosystem,
       startedAt: new Date(startTime).toISOString(),
       completedAt: new Date().toISOString(),
       durationMs,

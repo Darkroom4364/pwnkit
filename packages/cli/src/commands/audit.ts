@@ -5,8 +5,9 @@ import { runUnified } from "./run.js";
 export function registerAuditCommand(program: Command): void {
   program
     .command("audit")
-    .description("Audit an npm package for security vulnerabilities")
-    .argument("<package>", "npm package name (e.g. lodash, express)")
+    .description("Audit a package for security vulnerabilities")
+    .argument("<package>", "package name (e.g. lodash, express, requests)")
+    .option("--ecosystem <ecosystem>", "Package ecosystem: npm, pypi", "npm")
     .option("--version <version>", "Specific version to audit (default: latest)")
     .option("--depth <depth>", "Audit depth: quick, default, deep", "default")
     .option("--format <format>", "Output format: terminal, json, md, html, sarif, pdf", "terminal")
@@ -19,6 +20,10 @@ export function registerAuditCommand(program: Command): void {
     .option("--verbose", "Show detailed output", false)
     .option("--timeout <ms>", "AI agent timeout in milliseconds", "600000")
     .action(async (packageName: string, opts: Record<string, string | boolean>) => {
+      const ecosystem = ((opts.ecosystem as string | undefined) ?? "npm").trim().toLowerCase();
+      if (ecosystem !== "npm" && ecosystem !== "pypi") {
+        throw new Error(`Unsupported ecosystem '${ecosystem}'. Valid: npm, pypi.`);
+      }
       let costCeilingUsd: number | undefined;
       const ceilingSource =
         (opts.costCeiling as string | undefined) ?? process.env.PWNKIT_COST_CEILING_USD;
@@ -31,7 +36,7 @@ export function registerAuditCommand(program: Command): void {
       }
       await runUnified({
         target: packageName,
-        targetType: "npm-package",
+        targetType: ecosystem === "pypi" ? "pypi-package" : "npm-package",
         depth: (opts.depth as ScanDepth) ?? "default",
         format: (opts.format === "md" ? "markdown" : opts.format) as OutputFormat,
         runtime: (opts.runtime as RuntimeMode) ?? "auto",

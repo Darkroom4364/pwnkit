@@ -4,6 +4,7 @@ export type ScanDepth = "quick" | "default" | "deep";
 export type OutputFormat = "terminal" | "json" | "markdown" | "html" | "sarif" | "pdf";
 export type RuntimeMode = "api" | "claude" | "codex" | "gemini" | "auto";
 export type ScanMode = "probe" | "deep" | "mcp" | "web";
+export type PackageEcosystem = "npm" | "pypi";
 
 // ── Authentication ──
 
@@ -374,6 +375,7 @@ export interface ReportSummary {
 export interface AuditConfig {
   package: string;
   version?: string;
+  ecosystem?: PackageEcosystem;
   depth: ScanDepth;
   format: OutputFormat;
   runtime?: RuntimeMode;
@@ -420,6 +422,7 @@ export interface TokenUsage {
 export interface AuditReport {
   package: string;
   version: string;
+  ecosystem?: PackageEcosystem;
   startedAt: string;
   completedAt: string;
   durationMs: number;

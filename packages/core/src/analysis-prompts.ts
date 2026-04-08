@@ -16,6 +16,8 @@ export function auditAgentPrompt(
   packagePath: string,
   semgrepResults: SemgrepFinding[],
   npmAuditResults: NpmAuditFinding[],
+  packageKind = "npm package",
+  advisoryLabel = "npm audit",
 ): string {
   const semgrepSection =
     semgrepResults.length > 0
@@ -37,9 +39,9 @@ export function auditAgentPrompt(
               `${i + 1}. [${finding.severity}] ${finding.name}\n   ${finding.title}${finding.range ? `\n   Affected: ${finding.range}` : ""}\n   Via: ${finding.via.join("; ")}${finding.fixAvailable ? `\n   Fix: ${finding.fixAvailable === true ? "available" : finding.fixAvailable}` : ""}${finding.url ? `\n   ${finding.url}` : ""}`,
           )
           .join("\n\n")
-      : "No npm audit advisories were reported for the installed dependency tree.";
+      : `No ${advisoryLabel} advisories were reported for the installed dependency tree.`;
 
-  return `You are a security researcher performing an authorized source code audit of an npm package.
+  return `You are a security researcher performing an authorized source code audit of a ${packageKind}.
 
 PACKAGE: ${packageName}@${packageVersion}
 SOURCE: ${packagePath}
@@ -56,7 +58,7 @@ ${semgrepResults.length} findings from automated scan:
 
 ${semgrepSection}
 
-## npm audit Results
+## ${advisoryLabel} Results
 
 ${npmAuditResults.length} advisories from dependency audit:
 
@@ -81,8 +83,8 @@ For each semgrep finding above:
 4. If exploitable: save a finding with evidence
 5. If not exploitable: skip it (don't save false positives)
 
-### Phase 2: Triage npm audit Advisories
-For each npm audit advisory above:
+### Phase 2: Triage dependency advisories
+For each dependency advisory above:
 1. Determine whether the vulnerable package is the target package or only a transitive dependency
 2. Confirm the vulnerable code path exists in the installed version and is reachable
 3. Note whether the issue is already known/public versus a new source-level bug

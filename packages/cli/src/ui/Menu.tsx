@@ -9,7 +9,7 @@ interface MenuOption {
 
 const options: MenuOption[] = [
   { value: "scan",    label: "Scan a target" },
-  { value: "audit",   label: "Audit an npm package" },
+  { value: "audit",   label: "Audit a package" },
   { value: "review",  label: "Review a codebase" },
   { value: "tui",     label: "Open terminal mission control" },
   { value: "dashboard", label: "Open local mission control" },
@@ -51,7 +51,7 @@ function Menu({ onSelect }: { onSelect: (action: string, target?: string) => voi
           setPlaceholder("https://api.example.com/v1");
         } else if (opt === "audit") {
           setInputLabel("Package name");
-          setPlaceholder("express");
+          setPlaceholder("express or requests");
         } else if (opt === "review") {
           setInputLabel("Repo path or URL");
           setPlaceholder("./my-project");

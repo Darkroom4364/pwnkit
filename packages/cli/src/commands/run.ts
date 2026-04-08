@@ -11,7 +11,7 @@ import { buildShareUrl, checkRuntimeAvailability } from "../utils.js";
 
 export interface RunOptions {
   target: string;
-  targetType?: "npm-package" | "source-code" | "url" | "web-app";
+  targetType?: "npm-package" | "pypi-package" | "source-code" | "url" | "web-app";
   resumeScanId?: string;
   diffBase?: string;
   changedOnly?: boolean;
@@ -64,7 +64,7 @@ interface ResultLinePayload {
 }
 
 function toScanReport(report: any): ScanReport {
-  if (report.targetType === "npm-package") {
+  if (report.targetType === "npm-package" || report.targetType === "pypi-package") {
     return {
       target: `${report.package}@${report.version}`,
       scanDepth: "deep",
@@ -176,7 +176,7 @@ export async function runUnified(opts: RunOptions): Promise<void> {
 
   if (format === "terminal" && process.stdout.isTTY && process.stdin.isTTY) {
     const { renderScanUI } = await import("../ui/renderScan.js");
-    const mode = opts.targetType === "npm-package" ? "audit"
+    const mode = opts.targetType === "npm-package" || opts.targetType === "pypi-package" ? "audit"
       : opts.targetType === "source-code" ? "review"
       : "scan";
     inkUI = renderScanUI({ version: VERSION, target, depth, mode });
@@ -242,7 +242,7 @@ export async function runUnified(opts: RunOptions): Promise<void> {
         if (format === "pdf") {
           await generatePdfReport(toScanReport(reportAny), filePath);
         } else {
-          const output = reportAny.targetType === "npm-package"
+          const output = reportAny.targetType === "npm-package" || reportAny.targetType === "pypi-package"
             ? formatAuditReport(reportAny, format)
             : reportAny.targetType === "source-code"
               ? formatReviewReport(reportAny, format)
@@ -253,7 +253,7 @@ export async function runUnified(opts: RunOptions): Promise<void> {
         const openCmd = process.platform === "darwin" ? "open" : "xdg-open";
         execFile(openCmd, [filePath], () => {});
       } else {
-        const output = reportAny.targetType === "npm-package"
+        const output = reportAny.targetType === "npm-package" || reportAny.targetType === "pypi-package"
           ? formatAuditReport(reportAny, format)
           : reportAny.targetType === "source-code"
             ? formatReviewReport(reportAny, format)

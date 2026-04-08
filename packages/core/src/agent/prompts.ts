@@ -532,6 +532,7 @@ export function researchPrompt(
   semgrepFindings: Array<{ ruleId: string; message: string; path: string; startLine: number }>,
   npmAuditFindings: Array<{ name: string; severity: string; title: string }>,
   targetDescription: string,
+  advisoryLabel = "npm audit",
 ): string {
   const semgrepSection = semgrepFindings.length > 0
     ? semgrepFindings.slice(0, 30).map((f, i) => `  ${i + 1}. [${f.ruleId}] ${f.path}:${f.startLine} — ${f.message}`).join("\n")
@@ -576,7 +577,7 @@ For EACH vulnerability you find, you MUST write a concrete proof-of-concept — 
 ### Semgrep
 ${semgrepSection}
 
-### npm audit
+### ${advisoryLabel}
 ${npmSection}
 
 ## Rules

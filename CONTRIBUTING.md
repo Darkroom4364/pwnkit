@@ -5,7 +5,7 @@ We love contributions! Here's how to get started.
 ## Development Setup
 
 ```bash
-git clone https://github.com/peaktwilight/pwnkit.git
+git clone https://github.com/PwnKit-Labs/pwnkit.git
 cd pwnkit
 pnpm install
 pnpm build        # builds all packages in dependency order + bundles CLI

@@ -62,7 +62,7 @@ function buildIssueBody(finding: Finding): string {
   }
 
   lines.push("---");
-  lines.push(`*Exported by [pwnkit](https://github.com/peaktwilight/pwnkit) | Finding ID: \`${finding.id}\`*`);
+  lines.push(`*Exported by [pwnkit](https://github.com/PwnKit-Labs/pwnkit) | Finding ID: \`${finding.id}\`*`);
 
   return lines.join("\n");
 }

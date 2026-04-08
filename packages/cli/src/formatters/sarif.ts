@@ -90,7 +90,7 @@ export function formatSarif(report: ScanReport): string {
           driver: {
             name: "pwnkit",
             version: VERSION,
-            informationUri: "https://github.com/peaktwilight/pwnkit",
+            informationUri: "https://github.com/PwnKit-Labs/pwnkit",
             rules: Array.from(rulesMap.values()),
           },
         },

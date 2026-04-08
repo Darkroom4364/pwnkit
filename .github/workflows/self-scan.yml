@@ -30,7 +30,6 @@ jobs:
             node packages/cli/dist/index.js review . \
             --format json \
             --runtime api \
-            --model free \
             --depth quick \
             --timeout 300000 \
             "${EXTRA_ARGS[@]}" \
@@ -64,7 +63,14 @@ jobs:
             }
           "
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Match the benchmark workflows: Azure is the primary CI runtime.
+          # Do NOT set OPENROUTER_API_KEY here — pwnkit prefers OpenRouter
+          # over Azure when both are present, which can silently route the
+          # self-scan to a slower or less deterministic provider/model.
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_BASE_URL: ${{ secrets.AZURE_OPENAI_BASE_URL }}
+          AZURE_OPENAI_MODEL: ${{ secrets.AZURE_OPENAI_MODEL }}
+          AZURE_OPENAI_WIRE_API: ${{ secrets.AZURE_OPENAI_WIRE_API }}
 
       # Print results in CI
       - name: Show scan summary

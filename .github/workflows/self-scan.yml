@@ -9,6 +9,7 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
@@ -26,12 +27,12 @@ jobs:
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
             EXTRA_ARGS+=(--changed-only --diff-base "${{ github.event.before }}")
           fi
-          timeout --signal=TERM --kill-after=30s 330s \
+          timeout --signal=TERM --kill-after=30s 480s \
             node packages/cli/dist/index.js review . \
             --format json \
             --runtime api \
             --depth quick \
-            --timeout 300000 \
+            --timeout 420000 \
             "${EXTRA_ARGS[@]}" \
             2> scan-stderr.log | tee scan-results.json
           status=${PIPESTATUS[0]}

@@ -10,12 +10,12 @@ import { installPackageForEcosystem } from "./package-ecosystems.js";
 // Types
 // ---------------------------------------------------------------------------
 
-export type TargetType = "npm-package" | "pypi-package" | "source-code" | "url" | "web-app";
+export type TargetType = "npm-package" | "pypi-package" | "cargo-package" | "source-code" | "url" | "web-app";
 
 export interface PrepareResult {
   targetType: TargetType;
   resolvedTarget: string; // local path or URL
-  packageInfo?: { name: string; version: string; path: string; tempDir: string; ecosystem: "npm" | "pypi" };
+  packageInfo?: { name: string; version: string; path: string; tempDir: string; ecosystem: "npm" | "pypi" | "cargo" };
   repoPath?: string;
   cleanup: () => void;
 }
@@ -53,7 +53,7 @@ export function detectTargetType(target: string): TargetType {
 // ---------------------------------------------------------------------------
 
 interface InstalledPackage {
-  ecosystem: "npm" | "pypi";
+  ecosystem: "npm" | "pypi" | "cargo";
   name: string;
   version: string;
   path: string;
@@ -64,7 +64,7 @@ interface InstalledPackage {
  * Install a package in a temporary directory and return its metadata.
  */
 function installPackage(
-  ecosystem: "npm" | "pypi",
+  ecosystem: "npm" | "pypi" | "cargo",
   packageName: string,
   requestedVersion: string | undefined,
   emit: ScanListener,
@@ -198,6 +198,22 @@ export async function prepare(
 
     case "pypi-package": {
       const pkg = installPackage("pypi", target, opts.packageVersion, emit);
+      return {
+        targetType: type,
+        resolvedTarget: pkg.path,
+        packageInfo: pkg,
+        cleanup: () => {
+          try {
+            rmSync(pkg.tempDir, { recursive: true, force: true });
+          } catch {
+            // ignore
+          }
+        },
+      };
+    }
+
+    case "cargo-package": {
+      const pkg = installPackage("cargo", target, opts.packageVersion, emit);
       return {
         targetType: type,
         resolvedTarget: pkg.path,

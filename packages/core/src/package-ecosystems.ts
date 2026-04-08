@@ -8,7 +8,7 @@ import type { ScanListener } from "./scanner.js";
 import { restoreHistoricalPackageFixture, shouldUseHistoricalPackageFallback } from "./historical-package-fallback.js";
 import { bufferToString } from "./shared-analysis.js";
 
-export type PackageEcosystem = "npm" | "pypi";
+export type PackageEcosystem = "npm" | "pypi" | "cargo";
 
 export interface InstalledPackage {
   ecosystem: PackageEcosystem;
@@ -129,6 +129,54 @@ function parsePipAuditOutput(rawOutput: string): NpmAuditFinding[] {
       }
     }
     return findings;
+  } catch {
+    return [];
+  }
+}
+
+function severityFromCvssScore(score: number | undefined): Severity {
+  if (typeof score !== "number" || !Number.isFinite(score)) return "high";
+  if (score >= 9) return "critical";
+  if (score >= 7) return "high";
+  if (score >= 4) return "medium";
+  if (score > 0) return "low";
+  return "info";
+}
+
+function parseCargoAuditOutput(rawOutput: string): NpmAuditFinding[] {
+  if (!rawOutput.trim()) return [];
+
+  try {
+    const parsed = JSON.parse(rawOutput) as {
+      vulnerabilities?: {
+        list?: Array<{
+          package?: { name?: string; version?: string };
+          advisory?: {
+            id?: string;
+            title?: string;
+            aliases?: string[];
+            url?: string;
+            cvss?: number;
+          };
+          versions?: { patched?: string[] };
+        }>;
+      };
+    };
+
+    return (parsed.vulnerabilities?.list ?? []).map((entry) => {
+      const aliases = entry.advisory?.aliases ?? [];
+      const source = entry.advisory?.id ?? aliases[0];
+      return {
+        name: String(entry.package?.name ?? "unknown"),
+        severity: severityFromCvssScore(entry.advisory?.cvss),
+        title: String(entry.advisory?.title ?? entry.advisory?.id ?? "cargo audit advisory"),
+        range: entry.package?.version,
+        source,
+        url: entry.advisory?.url,
+        via: [source, ...aliases].filter(Boolean) as string[],
+        fixAvailable: entry.versions?.patched?.[0] ?? false,
+      };
+    });
   } catch {
     return [];
   }
@@ -390,6 +438,94 @@ function installPypiPackage(
   };
 }
 
+function resolveCargoVersion(packageName: string, requestedVersion: string | undefined): string {
+  if (requestedVersion) return requestedVersion;
+
+  const raw = execFileSync("curl", ["-fsSL", `https://crates.io/api/v1/crates/${packageName}`], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 60_000,
+  });
+  const parsed = JSON.parse(raw) as {
+    crate?: { max_stable_version?: string; max_version?: string; newest_version?: string };
+  };
+  return (
+    parsed.crate?.max_stable_version ??
+    parsed.crate?.max_version ??
+    parsed.crate?.newest_version ??
+    "latest"
+  );
+}
+
+function installCargoPackage(
+  packageName: string,
+  requestedVersion: string | undefined,
+  emit: ScanListener,
+): InstalledPackage {
+  const tempDir = join(tmpdir(), `pwnkit-audit-${randomUUID().slice(0, 8)}`);
+  const downloadDir = join(tempDir, "downloads");
+  const extractDir = join(tempDir, "src");
+  mkdirSync(downloadDir, { recursive: true });
+  mkdirSync(extractDir, { recursive: true });
+
+  const version = resolveCargoVersion(packageName, requestedVersion);
+  emit({ type: "stage:start", stage: "discovery", message: `Downloading crates.io crate ${packageName}@${version}...` });
+
+  try {
+    execFileSync(
+      "curl",
+      ["-fsSL", `https://crates.io/api/v1/crates/${packageName}/${version}/download`, "-o", join(downloadDir, `${packageName}-${version}.crate`)],
+      {
+        cwd: tempDir,
+        timeout: 120_000,
+        stdio: "pipe",
+      },
+    );
+  } catch (err) {
+    rmSync(tempDir, { recursive: true, force: true });
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to download ${packageName}@${version} from crates.io: ${msg}`);
+  }
+
+  const archivePath = join(downloadDir, `${packageName}-${version}.crate`);
+  extractSingleArchive(archivePath, extractDir);
+  const scopePath = pickPythonScopePath(extractDir);
+
+  const cargoTomlPath = join(scopePath, "Cargo.toml");
+  let resolvedVersion = version;
+  if (existsSync(cargoTomlPath)) {
+    const content = readFileSync(cargoTomlPath, "utf8");
+    const match = content.match(/^\s*version\s*=\s*["']([^"']+)["']/m);
+    resolvedVersion = match?.[1] ?? version;
+  }
+
+  writeFileSync(
+    join(tempDir, "Cargo.toml"),
+    `[package]\nname = "pwnkit-cargo-audit"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\n${packageName} = "${resolvedVersion}"\n`,
+    "utf8",
+  );
+  mkdirSync(join(tempDir, "src"), { recursive: true });
+  writeFileSync(join(tempDir, "src", "main.rs"), "fn main() {}\n", "utf8");
+  try {
+    execFileSync("cargo", ["generate-lockfile"], {
+      cwd: tempDir,
+      timeout: 180_000,
+      stdio: "pipe",
+    });
+  } catch {
+    // Best-effort: advisory lookup can still degrade to OSV only.
+  }
+
+  emit({ type: "stage:end", stage: "discovery", message: `Prepared ${packageName}@${resolvedVersion} from crates.io` });
+  return {
+    ecosystem: "cargo",
+    name: packageName,
+    version: resolvedVersion,
+    path: scopePath,
+    tempDir,
+  };
+}
+
 export function installPackageForEcosystem(
   ecosystem: PackageEcosystem,
   rawPackageName: string,
@@ -397,9 +533,9 @@ export function installPackageForEcosystem(
   emit: ScanListener,
 ): InstalledPackage {
   const { packageName, version } = splitPackageSpec(rawPackageName, requestedVersion);
-  return ecosystem === "pypi"
-    ? installPypiPackage(packageName, version, emit)
-    : installNpmPackage(packageName, version, emit);
+  if (ecosystem === "pypi") return installPypiPackage(packageName, version, emit);
+  if (ecosystem === "cargo") return installCargoPackage(packageName, version, emit);
+  return installNpmPackage(packageName, version, emit);
 }
 
 export function runDependencyAuditForEcosystem(
@@ -407,6 +543,46 @@ export function runDependencyAuditForEcosystem(
   projectDir: string,
   emit: ScanListener,
 ): NpmAuditFinding[] {
+  if (ecosystem === "cargo") {
+    emit({ type: "stage:start", stage: "discovery", message: "Running cargo audit..." });
+    const commands: Array<{ cmd: string; args: string[] }> = [
+      { cmd: "cargo", args: ["audit", "--json", "--stale", "--no-fetch", "-f", "Cargo.lock"] },
+      { cmd: "cargo-audit", args: ["--json", "--stale", "--no-fetch", "-f", "Cargo.lock"] },
+    ];
+    let rawOutput = "";
+    let sawExecutable = false;
+    for (const command of commands) {
+      try {
+        rawOutput = execFileSync(command.cmd, command.args, {
+          cwd: projectDir,
+          timeout: 60_000,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        });
+        sawExecutable = true;
+        break;
+      } catch (err: any) {
+        if (err && err.code === "ENOENT") {
+          continue;
+        }
+        sawExecutable = true;
+        rawOutput = (err && typeof err.stdout === "string" ? err.stdout : "") || "";
+        if (rawOutput) break;
+      }
+    }
+    if (!sawExecutable && !rawOutput) {
+      emit({ type: "stage:end", stage: "discovery", message: "cargo audit unavailable" });
+      return [];
+    }
+    if (!rawOutput) {
+      emit({ type: "stage:end", stage: "discovery", message: "cargo audit unavailable" });
+      return [];
+    }
+    const findings = parseCargoAuditOutput(rawOutput);
+    emit({ type: "stage:end", stage: "discovery", message: `cargo audit: ${findings.length} advisories` });
+    return findings;
+  }
+
   if (ecosystem === "pypi") {
     emit({ type: "stage:start", stage: "discovery", message: "Running pip-audit..." });
     const commands: Array<{ cmd: string; args: string[] }> = [

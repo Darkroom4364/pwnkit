@@ -20,7 +20,7 @@ export interface StaticAnalysisResult {
 /**
  * Run static analysis tools against a prepared target.
  *
- * - npm-package / pypi-package: semgrep + dependency audit
+ * - npm-package / pypi-package / cargo-package: semgrep + dependency audit
  * - source-code: semgrep only
  * - url / web-app: skip (return empty results)
  */
@@ -40,6 +40,16 @@ export async function runStaticAnalysis(
     }
 
     case "pypi-package": {
+      const semgrepFindings = runSemgrepScan(prepared.resolvedTarget, emit, {
+        noGitIgnore: true,
+      });
+      const npmAuditFindings = prepared.packageInfo
+        ? runDependencyAuditForEcosystem(prepared.packageInfo.ecosystem, prepared.packageInfo.tempDir, emit)
+        : [];
+      return { semgrepFindings, npmAuditFindings };
+    }
+
+    case "cargo-package": {
       const semgrepFindings = runSemgrepScan(prepared.resolvedTarget, emit, {
         noGitIgnore: true,
       });

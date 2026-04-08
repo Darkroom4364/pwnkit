@@ -135,7 +135,7 @@ export function parseOsvAdvisories(
 export async function queryOsvAdvisories(
   packageName: string,
   version: string,
-  ecosystem: "npm" | "pypi" = "npm",
+  ecosystem: "npm" | "pypi" | "cargo" = "npm",
   emit?: ScanListener,
 ): Promise<NpmAuditFinding[]> {
   emit?.({
@@ -149,7 +149,10 @@ export async function queryOsvAdvisories(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        package: { ecosystem: ecosystem === "pypi" ? "PyPI" : "npm", name: packageName },
+        package: {
+          ecosystem: ecosystem === "pypi" ? "PyPI" : ecosystem === "cargo" ? "crates.io" : "npm",
+          name: packageName,
+        },
         version,
       }),
     });
@@ -265,7 +268,12 @@ function buildCliAuditPrompt(
   semgrepFindings: SemgrepFinding[],
   npmAuditFindings: NpmAuditFinding[],
 ): string {
-  const auditLabel = pkg.ecosystem === "pypi" ? "pip-audit / dependency audit" : "npm audit";
+  const auditLabel =
+    pkg.ecosystem === "pypi"
+      ? "pip-audit / dependency audit"
+      : pkg.ecosystem === "cargo"
+        ? "cargo audit / dependency audit"
+        : "npm audit";
   const semgrepContext = semgrepFindings.length > 0
     ? semgrepFindings
         .slice(0, 30)
@@ -280,7 +288,7 @@ function buildCliAuditPrompt(
         .join("\n")
     : "  None.";
 
-  return `Audit the ${pkg.ecosystem === "pypi" ? "PyPI package" : "npm package"} at ${pkg.path} (${pkg.name}@${pkg.version}).
+  return `Audit the ${pkg.ecosystem === "pypi" ? "PyPI package" : pkg.ecosystem === "cargo" ? "crates.io crate" : "npm package"} at ${pkg.path} (${pkg.name}@${pkg.version}).
 
 Read the source code, look for: prototype pollution, ReDoS, path traversal, injection, unsafe deserialization, missing validation. Map data flow from untrusted input to sensitive operations. Report any security findings with severity and PoC suggestions.
 
@@ -354,7 +362,12 @@ function buildDirectApiAuditPrompt(
   semgrepFindings: SemgrepFinding[],
   npmAuditFindings: NpmAuditFinding[],
 ): string {
-  const auditLabel = pkg.ecosystem === "pypi" ? "Dependency audit" : "npm audit";
+  const auditLabel =
+    pkg.ecosystem === "pypi"
+      ? "Dependency audit"
+      : pkg.ecosystem === "cargo"
+        ? "cargo audit / dependency audit"
+        : "npm audit";
   const sourceFiles = collectSourceFiles(pkg.path);
   const sourceBlocks: string[] = [];
   let totalChars = 0;
@@ -387,7 +400,7 @@ function buildDirectApiAuditPrompt(
         .join("\n")
     : "  None.";
 
-  return `You are a security researcher performing an authorized source code audit of the ${pkg.ecosystem === "pypi" ? "PyPI package" : "npm package"} "${pkg.name}@${pkg.version}".
+  return `You are a security researcher performing an authorized source code audit of the ${pkg.ecosystem === "pypi" ? "PyPI package" : pkg.ecosystem === "cargo" ? "crates.io crate" : "npm package"} "${pkg.name}@${pkg.version}".
 
 ## Semgrep findings:
 ${semgrepContext}
@@ -455,10 +468,10 @@ async function runAuditAgent(
       pkg.path,
       semgrepFindings,
       npmAuditFindings,
-      pkg.ecosystem === "pypi" ? "PyPI package" : "npm package",
-      pkg.ecosystem === "pypi" ? "pip-audit / dependency audit" : "npm audit",
+      pkg.ecosystem === "pypi" ? "PyPI package" : pkg.ecosystem === "cargo" ? "crates.io crate" : "npm package",
+      pkg.ecosystem === "pypi" ? "pip-audit / dependency audit" : pkg.ecosystem === "cargo" ? "cargo audit / dependency audit" : "npm audit",
     ),
-    cliSystemPrompt: `You are a security researcher performing an authorized ${pkg.ecosystem === "pypi" ? "PyPI" : "npm"} package audit. Be thorough and precise. Only report real, exploitable vulnerabilities.`,
+    cliSystemPrompt: `You are a security researcher performing an authorized ${pkg.ecosystem === "pypi" ? "PyPI" : pkg.ecosystem === "cargo" ? "crates.io" : "npm"} package audit. Be thorough and precise. Only report real, exploitable vulnerabilities.`,
     directApiPrompt: buildDirectApiAuditPrompt(pkg, semgrepFindings, npmAuditFindings),
   });
 }

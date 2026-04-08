@@ -32,7 +32,7 @@ import {
 
 export interface PipelineOptions {
   target: string;
-  targetType?: "npm-package" | "pypi-package" | "source-code" | "url" | "web-app";
+  targetType?: "npm-package" | "pypi-package" | "cargo-package" | "source-code" | "url" | "web-app";
   depth: ScanDepth;
   format: OutputFormat;
   runtime?: RuntimeMode;
@@ -79,10 +79,10 @@ export interface PipelineReport {
 interface PrepareResult {
   scopePath: string;
   resolvedTarget: string;
-  resolvedType: "npm-package" | "pypi-package" | "source-code" | "url" | "web-app";
+  resolvedType: "npm-package" | "pypi-package" | "cargo-package" | "source-code" | "url" | "web-app";
   packageName?: string;
   packageVersion?: string;
-  packageEcosystem?: "npm" | "pypi";
+  packageEcosystem?: "npm" | "pypi" | "cargo";
   tempDir?: string;
   needsCleanup: boolean;
 }
@@ -125,6 +125,10 @@ function prepareTarget(
 
   if (targetType === "pypi-package") {
     return preparePythonPackage(opts.target, opts.packageVersion, emit);
+  }
+
+  if (targetType === "cargo-package") {
+    return prepareCargoPackage(opts.target, opts.packageVersion, emit);
   }
 
   if (targetType === "source-code") {
@@ -183,6 +187,24 @@ function preparePythonPackage(
     packageName: pkg.name,
     packageVersion: pkg.version,
     packageEcosystem: "pypi",
+    tempDir: pkg.tempDir,
+    needsCleanup: true,
+  };
+}
+
+function prepareCargoPackage(
+  packageName: string,
+  requestedVersion: string | undefined,
+  emit: ScanListener,
+): PrepareResult {
+  const pkg = installPackageForEcosystem("cargo", packageName, requestedVersion, emit);
+  return {
+    scopePath: pkg.path,
+    resolvedTarget: `cargo:${pkg.name}@${pkg.version}`,
+    resolvedType: "cargo-package",
+    packageName: pkg.name,
+    packageVersion: pkg.version,
+    packageEcosystem: "cargo",
     tempDir: pkg.tempDir,
     needsCleanup: true,
   };
@@ -548,13 +570,14 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
     if (
       prepared.resolvedType === "source-code" ||
       prepared.resolvedType === "npm-package" ||
-      prepared.resolvedType === "pypi-package"
+      prepared.resolvedType === "pypi-package" ||
+      prepared.resolvedType === "cargo-package"
     ) {
       try {
         semgrepFindings = runSemgrepScan(
           prepared.scopePath,
           analyzeEmit,
-          prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package"
+          prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package" || prepared.resolvedType === "cargo-package"
             ? { noGitIgnore: true }
             : opts.changedOnly && changedFiles.length > 0
               ? { paths: changedFiles.map((path) => join(prepared.scopePath, path)) }
@@ -569,7 +592,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
 
     // dependency audit (package targets only, need the temp project dir)
     if (
-      (prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package") &&
+      (prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package" || prepared.resolvedType === "cargo-package") &&
       prepared.tempDir &&
       prepared.packageEcosystem
     ) {
@@ -669,12 +692,18 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
     } else if (
       prepared.resolvedType === "npm-package" ||
       prepared.resolvedType === "pypi-package" ||
+      prepared.resolvedType === "cargo-package" ||
       prepared.resolvedType === "source-code"
     ) {
       const targetLabel = prepared.resolvedType === "source-code"
         ? "repository"
-        : `${prepared.packageEcosystem === "pypi" ? "PyPI" : "npm"} package ${prepared.packageName}@${prepared.packageVersion}`;
-      const advisoryLabel = prepared.packageEcosystem === "pypi" ? "pip-audit / dependency audit" : "npm audit";
+        : `${prepared.packageEcosystem === "pypi" ? "PyPI" : prepared.packageEcosystem === "cargo" ? "crates.io" : "npm"} package ${prepared.packageName}@${prepared.packageVersion}`;
+      const advisoryLabel =
+        prepared.packageEcosystem === "pypi"
+          ? "pip-audit / dependency audit"
+          : prepared.packageEcosystem === "cargo"
+            ? "cargo audit / dependency audit"
+            : "npm audit";
 
       const agentSystemPrompt = researchPrompt(
         prepared.scopePath,
@@ -745,7 +774,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
     // ── PHASE 4: VERIFY (parallel blind agents) ──
     if (
       findings.length > 0 &&
-      (prepared.resolvedType === "source-code" || prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package")
+      (prepared.resolvedType === "source-code" || prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package" || prepared.resolvedType === "cargo-package")
     ) {
       const canSkipVerify = existingVerifiedFindings.length === findings.length && findings.length > 0;
       emit({
@@ -905,7 +934,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
       findings: confirmedFindings,
       warnings,
       // Backwards-compat extras
-      ...(prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package"
+      ...(prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package" || prepared.resolvedType === "cargo-package"
         ? {
             package: prepared.packageName,
             version: prepared.packageVersion,

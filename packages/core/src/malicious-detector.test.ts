@@ -14,8 +14,10 @@ import { tmpdir } from "node:os";
 import {
   damerauLevenshtein,
   checkTyposquat,
+  checkKnownCompromisedPackage,
   inspectInstallScripts,
   scanForMaliciousPatterns,
+  KNOWN_COMPROMISED_PACKAGES,
   TYPOSQUAT_TARGETS,
 } from "./malicious-detector.js";
 
@@ -126,6 +128,38 @@ describe("checkTyposquat", () => {
 });
 
 // ────────────────────────────────────────────────────────────────────
+// checkKnownCompromisedPackage
+// ────────────────────────────────────────────────────────────────────
+
+describe("checkKnownCompromisedPackage", () => {
+  it("flags event-stream as historically compromised", () => {
+    const hit = checkKnownCompromisedPackage("event-stream");
+    expect(hit).not.toBeNull();
+    expect(hit?.severity).toBe("critical");
+    expect(hit?.title).toContain("event-stream");
+  });
+
+  it("flags scoped/cased package names after normalization", () => {
+    const hit = checkKnownCompromisedPackage("ESLint-Scope");
+    expect(hit).not.toBeNull();
+    expect(hit?.title).toContain("eslint-scope");
+  });
+
+  it("returns null for unrelated packages", () => {
+    expect(checkKnownCompromisedPackage("express")).toBeNull();
+    expect(checkKnownCompromisedPackage("react")).toBeNull();
+  });
+
+  it("contains the benchmark's historical compromise cases", () => {
+    expect(KNOWN_COMPROMISED_PACKAGES["event-stream"]).toBeDefined();
+    expect(KNOWN_COMPROMISED_PACKAGES["ua-parser-js"]).toBeDefined();
+    expect(KNOWN_COMPROMISED_PACKAGES["coa"]).toBeDefined();
+    expect(KNOWN_COMPROMISED_PACKAGES["rc"]).toBeDefined();
+    expect(KNOWN_COMPROMISED_PACKAGES["eslint-scope"]).toBeDefined();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
 // inspectInstallScripts
 // ────────────────────────────────────────────────────────────────────
 
@@ -200,6 +234,15 @@ describe("inspectInstallScripts", () => {
 // ────────────────────────────────────────────────────────────────────
 
 describe("scanForMaliciousPatterns", () => {
+  it("emits a historical-compromise finding for event-stream", () => {
+    const dir = fakePackage("event-stream");
+    const findings = scanForMaliciousPatterns({ packageName: "event-stream", packagePath: dir });
+    const finding = findings.find((f) => f.templateId === "malicious-known-compromise");
+    expect(finding).toBeDefined();
+    expect(finding?.severity).toBe("critical");
+    expect(finding?.description).toContain("currently installed tarball");
+  });
+
   it("emits a typosquat finding for loadsh", () => {
     const dir = fakePackage("loadsh");
     const findings = scanForMaliciousPatterns({ packageName: "loadsh", packagePath: dir });

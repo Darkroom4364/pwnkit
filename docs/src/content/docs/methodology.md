@@ -32,7 +32,7 @@ The lesson: **a single XBOW solve is an anecdote, not a benchmark.**
 Single-shot results cannot be promoted to defaults. That is what the
 `--repeat N` harness ([issue #81]) exists to prevent.
 
-[issue #81]: https://github.com/peaktwilight/pwnkit/issues/81
+[issue #81]: https://github.com/PwnKit-Labs/pwnkit/issues/81
 
 ## Three methodologies, one raw dataset
 
@@ -135,7 +135,7 @@ Specifically, every XBOW result we quote comes with:
   (and whether any cell hit it)
 
 That is what the JSON schema in
-[`packages/benchmark/README.md`](https://github.com/peaktwilight/pwnkit/blob/main/packages/benchmark/README.md)
+[`packages/benchmark/README.md`](https://github.com/PwnKit-Labs/pwnkit/blob/main/packages/benchmark/README.md)
 emits when you run with `--repeat > 1`, and it is what the CI workflow
 uploads as a build artifact on every scheduled run.
 

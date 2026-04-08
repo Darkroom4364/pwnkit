@@ -144,7 +144,7 @@ flowchart TD
 | Holding-it-wrong filter | `packages/core/src/triage/holding-it-wrong.ts` | Rejects findings where the "vulnerability" is the documented behaviour of the called function (e.g. `eval`, `writeFile`, `compile`). Downgrades to `info`. |
 | Feature extractor | `packages/core/src/triage/feature-extractor.ts` | 45 handcrafted features (response, request, metadata, text quality, cross-field) for fast first-pass signal. |
 | Reachability gate | `packages/core/src/triage/reachability.ts` | Suppresses findings whose sink is not reachable from an application entry point. Open-source mirror of Endor Labs' "Code API" moat. |
-| Multi-modal agreement | `packages/core/src/triage/multi-modal.ts` | Cross-validates against [foxguard](https://github.com/peaktwilight/foxguard) (Rust pattern scanner). Both fire = strong signal; foxguard silent on scanned file = likely FP. |
+| Multi-modal agreement | `packages/core/src/triage/multi-modal.ts` | Cross-validates against [foxguard](https://github.com/PwnKit-Labs/foxguard) (Rust pattern scanner). Both fire = strong signal; foxguard silent on scanned file = likely FP. |
 | Per-class oracles | `packages/core/src/triage/oracles.ts` | Deterministic exploit oracles per category (SQLi, XSS, SSRF, RCE, path traversal, IDOR). Verified = accept with no LLM call. |
 | PoV gate | `packages/core/src/triage/pov-gate.ts` | Narrowly-scoped mini agent loop must produce a working executable PoC. No PoV = downgrade to `info`. Based on "All You Need Is A Fuzzing Brain". |
 | Structured verify pipeline | `packages/core/src/triage/verify-pipeline.ts` | 4-step LLM verification: reachability -> payload validation -> impact assessment -> exploit confirmation. Category-specific addendums per vuln class. |

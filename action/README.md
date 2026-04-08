@@ -3,7 +3,7 @@
 The supported GitHub Action entrypoint is the repository root:
 
 ```yaml
-uses: peaktwilight/pwnkit@main
+uses: PwnKit-Labs/pwnkit@main
 ```
 
 The legacy `action/` path has been retired to avoid drift between two different action contracts.

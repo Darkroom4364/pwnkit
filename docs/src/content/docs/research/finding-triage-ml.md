@@ -138,7 +138,7 @@ Deterministic, category-specific exploit oracles: SQLi, reflected XSS, SSRF, RCE
 
 ### Layer 1.95: Multi-Modal Agreement (foxguard × pwnkit) — SHIPPED
 
-Cross-validate every pwnkit finding against [foxguard](https://github.com/peaktwilight/foxguard), the Rust pattern scanner. If foxguard fires on the same file (and ideally the same category) → strong signal the finding is real. If foxguard scanned the file but was silent → likely false positive. This is the open-source mirror of Endor Labs' "neural + rules must agree" architecture.
+Cross-validate every pwnkit finding against [foxguard](https://github.com/PwnKit-Labs/foxguard), the Rust pattern scanner. If foxguard fires on the same file (and ideally the same category) → strong signal the finding is real. If foxguard scanned the file but was silent → likely false positive. This is the open-source mirror of Endor Labs' "neural + rules must agree" architecture.
 
 **Implementation:** `packages/core/src/triage/multi-modal.ts` — `checkMultiModalAgreement`, `fuseTriageSignals`, `parseFoxguardSarif`, `detectFoxguard`. **Unique to pwnkit: no other open-source agent runs a second, independent scanner for cross-validation.**
 

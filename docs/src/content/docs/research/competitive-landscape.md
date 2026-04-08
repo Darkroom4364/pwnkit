@@ -56,7 +56,7 @@ Endor Labs' disclosed ~95% false-positive elimination depends on a proprietary "
 
 ### foxguard × pwnkit cross-validation (unique)
 
-Endor Labs' triage accuracy comes from forcing neural + rules to agree. pwnkit has the open-source version: for every finding, run [foxguard](https://github.com/peaktwilight/foxguard) (Rust pattern scanner) against the same source tree and require agreement. Both fire → strong signal. Foxguard silent → likely false positive. Nobody else in the open-source pentest-agent space runs a second, independent scanner for cross-validation — this is unique to the pwnkit / foxguard / opensoar trinity.
+Endor Labs' triage accuracy comes from forcing neural + rules to agree. pwnkit has the open-source version: for every finding, run [foxguard](https://github.com/PwnKit-Labs/foxguard) (Rust pattern scanner) against the same source tree and require agreement. Both fire → strong signal. Foxguard silent → likely false positive. Nobody else in the open-source pentest-agent space runs a second, independent scanner for cross-validation — this is unique to the pwnkit / foxguard / opensoar trinity.
 
 Implementation: `packages/core/src/triage/multi-modal.ts`.
 

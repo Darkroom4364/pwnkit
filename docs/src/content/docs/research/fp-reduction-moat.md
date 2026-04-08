@@ -159,7 +159,7 @@ runtime filters. The collector can emit labeled rows from:
 - blind-verify statuses in the local SQLite DB
 
 See [Triage Dataset](/research/triage-dataset/) for the JSONL schema and
-[issue #67](https://github.com/peaktwilight/pwnkit/issues/67) for the
+[issue #67](https://github.com/PwnKit-Labs/pwnkit/issues/67) for the
 paper-plan that uses it.
 
 ### Conservative by default

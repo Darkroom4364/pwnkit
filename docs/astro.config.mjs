@@ -26,7 +26,7 @@ export default defineConfig({
         {
           icon: "github",
           label: "GitHub",
-          href: "https://github.com/peaktwilight/pwnkit",
+          href: "https://github.com/PwnKit-Labs/pwnkit",
         },
         {
           icon: "external",

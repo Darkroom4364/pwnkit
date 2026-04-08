@@ -105,7 +105,7 @@ pwnkit supports multiple output formats:
 In CI (GitHub Action), set `format: sarif` to populate the Security tab:
 
 ```yaml
-- uses: peaktwilight/pwnkit@main
+- uses: PwnKit-Labs/pwnkit@main
   with:
     mode: review
     path: .
@@ -162,7 +162,7 @@ control the container image and bootstrap behavior:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `PWNKIT_DOCKER_IMAGE` | `ghcr.io/peaktwilight/pwnkit:latest` | Override the executor image |
+| `PWNKIT_DOCKER_IMAGE` | `ghcr.io/PwnKit-Labs/pwnkit:latest` | Override the executor image |
 | `PWNKIT_DOCKER_BOOTSTRAP_TOOLS` | auto | Force or disable apt-based tool bootstrap inside the container |
 
 Bootstrap rules:

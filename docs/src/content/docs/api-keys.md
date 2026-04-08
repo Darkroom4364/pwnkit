@@ -41,7 +41,7 @@ Then reload your shell or run `source ~/.zshrc`.
 Add the key as a repository secret, then reference it in your workflow:
 
 ```yaml
-- uses: peaktwilight/pwnkit@main
+- uses: PwnKit-Labs/pwnkit@main
   with:
     mode: review
     path: .

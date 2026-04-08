@@ -70,7 +70,7 @@ Key improvements over previous runs: LLM-based context compaction, 3 retries (up
 
 ### Flag catalogue (sample)
 
-The table below is a representative sample of extracted flags across local + CI runs. The current best-of-N aggregate is **96 solved challenges** (91 black-box + 5 white-box-only) across the full 104-challenge suite. For raw artifacts, see [`packages/benchmark/results`](https://github.com/peaktwilight/pwnkit/tree/main/packages/benchmark/results).
+The table below is a representative sample of extracted flags across local + CI runs. The current best-of-N aggregate is **96 solved challenges** (91 black-box + 5 white-box-only) across the full 104-challenge suite. For raw artifacts, see [`packages/benchmark/results`](https://github.com/PwnKit-Labs/pwnkit/tree/main/packages/benchmark/results).
 
 | # | Challenge | Source |
 |---|-----------|--------|

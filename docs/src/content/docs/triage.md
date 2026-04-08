@@ -136,7 +136,7 @@ chance. A tree-sitter-based interprocedural upgrade is planned.
 **Module:** `triage/multi-modal.ts`
 **Flag:** `PWNKIT_FEATURE_MULTIMODAL=1`
 
-When both a source tree and the [foxguard](https://github.com/peaktwilight/foxguard)
+When both a source tree and the [foxguard](https://github.com/PwnKit-Labs/foxguard)
 binary are available, pwnkit runs foxguard against the same code and
 cross-checks every finding against foxguard's SARIF output.
 

@@ -6,5 +6,5 @@ runs:
   steps:
     - shell: bash
       run: |
-        echo "::error::The legacy 'action/' entrypoint has been retired. Use 'peaktwilight/pwnkit@<ref>' from the repository root instead."
+        echo "::error::The legacy 'action/' entrypoint has been retired. Use 'PwnKit-Labs/pwnkit@<ref>' from the repository root instead."
         exit 1

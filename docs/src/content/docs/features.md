@@ -171,8 +171,8 @@ pwnkit ships a full triage pipeline with 11 independent layers. See
 
 pwnkit is one leg of an open-source three-part security stack:
 
-- **[pwnkit](https://github.com/peaktwilight/pwnkit)** — AI agent pentester (detect)
-- **[foxguard](https://github.com/peaktwilight/foxguard)** — Rust security scanner (prevent)
+- **[pwnkit](https://github.com/PwnKit-Labs/pwnkit)** — AI agent pentester (detect)
+- **[foxguard](https://github.com/PwnKit-Labs/foxguard)** — Rust security scanner (prevent)
 - **[opensoar](https://github.com/opensoar-hq/opensoar-core)** — Python-native SOAR platform (respond)
 
 With `PWNKIT_FEATURE_MULTIMODAL=1`, pwnkit automatically cross-validates

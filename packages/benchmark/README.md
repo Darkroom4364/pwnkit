@@ -105,7 +105,7 @@ approximation) because N is small and rates can be near 0 or 1, where
 Wald produces degenerate intervals like `[0, 0]` or extends outside
 `[0, 1]`.
 
-[#81]: https://github.com/peaktwilight/pwnkit/issues/81
+[#81]: https://github.com/PwnKit-Labs/pwnkit/issues/81
 
 #### Flags
 

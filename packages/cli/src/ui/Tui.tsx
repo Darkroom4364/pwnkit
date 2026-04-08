@@ -251,6 +251,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
   const [pane, setPane] = useState<Pane>("scans");
   const [mode, setMode] = useState<InputMode>("normal");
   const [filter, setFilter] = useState("");
+  const [familyFocus, setFamilyFocus] = useState(false);
   const [scanIndex, setScanIndex] = useState(0);
   const [findingIndex, setFindingIndex] = useState(0);
   const [detailOffset, setDetailOffset] = useState(0);
@@ -307,9 +308,20 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
     );
   }, [filter, state.scans]);
   const selectedScan = scans[scanIndex] ?? null;
+  const selectedScanFindings = useMemo(() => {
+    if (!selectedScan) return [] as FindingRow[];
+    return state.findings.filter((finding) => finding.scanId === selectedScan.id);
+  }, [selectedScan, state.findings]);
+  const selectedScanCandidate = selectedScanFindings[findingIndex] ?? null;
+  const activeFingerprint =
+    familyFocus && selectedScanCandidate?.fingerprint
+      ? selectedScanCandidate.fingerprint
+      : null;
   const findingsForScan = useMemo(() => {
     if (!selectedScan) return [] as FindingRow[];
-    const source = state.findings.filter((finding) => finding.scanId === selectedScan.id);
+    const source = activeFingerprint
+      ? state.findings.filter((finding) => (finding.fingerprint ?? finding.id) === activeFingerprint)
+      : selectedScanFindings;
     const q = filter.trim().toLowerCase();
     if (!q) return source;
     return source.filter((finding) =>
@@ -325,7 +337,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
         .toLowerCase()
         .includes(q),
     );
-  }, [filter, selectedScan, state.findings]);
+  }, [activeFingerprint, filter, selectedScan, selectedScanFindings, state.findings]);
   const selectedFinding = findingsForScan[findingIndex] ?? null;
   const eventsForSelection = useMemo(() => {
     if (!selectedScan) return [] as EventRow[];
@@ -562,7 +574,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
       }
     }
 
-    if (input === "r") {
+      if (input === "r") {
       setLoading(true);
       void loadState(dbPath)
         .then((next) => {
@@ -574,6 +586,11 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
     }
 
     if ((pane === "findings" || pane === "details") && selectedFinding) {
+      if (input === "f") {
+        setFamilyFocus((current) => !current);
+        setFindingIndex(0);
+        return;
+      }
       if (input === "a") {
         setPendingTriage("accepted");
         return;
@@ -602,9 +619,10 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
         />
         <Stat label="pane" value={pane} color="#06B6D4" />
         <Stat label="refresh" value={`${refreshMs}ms`} color="#9CA3AF" />
+        <Stat label="family" value={familyFocus ? "on" : "off"} color={familyFocus ? "#F97316" : "#9CA3AF"} />
       </Box>
       <Text color="#9CA3AF">
-        {"  "}tab/←/→ switch pane · ↑/↓ navigate · / filter · a accept · s suppress · r refresh · q quit
+        {"  "}tab/←/→ switch pane · ↑/↓ navigate · / filter · f family · a accept · s suppress · r refresh · q quit
       </Text>
       {mode === "filter" ? (
         <Box>
@@ -681,7 +699,13 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
             <PaneTitle
               label="Findings"
               active={pane === "findings"}
-              meta={selectedScan ? `${findingsForScan.length} in run` : ""}
+              meta={
+                selectedScan
+                  ? familyFocus
+                    ? `${findingsForScan.length} in family`
+                    : `${findingsForScan.length} in run`
+                  : ""
+              }
             />
             <Box flexDirection="column" marginTop={1}>
               {findingsForScan.length === 0 ? (
@@ -761,6 +785,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
                 : `details ${detailOffset + 1}-${Math.min(detailOffset + detailPageSize, detailLines.length)}/${detailLines.length || 0}`}
             {selectedScan ? ` · ${selectedScan.mode}/${selectedScan.depth} · ${selectedScan.runtime}` : ""}
             {selectedFinding ? ` · ${selectedFinding.severity}/${selectedFinding.category}` : ""}
+            {activeFingerprint ? ` · fp:${activeFingerprint.slice(0, 8)}` : ""}
             {filter ? ` · filter:${filter}` : ""}
           </Text>
         </Box>

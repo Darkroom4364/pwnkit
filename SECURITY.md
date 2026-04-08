@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in pwnkit, please report it via [GitHub Security Advisories](https://github.com/peaktwilight/pwnkit/security/advisories/new).
+If you discover a security vulnerability in pwnkit, please report it via [GitHub Security Advisories](https://github.com/PwnKit-Labs/pwnkit/security/advisories/new).
 
 Please include:
 - Description of the vulnerability

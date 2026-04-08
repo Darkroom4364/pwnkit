@@ -1,6 +1,6 @@
 name: "pwnkit"
 description: "One-line security scanning for repos, packages, and endpoints"
-author: "peaktwilight"
+author: "PwnKit Labs"
 
 branding:
   icon: "shield"

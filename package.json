@@ -35,14 +35,14 @@
     "llm",
     "prompt-injection"
   ],
-  "author": "Peak Twilight",
+  "author": "PwnKit Labs",
   "homepage": "https://pwnkit.com",
   "bugs": {
-    "url": "https://github.com/peaktwilight/pwnkit/issues"
+    "url": "https://github.com/PwnKit-Labs/pwnkit/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/peaktwilight/pwnkit.git"
+    "url": "git+https://github.com/PwnKit-Labs/pwnkit.git"
   },
   "license": "Apache-2.0",
   "engines": {

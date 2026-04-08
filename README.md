@@ -22,10 +22,10 @@
      across the row, varied accent colors per badge. -->
 <p align="center">
  <a href="https://www.npmjs.com/package/pwnkit-cli"><img src="https://img.shields.io/npm/v/pwnkit-cli?color=e63946&style=flat-square&labelColor=2b2d42" alt="npm version" /></a>
- <a href="https://github.com/peaktwilight/pwnkit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-1d3557?style=flat-square&labelColor=2b2d42" alt="license" /></a>
+ <a href="https://github.com/PwnKit-Labs/pwnkit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-1d3557?style=flat-square&labelColor=2b2d42" alt="license" /></a>
  <img src="https://img.shields.io/badge/runtime-npx%20%C2%B7%20bunx%20%C2%B7%20docker-2a9d8f?style=flat-square&labelColor=2b2d42" alt="runs with npx, bunx, docker" />
  <img src="https://img.shields.io/badge/native%20deps-zero-457b9d?style=flat-square&labelColor=2b2d42" alt="zero native modules" />
- <a href="https://github.com/peaktwilight/pwnkit/actions"><img src="https://img.shields.io/github/actions/workflow/status/peaktwilight/pwnkit/ci.yml?style=flat-square&labelColor=2b2d42&label=build" alt="build" /></a>
+ <a href="https://github.com/PwnKit-Labs/pwnkit/actions"><img src="https://img.shields.io/github/actions/workflow/status/PwnKit-Labs/pwnkit/ci.yml?style=flat-square&labelColor=2b2d42&label=build" alt="build" /></a>
 </p>
 
 <p align="center">
@@ -43,6 +43,8 @@
 ---
 
 > Fully autonomous agentic pentesting for web apps, AI/LLM apps, npm packages, and source code.
+
+> **A PwnKit Labs product.**
 
 This README is the fast path. The detailed command reference, configuration, architecture notes, recipes, and benchmark breakdowns live in the docs site.
 
@@ -104,7 +106,7 @@ bun add -g pwnkit-cli
 
 - Shell-first web pentesting. The agent uses `bash`, writes scripts, and chains tools like a human pentester instead of being trapped in a small HTTP-tool DSL.
 - Blind verification. Findings are independently re-exploited before they are reported.
-- Docs-backed benchmark transparency. The current benchmark details live in the docs and raw artifacts under [`packages/benchmark/results`](https://github.com/peaktwilight/pwnkit/tree/main/packages/benchmark/results).
+- Docs-backed benchmark transparency. The current benchmark details live in the docs and raw artifacts under [`packages/benchmark/results`](https://github.com/PwnKit-Labs/pwnkit/tree/main/packages/benchmark/results).
 
 ## Docs
 
@@ -128,7 +130,7 @@ Both XBOW numbers are reported separately — no methodology blending. The 5 whi
 ## GitHub Action
 
 ```yaml
-- uses: peaktwilight/pwnkit@main
+- uses: PwnKit-Labs/pwnkit@main
   with:
     mode: review
     path: .
@@ -140,7 +142,7 @@ Both XBOW numbers are reported separately — no methodology blending. The 5 whi
 ## Development
 
 ```bash
-git clone https://github.com/peaktwilight/pwnkit.git
+git clone https://github.com/PwnKit-Labs/pwnkit.git
 cd pwnkit
 pnpm install
 pnpm lint
@@ -151,4 +153,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-[Apache 2.0](LICENSE) — built by [Peak Twilight](https://doruk.ch).
+[Apache 2.0](LICENSE) — built by [PwnKit Labs](https://github.com/PwnKit-Labs) and [Doruk Tan Ozturk](https://doruk.ch).

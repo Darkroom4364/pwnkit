@@ -51,7 +51,7 @@ type EventRow = {
 };
 
 type Pane = "scans" | "findings" | "details";
-type InputMode = "normal" | "filter";
+type InputMode = "normal" | "filter" | "note";
 type PendingTriageAction = "accepted" | "suppressed" | null;
 
 function parseSummary(summary?: string | null): Record<string, number> {
@@ -188,11 +188,12 @@ async function applyFindingTriage(
   dbPath: string | undefined,
   findingId: string,
   triageStatus: FindingTriageStatus,
+  triageNote?: string,
 ): Promise<void> {
   const { pwnkitDB } = await import("@pwnkit/db");
   const db = new pwnkitDB(dbPath);
   try {
-    db.updateFindingTriage(findingId, triageStatus);
+    db.updateFindingTriage(findingId, triageStatus, triageNote);
   } finally {
     db.close();
   }
@@ -252,6 +253,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
   const [mode, setMode] = useState<InputMode>("normal");
   const [filter, setFilter] = useState("");
   const [familyFocus, setFamilyFocus] = useState(false);
+  const [pendingTriageNote, setPendingTriageNote] = useState("");
   const [scanIndex, setScanIndex] = useState(0);
   const [findingIndex, setFindingIndex] = useState(0);
   const [detailOffset, setDetailOffset] = useState(0);
@@ -453,6 +455,10 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
     setDetailOffset(0);
   }, [selectedScan?.id, selectedFinding?.id]);
 
+  useEffect(() => {
+    setPendingTriageNote("");
+  }, [selectedFinding?.id]);
+
   useInput((input, key) => {
     if (mode === "filter") {
       if (key.escape) {
@@ -474,6 +480,34 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
       return;
     }
 
+    if (mode === "note") {
+      if (key.escape) {
+        setMode("normal");
+        return;
+      }
+      if (key.return) {
+        setMode("normal");
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setPendingTriageNote((current) => current.slice(0, -1));
+        return;
+      }
+      if (
+        !pendingTriage
+        && selectedFinding
+        && (input === "A" || input === "S")
+      ) {
+        setPendingTriage(input === "A" ? "accepted" : "suppressed");
+        setMode("normal");
+        return;
+      }
+      if (input && !key.ctrl && !key.meta) {
+        setPendingTriageNote((current) => current + input);
+      }
+      return;
+    }
+
     if (pendingTriage) {
       if (key.escape || input === "n") {
         setPendingTriage(null);
@@ -481,19 +515,25 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
       }
       if ((key.return || input === "y") && selectedFinding) {
         setLoading(true);
-        void applyFindingTriage(dbPath, selectedFinding.id, pendingTriage)
+        const triageNote = pendingTriageNote.trim() || undefined;
+        void applyFindingTriage(dbPath, selectedFinding.id, pendingTriage, triageNote)
           .then(async () => {
             const next = await loadState(dbPath);
             setState(next);
             setError(null);
             const id = selectedFinding.id.slice(0, 8);
-            setFlashMessage(`Marked ${id} as ${pendingTriage}.`);
+            setFlashMessage(
+              triageNote
+                ? `Marked ${id} as ${pendingTriage} with note.`
+                : `Marked ${id} as ${pendingTriage}.`,
+            );
             setTimeout(() => setFlashMessage(null), 2500);
           })
           .catch((err) => setError(err instanceof Error ? err.message : String(err)))
           .finally(() => {
             setLoading(false);
             setPendingTriage(null);
+            setPendingTriageNote("");
           });
         return;
       }
@@ -591,11 +631,24 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
         setFindingIndex(0);
         return;
       }
+      if (input === "n") {
+        setPendingTriageNote(selectedFinding.triageNote ?? "");
+        setMode("note");
+        return;
+      }
       if (input === "a") {
         setPendingTriage("accepted");
         return;
       }
       if (input === "s") {
+        setPendingTriage("suppressed");
+        return;
+      }
+      if (input === "A") {
+        setPendingTriage("accepted");
+        return;
+      }
+      if (input === "S") {
         setPendingTriage("suppressed");
         return;
       }
@@ -622,7 +675,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
         <Stat label="family" value={familyFocus ? "on" : "off"} color={familyFocus ? "#F97316" : "#9CA3AF"} />
       </Box>
       <Text color="#9CA3AF">
-        {"  "}tab/←/→ switch pane · ↑/↓ navigate · / filter · f family · a accept · s suppress · r refresh · q quit
+        {"  "}tab/←/→ switch pane · ↑/↓ navigate · / filter · f family · n note · a/s triage · A/S triage+note · r refresh · q quit
       </Text>
       {mode === "filter" ? (
         <Box>
@@ -630,14 +683,24 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
           <Text color="#FFFFFF">{filter}</Text>
           <Text color="#DC2626">█</Text>
         </Box>
+      ) : mode === "note" ? (
+        <Box>
+          <Text color="#6B7280">  triage note: </Text>
+          <Text color="#FFFFFF">{pendingTriageNote}</Text>
+          <Text color="#DC2626">█</Text>
+          <Text color="#6B7280">  enter/esc done · A accept · S suppress</Text>
+        </Box>
       ) : pendingTriage ? (
         <Text color="#EAB308">
-          {"  "}Confirm mark {selectedFinding?.id.slice(0, 8) ?? "finding"} as {pendingTriage}? enter/y confirm · esc/n cancel
+          {"  "}Confirm mark {selectedFinding?.id.slice(0, 8) ?? "finding"} as {pendingTriage}
+          {pendingTriageNote.trim() ? " with note" : ""}? enter/y confirm · esc/n cancel
         </Text>
       ) : flashMessage ? (
         <Text color="#22C55E">  {flashMessage}</Text>
       ) : filter ? (
         <Text color="#6B7280">  filter active: {filter}</Text>
+      ) : pendingTriageNote ? (
+        <Text color="#6B7280">  note ready: {truncate(pendingTriageNote, 80)}</Text>
       ) : null}
       <Text> </Text>
       {loading ? <Text color="#9CA3AF">  Loading local pwnkit state…</Text> : null}

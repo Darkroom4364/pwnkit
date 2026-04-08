@@ -49,7 +49,7 @@ type EventRow = {
   timestamp: number;
 };
 
-type Pane = "scans" | "findings";
+type Pane = "scans" | "findings" | "details";
 type InputMode = "normal" | "filter";
 
 function parseSummary(summary?: string | null): Record<string, number> {
@@ -152,6 +152,18 @@ function PaneTitle({
   );
 }
 
+function nextPane(current: Pane): Pane {
+  if (current === "scans") return "findings";
+  if (current === "findings") return "details";
+  return "scans";
+}
+
+function previousPane(current: Pane): Pane {
+  if (current === "details") return "findings";
+  if (current === "findings") return "scans";
+  return "details";
+}
+
 function Stat({
   label,
   value,
@@ -176,6 +188,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
   const [filter, setFilter] = useState("");
   const [scanIndex, setScanIndex] = useState(0);
   const [findingIndex, setFindingIndex] = useState(0);
+  const [detailOffset, setDetailOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<{
@@ -256,6 +269,87 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
       .slice(0, 8);
   }, [selectedScan, selectedFinding, state.events]);
 
+  const detailLines = useMemo(() => {
+    const lines: Array<{ color: string; text: string; bold?: boolean }> = [];
+
+    if (selectedFinding) {
+      lines.push({
+        color: "#FFFFFF",
+        text: selectedFinding.title,
+        bold: true,
+      });
+      lines.push({
+        color: severityColor(selectedFinding.severity),
+        text: `${selectedFinding.severity.toUpperCase()} · ${selectedFinding.category}`,
+      });
+      if (selectedFinding.triageStatus || selectedFinding.triageNote) {
+        lines.push({
+          color: "#6B7280",
+          text: `triage: ${selectedFinding.triageStatus ?? "new"}${selectedFinding.triageNote ? ` · ${selectedFinding.triageNote}` : ""}`,
+        });
+      }
+      lines.push({ color: "#9CA3AF", text: selectedFinding.description });
+      if (selectedFinding.evidenceRequest) {
+        lines.push({ color: "#6B7280", text: "Request" });
+        lines.push({ color: "#D1D5DB", text: selectedFinding.evidenceRequest });
+      }
+      if (selectedFinding.evidenceResponse) {
+        lines.push({ color: "#6B7280", text: "Response" });
+        lines.push({ color: "#D1D5DB", text: selectedFinding.evidenceResponse });
+      }
+      if (selectedFinding.evidenceAnalysis) {
+        lines.push({ color: "#6B7280", text: "Analysis" });
+        lines.push({ color: "#D1D5DB", text: selectedFinding.evidenceAnalysis });
+      }
+    } else if (selectedScan) {
+      lines.push({
+        color: "#FFFFFF",
+        text: selectedScan.target,
+        bold: true,
+      });
+      lines.push({
+        color: "#9CA3AF",
+        text: `${selectedScan.mode}/${selectedScan.depth} · ${selectedScan.runtime} · ${selectedScan.status}`,
+      });
+      lines.push({
+        color: "#9CA3AF",
+        text: `Started ${formatStarted(selectedScan.startedAt)}`,
+      });
+      if (selectedScan.completedAt) {
+        lines.push({
+          color: "#9CA3AF",
+          text: `Completed ${formatStarted(selectedScan.completedAt)}`,
+        });
+      }
+    }
+
+    lines.push({ color: "#6B7280", text: "" });
+    lines.push({ color: "#6B7280", text: "Recent events" });
+    if (eventsForSelection.length === 0) {
+      lines.push({ color: "#9CA3AF", text: "No recent events." });
+    } else {
+      for (const event of eventsForSelection) {
+        lines.push({
+          color: "#FFFFFF",
+          text: `${event.stage} · ${event.eventType}`,
+        });
+        lines.push({
+          color: "#6B7280",
+          text: event.payload,
+        });
+      }
+    }
+
+    return lines.flatMap((line) => {
+      const source = line.text.length === 0 ? [""] : line.text.split(/\n/);
+      return source.map((text) => ({ ...line, text }));
+    });
+  }, [eventsForSelection, selectedFinding, selectedScan]);
+
+  const detailPageSize = 18;
+  const maxDetailOffset = Math.max(0, detailLines.length - detailPageSize);
+  const visibleDetailLines = detailLines.slice(detailOffset, detailOffset + detailPageSize);
+
   useEffect(() => {
     if (scanIndex >= scans.length) {
       setScanIndex(Math.max(0, scans.length - 1));
@@ -267,6 +361,10 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
       setFindingIndex(Math.max(0, findingsForScan.length - 1));
     }
   }, [findingIndex, findingsForScan.length]);
+
+  useEffect(() => {
+    setDetailOffset(0);
+  }, [selectedScan?.id, selectedFinding?.id]);
 
   useInput((input, key) => {
     if (mode === "filter") {
@@ -301,12 +399,12 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
     }
 
     if (input === "\t" || key.rightArrow) {
-      setPane((current) => (current === "scans" ? "findings" : "scans"));
+      setPane((current) => nextPane(current));
       return;
     }
 
     if (key.leftArrow) {
-      setPane((current) => (current === "findings" ? "scans" : "findings"));
+      setPane((current) => previousPane(current));
       return;
     }
 
@@ -314,8 +412,10 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
       if (pane === "scans") {
         setScanIndex((current) => Math.max(0, current - 1));
         setFindingIndex(0);
-      } else {
+      } else if (pane === "findings") {
         setFindingIndex((current) => Math.max(0, current - 1));
+      } else {
+        setDetailOffset((current) => Math.max(0, current - 1));
       }
       return;
     }
@@ -324,12 +424,41 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
       if (pane === "scans") {
         setScanIndex((current) => Math.min(scans.length - 1, current + 1));
         setFindingIndex(0);
-      } else {
+      } else if (pane === "findings") {
         setFindingIndex((current) =>
           Math.min(findingsForScan.length - 1, current + 1),
         );
+      } else {
+        setDetailOffset((current) => Math.min(maxDetailOffset, current + 1));
       }
       return;
+    }
+
+    if (pane === "details") {
+      if (input === "j") {
+        setDetailOffset((current) => Math.min(maxDetailOffset, current + 1));
+        return;
+      }
+      if (input === "k") {
+        setDetailOffset((current) => Math.max(0, current - 1));
+        return;
+      }
+      if (input === "d" || key.pageDown) {
+        setDetailOffset((current) => Math.min(maxDetailOffset, current + detailPageSize));
+        return;
+      }
+      if (input === "u" || key.pageUp) {
+        setDetailOffset((current) => Math.max(0, current - detailPageSize));
+        return;
+      }
+      if (input === "g") {
+        setDetailOffset(0);
+        return;
+      }
+      if (input === "G") {
+        setDetailOffset(maxDetailOffset);
+        return;
+      }
     }
 
     if (input === "r") {
@@ -360,6 +489,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
           color="#EAB308"
         />
         <Stat label="pane" value={pane} color="#06B6D4" />
+        <Stat label="refresh" value={`${refreshMs}ms`} color="#9CA3AF" />
       </Box>
       <Text color="#9CA3AF">
         {"  "}tab/←/→ switch pane · ↑/↓ navigate · / filter · r refresh · q quit
@@ -477,73 +607,37 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
           >
             <PaneTitle
               label="Details"
-              active={false}
-              meta={selectedFinding ? selectedFinding.id.slice(0, 8) : selectedScan?.id.slice(0, 8)}
+              active={pane === "details"}
+              meta={`${detailOffset + 1}-${Math.min(detailOffset + detailPageSize, detailLines.length)}/${detailLines.length || 0}`}
             />
             <Box flexDirection="column" marginTop={1}>
-              {selectedFinding ? (
-                <>
-                  <Text bold color="#FFFFFF">
-                    {selectedFinding.title}
-                  </Text>
-                  <Text color={severityColor(selectedFinding.severity)}>
-                    {selectedFinding.severity.toUpperCase()} · {selectedFinding.category}
-                  </Text>
-                  <Text color="#9CA3AF">{truncate(selectedFinding.description, 260)}</Text>
-                  {selectedFinding.evidenceResponse ? (
-                    <>
-                      <Text> </Text>
-                      <Text color="#6B7280">Response</Text>
-                      <Text color="#D1D5DB">{truncate(selectedFinding.evidenceResponse, 260)}</Text>
-                    </>
-                  ) : null}
-                  {selectedFinding.evidenceRequest ? (
-                    <>
-                      <Text> </Text>
-                      <Text color="#6B7280">Request</Text>
-                      <Text color="#D1D5DB">{truncate(selectedFinding.evidenceRequest, 260)}</Text>
-                    </>
-                  ) : null}
-                  {selectedFinding.evidenceAnalysis ? (
-                    <>
-                      <Text> </Text>
-                      <Text color="#6B7280">Analysis</Text>
-                      <Text color="#D1D5DB">{truncate(selectedFinding.evidenceAnalysis, 260)}</Text>
-                    </>
-                  ) : null}
-                </>
-              ) : selectedScan ? (
-                <>
-                  <Text bold color="#FFFFFF">
-                    {selectedScan.target}
-                  </Text>
-                  <Text color="#9CA3AF">
-                    {selectedScan.mode}/{selectedScan.depth} · {selectedScan.runtime}
-                  </Text>
-                  <Text color="#9CA3AF">
-                    Started {formatStarted(selectedScan.startedAt)}
-                  </Text>
-                </>
-              ) : null}
-
-              <Text> </Text>
-              <Text color="#6B7280">Recent events</Text>
-              {eventsForSelection.length === 0 ? (
-                <Text color="#9CA3AF">No recent events.</Text>
-              ) : (
-                eventsForSelection.map((event) => (
-                  <Box key={event.id} flexDirection="column" marginBottom={1}>
-                    <Text color="#FFFFFF">
-                      {event.stage} · {event.eventType}
-                    </Text>
-                    <Text color="#6B7280">
-                      {truncate(event.payload, 180)}
-                    </Text>
-                  </Box>
-                ))
-              )}
+              {visibleDetailLines.map((line, index) => (
+                <Text
+                  key={`${detailOffset}-${index}-${line.text.slice(0, 16)}`}
+                  color={line.color}
+                  bold={line.bold}
+                  wrap="truncate-end"
+                >
+                  {truncate(line.text, 300)}
+                </Text>
+              ))}
             </Box>
           </Box>
+        </Box>
+      ) : null}
+      {!loading && !error && scans.length > 0 ? (
+        <Box marginTop={1}>
+          <Text color="#6B7280">
+            {"  "}
+            {pane === "scans"
+              ? `runs ${scanIndex + 1}/${Math.max(scans.length, 1)} · ${selectedScan?.id.slice(0, 8) ?? "none"}`
+              : pane === "findings"
+                ? `findings ${findingIndex + 1}/${Math.max(findingsForScan.length, 1)} · ${selectedFinding?.id.slice(0, 8) ?? "none"}`
+                : `details ${detailOffset + 1}-${Math.min(detailOffset + detailPageSize, detailLines.length)}/${detailLines.length || 0}`}
+            {selectedScan ? ` · ${selectedScan.mode}/${selectedScan.depth} · ${selectedScan.runtime}` : ""}
+            {selectedFinding ? ` · ${selectedFinding.severity}/${selectedFinding.category}` : ""}
+            {filter ? ` · filter:${filter}` : ""}
+          </Text>
         </Box>
       ) : null}
     </Box>

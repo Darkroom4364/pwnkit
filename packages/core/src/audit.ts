@@ -17,6 +17,7 @@ import { auditAgentPrompt } from "./analysis-prompts.js";
 import { runAnalysisAgent } from "./agent-runner.js";
 import { bufferToString, runSemgrepScan } from "./shared-analysis.js";
 import { scanForMaliciousPatterns } from "./malicious-detector.js";
+import { postProcessPackageAuditFindings } from "./package-audit-suppressor.js";
 
 export interface PackageAuditOptions {
   config: AuditConfig;
@@ -728,6 +729,7 @@ export async function packageAudit(
       config,
       emit,
     );
+    const agentFindings = postProcessPackageAuditFindings(agentResult.findings);
 
     // Combine deterministic + LLM findings into the final report set.
     // Deterministic findings come FIRST so they're prominent in the
@@ -735,7 +737,7 @@ export async function packageAudit(
     const findings = [
       ...(advisoryFinding ? [advisoryFinding] : []),
       ...maliciousFindings,
-      ...agentResult.findings,
+      ...agentFindings,
     ];
 
     // Step 4: Build report

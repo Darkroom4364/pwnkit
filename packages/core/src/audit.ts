@@ -15,6 +15,7 @@ import type {
 import type { ScanEvent, ScanListener } from "./scanner.js";
 import { auditAgentPrompt } from "./analysis-prompts.js";
 import { runAnalysisAgent } from "./agent-runner.js";
+import { restoreHistoricalPackageFixture, shouldUseHistoricalPackageFallback } from "./historical-package-fallback.js";
 import { bufferToString, runSemgrepScan } from "./shared-analysis.js";
 import { scanForMaliciousPatterns } from "./malicious-detector.js";
 import { postProcessPackageAuditFindings } from "./package-audit-suppressor.js";
@@ -82,8 +83,17 @@ function installPackage(
       stdio: "pipe",
     });
   } catch (err) {
-    rmSync(tempDir, { recursive: true, force: true });
     const msg = err instanceof Error ? err.message : String(err);
+    if (shouldUseHistoricalPackageFallback(msg)) {
+      const restored = restoreHistoricalPackageFixture(packageName, tempDir, emit);
+      if (restored) {
+        return {
+          ...restored,
+          tempDir,
+        };
+      }
+    }
+    rmSync(tempDir, { recursive: true, force: true });
     throw new Error(`Failed to install ${spec}: ${msg}`);
   }
 

@@ -4,6 +4,7 @@ import { join, resolve, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import type { ScanListener } from "./scanner.js";
+import { restoreHistoricalPackageFixture, shouldUseHistoricalPackageFallback } from "./historical-package-fallback.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -87,6 +88,7 @@ function installPackage(
       stdio: "pipe",
     });
 
+    let installError: string | null = null;
     try {
       execFileSync(
         "npm",
@@ -108,17 +110,35 @@ function installPackage(
       const looksLikePeerDep =
         /ERESOLVE|peer dep|peerDep|peer dependency/i.test(firstMsg);
       if (!looksLikePeerDep) {
-        throw firstErr;
+        installError = firstMsg;
+      } else {
+        try {
+          execFileSync(
+            "npm",
+            ["install", spec, "--ignore-scripts", "--no-audit", "--no-fund", "--legacy-peer-deps"],
+            {
+              cwd: tempDir,
+              timeout: 120_000,
+              stdio: "pipe",
+            },
+          );
+        } catch (secondErr) {
+          installError = secondErr instanceof Error ? secondErr.message : String(secondErr);
+        }
       }
-      execFileSync(
-        "npm",
-        ["install", spec, "--ignore-scripts", "--no-audit", "--no-fund", "--legacy-peer-deps"],
-        {
-          cwd: tempDir,
-          timeout: 120_000,
-          stdio: "pipe",
-        },
-      );
+    }
+
+    if (installError) {
+      if (shouldUseHistoricalPackageFallback(installError)) {
+        const restored = restoreHistoricalPackageFixture(packageName, tempDir, emit);
+        if (restored) {
+          return {
+            ...restored,
+            tempDir,
+          };
+        }
+      }
+      throw new Error(installError);
     }
   } catch (err) {
     rmSync(tempDir, { recursive: true, force: true });

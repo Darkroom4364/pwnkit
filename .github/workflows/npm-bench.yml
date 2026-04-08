@@ -2,6 +2,24 @@ name: npm-bench Benchmark
 
 on:
   workflow_dispatch:
+    inputs:
+      depth:
+        description: 'Benchmark depth (quick, default, deep)'
+        required: false
+        default: 'quick'
+        type: choice
+        options:
+          - quick
+          - default
+          - deep
+      runtime:
+        description: 'Runtime mode'
+        required: false
+        default: 'api'
+        type: choice
+        options:
+          - api
+          - auto
 
 jobs:
   npm-bench:
@@ -34,7 +52,10 @@ jobs:
         # Bumped 45m → 150m after run #24025320432 hit the wall mid-run on
         # the expanded 81-package set. The 81-package set is the new baseline;
         # this needs to comfortably accommodate the worst-case serial runtime.
-        run: pnpm --filter @pwnkit/benchmark npm-bench
+        run: |
+          DEPTH="${{ inputs.depth || 'quick' }}"
+          RUNTIME="${{ inputs.runtime || 'api' }}"
+          pnpm --filter @pwnkit/benchmark npm-bench -- --depth "$DEPTH" --runtime "$RUNTIME"
         timeout-minutes: 150
 
       - name: Upload results artifact

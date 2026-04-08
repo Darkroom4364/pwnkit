@@ -50,6 +50,7 @@ type EventRow = {
 };
 
 type Pane = "scans" | "findings";
+type InputMode = "normal" | "filter";
 
 function parseSummary(summary?: string | null): Record<string, number> {
   if (!summary) return {};
@@ -151,9 +152,28 @@ function PaneTitle({
   );
 }
 
+function Stat({
+  label,
+  value,
+  color = "#FFFFFF",
+}: {
+  label: string;
+  value: string;
+  color?: string;
+}) {
+  return (
+    <Box marginRight={3}>
+      <Text color="#6B7280">{label}: </Text>
+      <Text color={color} bold>{value}</Text>
+    </Box>
+  );
+}
+
 function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactElement {
   const { exit } = useApp();
   const [pane, setPane] = useState<Pane>("scans");
+  const [mode, setMode] = useState<InputMode>("normal");
+  const [filter, setFilter] = useState("");
   const [scanIndex, setScanIndex] = useState(0);
   const [findingIndex, setFindingIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -189,12 +209,43 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
     };
   }, [dbPath, refreshMs]);
 
-  const scans = state.scans;
+  const scans = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return state.scans;
+    return state.scans.filter((scan) =>
+      [
+        scan.target,
+        scan.depth,
+        scan.runtime,
+        scan.mode,
+        scan.status,
+        scan.id,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [filter, state.scans]);
   const selectedScan = scans[scanIndex] ?? null;
   const findingsForScan = useMemo(() => {
     if (!selectedScan) return [] as FindingRow[];
-    return state.findings.filter((finding) => finding.scanId === selectedScan.id);
-  }, [selectedScan, state.findings]);
+    const source = state.findings.filter((finding) => finding.scanId === selectedScan.id);
+    const q = filter.trim().toLowerCase();
+    if (!q) return source;
+    return source.filter((finding) =>
+      [
+        finding.title,
+        finding.category,
+        finding.severity,
+        finding.status,
+        finding.triageStatus ?? "",
+        finding.triageNote ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [filter, selectedScan, state.findings]);
   const selectedFinding = findingsForScan[findingIndex] ?? null;
   const eventsForSelection = useMemo(() => {
     if (!selectedScan) return [] as EventRow[];
@@ -218,8 +269,34 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
   }, [findingIndex, findingsForScan.length]);
 
   useInput((input, key) => {
+    if (mode === "filter") {
+      if (key.escape) {
+        setMode("normal");
+        setFilter("");
+        return;
+      }
+      if (key.return) {
+        setMode("normal");
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setFilter((current) => current.slice(0, -1));
+        return;
+      }
+      if (input && !key.ctrl && !key.meta) {
+        setFilter((current) => current + input);
+      }
+      return;
+    }
+
     if (key.escape || input === "q" || (key.ctrl && input === "c")) {
       exit();
+      return;
+    }
+
+    if (input === "/") {
+      setMode("filter");
+      setFilter("");
       return;
     }
 
@@ -269,9 +346,33 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
 
   return (
     <Box flexDirection="column" paddingLeft={1}>
+      <Box marginBottom={1} flexDirection="row">
+        <Stat label="runs" value={String(scans.length)} />
+        <Stat label="findings" value={String(state.findings.length)} />
+        <Stat
+          label="critical"
+          value={String(state.findings.filter((finding) => finding.severity === "critical").length)}
+          color="#DC2626"
+        />
+        <Stat
+          label="high"
+          value={String(state.findings.filter((finding) => finding.severity === "high").length)}
+          color="#EAB308"
+        />
+        <Stat label="pane" value={pane} color="#06B6D4" />
+      </Box>
       <Text color="#9CA3AF">
-        {"  "}tab/←/→ switch pane · ↑/↓ navigate · r refresh · q quit
+        {"  "}tab/←/→ switch pane · ↑/↓ navigate · / filter · r refresh · q quit
       </Text>
+      {mode === "filter" ? (
+        <Box>
+          <Text color="#6B7280">  filter: </Text>
+          <Text color="#FFFFFF">{filter}</Text>
+          <Text color="#DC2626">█</Text>
+        </Box>
+      ) : filter ? (
+        <Text color="#6B7280">  filter active: {filter}</Text>
+      ) : null}
       <Text> </Text>
       {loading ? <Text color="#9CA3AF">  Loading local pwnkit state…</Text> : null}
       {error ? <Text color="#DC2626">  {error}</Text> : null}
@@ -389,6 +490,13 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
                     {selectedFinding.severity.toUpperCase()} · {selectedFinding.category}
                   </Text>
                   <Text color="#9CA3AF">{truncate(selectedFinding.description, 260)}</Text>
+                  {selectedFinding.evidenceResponse ? (
+                    <>
+                      <Text> </Text>
+                      <Text color="#6B7280">Response</Text>
+                      <Text color="#D1D5DB">{truncate(selectedFinding.evidenceResponse, 260)}</Text>
+                    </>
+                  ) : null}
                   {selectedFinding.evidenceRequest ? (
                     <>
                       <Text> </Text>

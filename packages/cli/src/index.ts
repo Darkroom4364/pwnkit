@@ -76,6 +76,12 @@ async function showInteractiveMenu(): Promise<void> {
     return;
   }
 
+  if (action === "tui") {
+    process.argv = [process.argv[0], process.argv[1], "tui"];
+    await program.parseAsync();
+    return;
+  }
+
   if (!target) return;
 
   if (action === "scan") {
@@ -91,7 +97,7 @@ async function showInteractiveMenu(): Promise<void> {
 
 // ── Entry point ──
 const userArgs = process.argv.slice(2);
-const knownCommands = ["scan", "resume", "replay", "history", "findings", "review", "audit", "doctor", "dashboard", "tui", "orchestrate", "db", "mcp-server", "help"];
+const knownCommands = ["scan", "resume", "replay", "history", "findings", "review", "audit", "doctor", "dashboard", "tui", "watch", "orchestrate", "db", "mcp-server", "help"];
 
 if (userArgs.length === 0) {
   showInteractiveMenu().catch((err) => {

@@ -8,6 +8,7 @@ type TuiOptions = {
 export function registerTuiCommand(program: Command): void {
   program
     .command("tui")
+    .alias("watch")
     .description("Open a local read-only terminal UI for runs, findings, and evidence")
     .option("--db-path <path>", "Path to SQLite database")
     .option("--refresh-ms <n>", "Refresh interval in milliseconds", "4000")

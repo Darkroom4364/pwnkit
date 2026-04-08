@@ -52,6 +52,7 @@ type EventRow = {
 
 type Pane = "scans" | "findings" | "details";
 type InputMode = "normal" | "filter";
+type PendingTriageAction = "accepted" | "suppressed" | null;
 
 function parseSummary(summary?: string | null): Record<string, number> {
   if (!summary) return {};
@@ -183,6 +184,20 @@ async function loadState(dbPath?: string): Promise<{
   }
 }
 
+async function applyFindingTriage(
+  dbPath: string | undefined,
+  findingId: string,
+  triageStatus: FindingTriageStatus,
+): Promise<void> {
+  const { pwnkitDB } = await import("@pwnkit/db");
+  const db = new pwnkitDB(dbPath);
+  try {
+    db.updateFindingTriage(findingId, triageStatus);
+  } finally {
+    db.close();
+  }
+}
+
 function PaneTitle({
   label,
   active,
@@ -239,6 +254,8 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
   const [scanIndex, setScanIndex] = useState(0);
   const [findingIndex, setFindingIndex] = useState(0);
   const [detailOffset, setDetailOffset] = useState(0);
+  const [pendingTriage, setPendingTriage] = useState<PendingTriageAction>(null);
+  const [flashMessage, setFlashMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<{
@@ -445,6 +462,32 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
       return;
     }
 
+    if (pendingTriage) {
+      if (key.escape || input === "n") {
+        setPendingTriage(null);
+        return;
+      }
+      if ((key.return || input === "y") && selectedFinding) {
+        setLoading(true);
+        void applyFindingTriage(dbPath, selectedFinding.id, pendingTriage)
+          .then(async () => {
+            const next = await loadState(dbPath);
+            setState(next);
+            setError(null);
+            const id = selectedFinding.id.slice(0, 8);
+            setFlashMessage(`Marked ${id} as ${pendingTriage}.`);
+            setTimeout(() => setFlashMessage(null), 2500);
+          })
+          .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+          .finally(() => {
+            setLoading(false);
+            setPendingTriage(null);
+          });
+        return;
+      }
+      return;
+    }
+
     if (key.escape || input === "q" || (key.ctrl && input === "c")) {
       exit();
       return;
@@ -529,6 +572,17 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
         .catch((err) => setError(err instanceof Error ? err.message : String(err)))
         .finally(() => setLoading(false));
     }
+
+    if ((pane === "findings" || pane === "details") && selectedFinding) {
+      if (input === "a") {
+        setPendingTriage("accepted");
+        return;
+      }
+      if (input === "s") {
+        setPendingTriage("suppressed");
+        return;
+      }
+    }
   });
 
   return (
@@ -550,7 +604,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
         <Stat label="refresh" value={`${refreshMs}ms`} color="#9CA3AF" />
       </Box>
       <Text color="#9CA3AF">
-        {"  "}tab/←/→ switch pane · ↑/↓ navigate · / filter · r refresh · q quit
+        {"  "}tab/←/→ switch pane · ↑/↓ navigate · / filter · a accept · s suppress · r refresh · q quit
       </Text>
       {mode === "filter" ? (
         <Box>
@@ -558,6 +612,12 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
           <Text color="#FFFFFF">{filter}</Text>
           <Text color="#DC2626">█</Text>
         </Box>
+      ) : pendingTriage ? (
+        <Text color="#EAB308">
+          {"  "}Confirm mark {selectedFinding?.id.slice(0, 8) ?? "finding"} as {pendingTriage}? enter/y confirm · esc/n cancel
+        </Text>
+      ) : flashMessage ? (
+        <Text color="#22C55E">  {flashMessage}</Text>
       ) : filter ? (
         <Text color="#6B7280">  filter active: {filter}</Text>
       ) : null}

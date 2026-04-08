@@ -47,6 +47,13 @@ function classifyPackageAuditFinding(finding: Finding): PostProcessDecision | nu
     };
   }
 
+  if (isKnownBinaryBootstrapNoise(text)) {
+    return {
+      action: "suppress",
+      note: "package-audit: suppressed known binary-bootstrap install hook for esbuild",
+    };
+  }
+
   if (isBenignInstallHookNoise(text)) {
     return {
       action: "suppress",
@@ -111,6 +118,16 @@ function isPureCliSelfDosNoise(text: string): boolean {
   if (!/\b(cli|command[- ]line|argv|process\.argv)\b/.test(text)) return false;
   if (!/--(?:size|count|length)\b/.test(text)) return false;
   return /\b(self-dos|self dos|dos|denial of service|resource exhaustion|memory exhaustion|cpu exhaustion|hang)\b/.test(text);
+}
+
+function isKnownBinaryBootstrapNoise(text: string): boolean {
+  if (!/\besbuild\b/.test(text)) return false;
+  if (!/\bpackage executes \d+ install-time hook/.test(text)) return false;
+  if (!/\bpostinstall\b/.test(text)) return false;
+  if (!/\bnode install\.js\b/.test(text)) return false;
+  if (!/\bchild_process spawned in install hook\b/.test(text)) return false;
+  if (!/\bexec\/spawn family in install hook\b/.test(text)) return false;
+  return /\b(outbound http request|fetch\(\) in install hook)\b/.test(text);
 }
 
 function isBenignInstallHookNoise(text: string): boolean {

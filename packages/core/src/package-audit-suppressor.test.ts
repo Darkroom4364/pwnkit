@@ -81,6 +81,26 @@ describe("postProcessPackageAuditFindings", () => {
     expect(postProcessPackageAuditFindings(findings)).toEqual([]);
   });
 
+  it("suppresses esbuild's known binary-bootstrap install hook pattern", () => {
+    const findings = [
+      makeFinding(
+        "Package executes 1 install-time hook (postinstall)",
+        "`esbuild` defines install-time scripts that execute on every `npm install`.\n\n" +
+          "**Hooks declared:**\n" +
+          "- `postinstall` → `node install.js`\n\n" +
+          "**Suspicious patterns matched:**\n" +
+          "- `install.js` — child_process spawned in install hook\n" +
+          "- `install.js` — exec/spawn family in install hook\n" +
+          "- `install.js` — outbound HTTP request in install hook\n" +
+          "- `install.js` — fetch() in install hook",
+        "high",
+        "supply-chain" as AttackCategory,
+      ),
+    ];
+
+    expect(postProcessPackageAuditFindings(findings)).toEqual([]);
+  });
+
   it("keeps likely real package findings intact", () => {
     const findings = [
       makeFinding(

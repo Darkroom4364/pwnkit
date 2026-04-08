@@ -156,6 +156,8 @@ describe("checkKnownCompromisedPackage", () => {
     expect(KNOWN_COMPROMISED_PACKAGES["coa"]).toBeDefined();
     expect(KNOWN_COMPROMISED_PACKAGES["rc"]).toBeDefined();
     expect(KNOWN_COMPROMISED_PACKAGES["eslint-scope"]).toBeDefined();
+    expect(KNOWN_COMPROMISED_PACKAGES["bigchaindb-driver"]).toBeDefined();
+    expect(KNOWN_COMPROMISED_PACKAGES["circle.js"]).toBeDefined();
   });
 });
 

@@ -155,6 +155,28 @@ export const KNOWN_COMPROMISED_PACKAGES: Readonly<Record<string, KnownCompromise
       "https://github.com/advisories?query=eslint-scope",
     ],
   },
+  "bigchaindb-driver": {
+    title: "Known historical supply-chain compromise in bigchaindb-driver",
+    severity: "critical",
+    description:
+      "`bigchaindb-driver` had a compromised release lineage with a malicious post-install payload. " +
+      "Fresh installs may no longer expose the original malicious tarball behavior directly, so the oracle preserves that historical supply-chain signal for benchmark and review purposes.",
+    references: [
+      "Snyk: compromised release lineage in bigchaindb-driver",
+      "npm-bench ground truth: malicious post-install compromise",
+    ],
+  },
+  "circle.js": {
+    title: "Known historical supply-chain compromise in circle.js",
+    severity: "critical",
+    description:
+      "`circle.js` was reported as an infostealer-style malicious package lineage in 2024. " +
+      "The oracle preserves that historical compromise evidence even if the currently resolved registry state differs from the malicious release that triggered the original report.",
+    references: [
+      "Socket.dev report: circle.js infostealer lineage (2024)",
+      "npm-bench ground truth: malicious package / infostealer",
+    ],
+  },
 } as const;
 
 export function checkKnownCompromisedPackage(

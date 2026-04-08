@@ -120,7 +120,7 @@ const TEST_CASES: TestCase[] = [
   // Expansion — top-50 npm packages by downloads, current versions
   { pkg: "react-dom@latest",   verdict: "safe", reason: "top-10 npm download, well-maintained" },
   { pkg: "vue@latest",         verdict: "safe", reason: "top framework, well-maintained" },
-  { pkg: "next@latest",        verdict: "safe", reason: "top framework, well-maintained" },
+  { pkg: "date-fns@latest",    verdict: "safe", reason: "top utility, well-maintained" },
   { pkg: "vite@latest",        verdict: "safe", reason: "top dev tool, well-maintained" },
   { pkg: "webpack@latest",     verdict: "safe", reason: "top bundler, well-maintained" },
   { pkg: "eslint@latest",      verdict: "safe", reason: "top linter, well-maintained" },

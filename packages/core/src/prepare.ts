@@ -10,12 +10,12 @@ import { installPackageForEcosystem } from "./package-ecosystems.js";
 // Types
 // ---------------------------------------------------------------------------
 
-export type TargetType = "npm-package" | "pypi-package" | "cargo-package" | "source-code" | "url" | "web-app";
+export type TargetType = "npm-package" | "pypi-package" | "cargo-package" | "oci-image" | "source-code" | "url" | "web-app";
 
 export interface PrepareResult {
   targetType: TargetType;
   resolvedTarget: string; // local path or URL
-  packageInfo?: { name: string; version: string; path: string; tempDir: string; ecosystem: "npm" | "pypi" | "cargo" };
+  packageInfo?: { name: string; version: string; path: string; tempDir: string; ecosystem: "npm" | "pypi" | "cargo" | "oci" };
   repoPath?: string;
   cleanup: () => void;
 }
@@ -53,7 +53,7 @@ export function detectTargetType(target: string): TargetType {
 // ---------------------------------------------------------------------------
 
 interface InstalledPackage {
-  ecosystem: "npm" | "pypi" | "cargo";
+  ecosystem: "npm" | "pypi" | "cargo" | "oci";
   name: string;
   version: string;
   path: string;
@@ -64,7 +64,7 @@ interface InstalledPackage {
  * Install a package in a temporary directory and return its metadata.
  */
 function installPackage(
-  ecosystem: "npm" | "pypi" | "cargo",
+  ecosystem: "npm" | "pypi" | "cargo" | "oci",
   packageName: string,
   requestedVersion: string | undefined,
   emit: ScanListener,
@@ -214,6 +214,22 @@ export async function prepare(
 
     case "cargo-package": {
       const pkg = installPackage("cargo", target, opts.packageVersion, emit);
+      return {
+        targetType: type,
+        resolvedTarget: pkg.path,
+        packageInfo: pkg,
+        cleanup: () => {
+          try {
+            rmSync(pkg.tempDir, { recursive: true, force: true });
+          } catch {
+            // ignore
+          }
+        },
+      };
+    }
+
+    case "oci-image": {
+      const pkg = installPackage("oci", target, opts.packageVersion, emit);
       return {
         targetType: type,
         resolvedTarget: pkg.path,

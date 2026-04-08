@@ -8,7 +8,7 @@ import type { ScanListener } from "./scanner.js";
 import { restoreHistoricalPackageFixture, shouldUseHistoricalPackageFallback } from "./historical-package-fallback.js";
 import { bufferToString } from "./shared-analysis.js";
 
-export type PackageEcosystem = "npm" | "pypi" | "cargo";
+export type PackageEcosystem = "npm" | "pypi" | "cargo" | "oci";
 
 export interface InstalledPackage {
   ecosystem: PackageEcosystem;
@@ -526,12 +526,113 @@ function installCargoPackage(
   };
 }
 
+function hasExplicitOciTag(imageRef: string): boolean {
+  if (imageRef.includes("@")) return false;
+  const lastSlash = imageRef.lastIndexOf("/");
+  const lastColon = imageRef.lastIndexOf(":");
+  return lastColon > lastSlash;
+}
+
+function resolveOciImageRef(rawImageRef: string, requestedVersion: string | undefined): {
+  imageRef: string;
+  name: string;
+  version: string;
+} {
+  if (rawImageRef.includes("@")) {
+    const [name, digest] = rawImageRef.split("@", 2);
+    return { imageRef: rawImageRef, name, version: digest ?? "unknown" };
+  }
+
+  if (hasExplicitOciTag(rawImageRef)) {
+    const lastColon = rawImageRef.lastIndexOf(":");
+    return {
+      imageRef: rawImageRef,
+      name: rawImageRef.slice(0, lastColon),
+      version: rawImageRef.slice(lastColon + 1),
+    };
+  }
+
+  if (requestedVersion) {
+    return {
+      imageRef: `${rawImageRef}:${requestedVersion}`,
+      name: rawImageRef,
+      version: requestedVersion,
+    };
+  }
+
+  return {
+    imageRef: rawImageRef,
+    name: rawImageRef,
+    version: "latest",
+  };
+}
+
+function installOciImage(
+  rawImageRef: string,
+  requestedVersion: string | undefined,
+  emit: ScanListener,
+): InstalledPackage {
+  const tempDir = join(tmpdir(), `pwnkit-audit-${randomUUID().slice(0, 8)}`);
+  const rootfsDir = join(tempDir, "rootfs");
+  const exportTar = join(tempDir, "image.tar");
+  mkdirSync(rootfsDir, { recursive: true });
+
+  const { imageRef, name, version } = resolveOciImageRef(rawImageRef, requestedVersion);
+  emit({ type: "stage:start", stage: "discovery", message: `Pulling OCI image ${imageRef}...` });
+
+  let containerId = "";
+  try {
+    execFileSync("docker", ["pull", imageRef], {
+      timeout: 300_000,
+      stdio: "pipe",
+    });
+    containerId = execFileSync("docker", ["create", imageRef], {
+      encoding: "utf8",
+      timeout: 60_000,
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    execFileSync("docker", ["export", containerId, "-o", exportTar], {
+      timeout: 300_000,
+      stdio: "pipe",
+    });
+    execFileSync("tar", ["-xf", exportTar, "-C", rootfsDir], {
+      timeout: 300_000,
+      stdio: "pipe",
+    });
+  } catch (err) {
+    rmSync(tempDir, { recursive: true, force: true });
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to prepare OCI image ${imageRef}: ${msg}`);
+  } finally {
+    if (containerId) {
+      try {
+        execFileSync("docker", ["rm", "-f", containerId], {
+          timeout: 30_000,
+          stdio: "pipe",
+        });
+      } catch {
+        // best-effort cleanup
+      }
+    }
+  }
+
+  emit({ type: "stage:end", stage: "discovery", message: `Prepared OCI image ${name}:${version}` });
+  return {
+    ecosystem: "oci",
+    name,
+    version,
+    path: rootfsDir,
+    tempDir,
+  };
+}
+
 export function installPackageForEcosystem(
   ecosystem: PackageEcosystem,
   rawPackageName: string,
   requestedVersion: string | undefined,
   emit: ScanListener,
 ): InstalledPackage {
+  if (ecosystem === "oci") return installOciImage(rawPackageName, requestedVersion, emit);
   const { packageName, version } = splitPackageSpec(rawPackageName, requestedVersion);
   if (ecosystem === "pypi") return installPypiPackage(packageName, version, emit);
   if (ecosystem === "cargo") return installCargoPackage(packageName, version, emit);
@@ -543,6 +644,12 @@ export function runDependencyAuditForEcosystem(
   projectDir: string,
   emit: ScanListener,
 ): NpmAuditFinding[] {
+  if (ecosystem === "oci") {
+    emit({ type: "stage:start", stage: "discovery", message: "OCI image advisory lookup unavailable" });
+    emit({ type: "stage:end", stage: "discovery", message: "OCI image advisory lookup unavailable" });
+    return [];
+  }
+
   if (ecosystem === "cargo") {
     emit({ type: "stage:start", stage: "discovery", message: "Running cargo audit..." });
     const commands: Array<{ cmd: string; args: string[] }> = [

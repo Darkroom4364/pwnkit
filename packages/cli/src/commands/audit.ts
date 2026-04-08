@@ -7,7 +7,7 @@ export function registerAuditCommand(program: Command): void {
     .command("audit")
     .description("Audit a package for security vulnerabilities")
     .argument("<package>", "package name (e.g. lodash, express, requests)")
-    .option("--ecosystem <ecosystem>", "Package ecosystem: npm, pypi, cargo", "npm")
+    .option("--ecosystem <ecosystem>", "Package ecosystem: npm, pypi, cargo, oci", "npm")
     .option("--version <version>", "Specific version to audit (default: latest)")
     .option("--depth <depth>", "Audit depth: quick, default, deep", "default")
     .option("--format <format>", "Output format: terminal, json, md, html, sarif, pdf", "terminal")
@@ -21,8 +21,8 @@ export function registerAuditCommand(program: Command): void {
     .option("--timeout <ms>", "AI agent timeout in milliseconds", "600000")
     .action(async (packageName: string, opts: Record<string, string | boolean>) => {
       const ecosystem = ((opts.ecosystem as string | undefined) ?? "npm").trim().toLowerCase();
-      if (ecosystem !== "npm" && ecosystem !== "pypi" && ecosystem !== "cargo") {
-        throw new Error(`Unsupported ecosystem '${ecosystem}'. Valid: npm, pypi, cargo.`);
+      if (ecosystem !== "npm" && ecosystem !== "pypi" && ecosystem !== "cargo" && ecosystem !== "oci") {
+        throw new Error(`Unsupported ecosystem '${ecosystem}'. Valid: npm, pypi, cargo, oci.`);
       }
       let costCeilingUsd: number | undefined;
       const ceilingSource =
@@ -36,7 +36,14 @@ export function registerAuditCommand(program: Command): void {
       }
       await runUnified({
         target: packageName,
-        targetType: ecosystem === "pypi" ? "pypi-package" : ecosystem === "cargo" ? "cargo-package" : "npm-package",
+        targetType:
+          ecosystem === "pypi"
+            ? "pypi-package"
+            : ecosystem === "cargo"
+              ? "cargo-package"
+              : ecosystem === "oci"
+                ? "oci-image"
+                : "npm-package",
         depth: (opts.depth as ScanDepth) ?? "default",
         format: (opts.format === "md" ? "markdown" : opts.format) as OutputFormat,
         runtime: (opts.runtime as RuntimeMode) ?? "auto",

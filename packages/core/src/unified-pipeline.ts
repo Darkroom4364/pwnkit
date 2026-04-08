@@ -32,7 +32,7 @@ import {
 
 export interface PipelineOptions {
   target: string;
-  targetType?: "npm-package" | "pypi-package" | "cargo-package" | "source-code" | "url" | "web-app";
+  targetType?: "npm-package" | "pypi-package" | "cargo-package" | "oci-image" | "source-code" | "url" | "web-app";
   depth: ScanDepth;
   format: OutputFormat;
   runtime?: RuntimeMode;
@@ -79,10 +79,10 @@ export interface PipelineReport {
 interface PrepareResult {
   scopePath: string;
   resolvedTarget: string;
-  resolvedType: "npm-package" | "pypi-package" | "cargo-package" | "source-code" | "url" | "web-app";
+  resolvedType: "npm-package" | "pypi-package" | "cargo-package" | "oci-image" | "source-code" | "url" | "web-app";
   packageName?: string;
   packageVersion?: string;
-  packageEcosystem?: "npm" | "pypi" | "cargo";
+  packageEcosystem?: "npm" | "pypi" | "cargo" | "oci";
   tempDir?: string;
   needsCleanup: boolean;
 }
@@ -129,6 +129,10 @@ function prepareTarget(
 
   if (targetType === "cargo-package") {
     return prepareCargoPackage(opts.target, opts.packageVersion, emit);
+  }
+
+  if (targetType === "oci-image") {
+    return prepareOciImage(opts.target, opts.packageVersion, emit);
   }
 
   if (targetType === "source-code") {
@@ -205,6 +209,24 @@ function prepareCargoPackage(
     packageName: pkg.name,
     packageVersion: pkg.version,
     packageEcosystem: "cargo",
+    tempDir: pkg.tempDir,
+    needsCleanup: true,
+  };
+}
+
+function prepareOciImage(
+  imageRef: string,
+  requestedVersion: string | undefined,
+  emit: ScanListener,
+): PrepareResult {
+  const pkg = installPackageForEcosystem("oci", imageRef, requestedVersion, emit);
+  return {
+    scopePath: pkg.path,
+    resolvedTarget: `oci:${pkg.name}@${pkg.version}`,
+    resolvedType: "oci-image",
+    packageName: pkg.name,
+    packageVersion: pkg.version,
+    packageEcosystem: "oci",
     tempDir: pkg.tempDir,
     needsCleanup: true,
   };
@@ -571,13 +593,14 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
       prepared.resolvedType === "source-code" ||
       prepared.resolvedType === "npm-package" ||
       prepared.resolvedType === "pypi-package" ||
-      prepared.resolvedType === "cargo-package"
+      prepared.resolvedType === "cargo-package" ||
+      prepared.resolvedType === "oci-image"
     ) {
       try {
         semgrepFindings = runSemgrepScan(
           prepared.scopePath,
           analyzeEmit,
-          prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package" || prepared.resolvedType === "cargo-package"
+          prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package" || prepared.resolvedType === "cargo-package" || prepared.resolvedType === "oci-image"
             ? { noGitIgnore: true }
             : opts.changedOnly && changedFiles.length > 0
               ? { paths: changedFiles.map((path) => join(prepared.scopePath, path)) }
@@ -592,7 +615,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
 
     // dependency audit (package targets only, need the temp project dir)
     if (
-      (prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package" || prepared.resolvedType === "cargo-package") &&
+      (prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package" || prepared.resolvedType === "cargo-package" || prepared.resolvedType === "oci-image") &&
       prepared.tempDir &&
       prepared.packageEcosystem
     ) {
@@ -693,16 +716,19 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
       prepared.resolvedType === "npm-package" ||
       prepared.resolvedType === "pypi-package" ||
       prepared.resolvedType === "cargo-package" ||
+      prepared.resolvedType === "oci-image" ||
       prepared.resolvedType === "source-code"
     ) {
       const targetLabel = prepared.resolvedType === "source-code"
         ? "repository"
-        : `${prepared.packageEcosystem === "pypi" ? "PyPI" : prepared.packageEcosystem === "cargo" ? "crates.io" : "npm"} package ${prepared.packageName}@${prepared.packageVersion}`;
+        : `${prepared.packageEcosystem === "pypi" ? "PyPI" : prepared.packageEcosystem === "cargo" ? "crates.io" : prepared.packageEcosystem === "oci" ? "OCI image" : "npm"} package ${prepared.packageName}@${prepared.packageVersion}`;
       const advisoryLabel =
         prepared.packageEcosystem === "pypi"
           ? "pip-audit / dependency audit"
           : prepared.packageEcosystem === "cargo"
             ? "cargo audit / dependency audit"
+            : prepared.packageEcosystem === "oci"
+              ? "OCI image dependency audit"
             : "npm audit";
 
       const agentSystemPrompt = researchPrompt(
@@ -774,7 +800,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
     // ── PHASE 4: VERIFY (parallel blind agents) ──
     if (
       findings.length > 0 &&
-      (prepared.resolvedType === "source-code" || prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package" || prepared.resolvedType === "cargo-package")
+      (prepared.resolvedType === "source-code" || prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package" || prepared.resolvedType === "cargo-package" || prepared.resolvedType === "oci-image")
     ) {
       const canSkipVerify = existingVerifiedFindings.length === findings.length && findings.length > 0;
       emit({
@@ -934,7 +960,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineReport
       findings: confirmedFindings,
       warnings,
       // Backwards-compat extras
-      ...(prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package" || prepared.resolvedType === "cargo-package"
+      ...(prepared.resolvedType === "npm-package" || prepared.resolvedType === "pypi-package" || prepared.resolvedType === "cargo-package" || prepared.resolvedType === "oci-image"
         ? {
             package: prepared.packageName,
             version: prepared.packageVersion,

@@ -104,7 +104,7 @@ bun add -g pwnkit-cli
 
 - Shell-first web pentesting. The agent uses `bash`, writes scripts, and chains tools like a human pentester instead of being trapped in a small HTTP-tool DSL.
 - Blind verification. Findings are independently re-exploited before they are reported.
-- Docs-backed benchmark transparency. The current benchmark details live in the docs and raw artifacts under [`packages/benchmark/results`](/Users/peak/coding/tools/pwnkit/packages/benchmark/results).
+- Docs-backed benchmark transparency. The current benchmark details live in the docs and raw artifacts under [`packages/benchmark/results`](https://github.com/peaktwilight/pwnkit/tree/main/packages/benchmark/results).
 
 ## Docs
 

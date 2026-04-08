@@ -1,5 +1,12 @@
 name: npm-bench Benchmark
 
+run-name: >-
+  npm-bench (${{
+    inputs.depth || 'quick'
+  }}, ${{
+    inputs.runtime || 'api'
+  }})
+
 on:
   workflow_dispatch:
     inputs:

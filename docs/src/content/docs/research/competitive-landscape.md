@@ -108,7 +108,7 @@ Ranked by expected impact and implementation complexity. Estimates based on chal
 
 **Blind SQLi script templates.** Pre-built exploitation scripts for time-based and boolean-based blind SQL injection. The agent injects these into the shell rather than trying to write sqlmap commands from scratch. deadend-cli's blind SQLi solves motivated this -- the challenge type has high variance without templates.
 
-**Patched XBOW fork for all 104 challenges.** Several XBOW challenges had environment bugs (broken Docker configs, missing dependencies, timing issues). The patched fork fixes these so the agent isn't fighting infrastructure. This is the single highest-impact change: +10-15 flags from challenges that were previously unsolvable due to benchmark bugs.
+**Patched XBOW fork for broad 104-challenge coverage.** Several XBOW challenges had environment bugs (broken Docker configs, missing dependencies, timing issues). The patched fork removes most of that infrastructure drag and is still the right substrate for the 104-challenge suite, but individual cases like XBEN-099 still needed separate investigation on top. This is still one of the highest-impact changes: +10-15 flags from challenges that were previously unsolvable due to benchmark bugs.
 
 **Loop/oscillation detection.** Detects when the agent is repeating the same failed commands or oscillating between two ineffective approaches. When a loop is detected, the agent is forced to change strategy or escalate. Based on BoxPwnr's oscillation detection mechanism, which catches the most common failure mode in long-running pentesting sessions -- the agent trying the same exploit with minor variations indefinitely.
 

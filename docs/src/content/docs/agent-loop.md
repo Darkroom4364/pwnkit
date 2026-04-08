@@ -11,29 +11,29 @@ The core loop lives in `packages/core/src/agent/native-loop.ts` (`runNativeAgent
 
 ```mermaid
 flowchart TD
-    A[Build system prompt<br/>+ initial user message] --> RACE{--race?}
-    RACE -->|yes| PAR[Spawn N strategy agents<br/>in parallel]
+    A["Build system prompt\n+ initial user message"] --> RACE{"race mode?"}
+    RACE -->|yes| PAR["Spawn N strategy agents\nin parallel"]
     RACE -->|no| B[Call LLM API]
     PAR --> B
     B --> CTX{Context near limit?}
-    CTX -->|yes| COMP[Compact history<br/>summary + recent turns]
+    CTX -->|yes| COMP["Compact history\nsummary + recent turns"]
     COMP --> C{Response type?}
     CTX -->|no| C
-    C -->|tool_use| LOOP{Loop detector<br/>same call N times?}
+    C -->|tool_use| LOOP{"Loop detector\nsame call N times?"}
     LOOP -->|yes| NUDGE[Inject switch-strategy nudge]
     NUDGE --> B
     LOOP -->|no| D[Execute each tool call]
     D --> E[Append tool results]
     E --> F{Agent called done?}
     F -->|no| EG{EGATS enabled?}
-    EG -->|yes| TREE[Update hypothesis tree<br/>prune dead branches]
+    EG -->|yes| TREE["Update hypothesis tree\nprune dead branches"]
     TREE --> B
     EG -->|no| B
-    F -->|yes| W[First racer wins<br/>cancel others]
+    F -->|yes| W["First racer wins\ncancel others"]
     W --> G[Return findings + summary]
     C -->|text only| H{Budget + min turns met?}
     H -->|yes| G
-    H -->|no| I[Budget-aware continue prompt<br/>30 / 50 / 70 / 85 / 100 pct]
+    H -->|no| I["Budget-aware continue prompt\n30 / 50 / 70 / 85 / 100 pct"]
     I --> B
 
     style A fill:#1a1a2e,stroke:#e94560,color:#fff

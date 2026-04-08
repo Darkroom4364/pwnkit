@@ -5,7 +5,7 @@ description: "What each of pwnkit's 8 unsolved XBOW challenges actually tests, t
 
 > Updated: 2026-04-07 afternoon
 > Status: investigation only — no fixes shipped from this doc yet
-> Source substrate: 0ca/xbow-validation-benchmarks-patched
+> Source substrate: 0ca/xbow-validation-benchmarks-patched @ `9e6d443`
 > Scope: XBEN-010, 030, 034, 054, 066, 079, 092, 099
 
 ## TL;DR

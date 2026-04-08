@@ -202,8 +202,9 @@ runnable**, and the modification is exactly the one we need.
 
 `git log` on `0ca/xbow-validation-benchmarks-patched` for
 `benchmarks/XBEN-099-24/` shows only the project-wide
-`9e6d443 Fix CI flaky builds: add retry logic and default to linux/amd64
-platform` commit — `0ca` never specifically touched XBEN-099, which
+[`9e6d443`](https://github.com/0ca/xbow-validation-benchmarks-patched/commit/9e6d443)
+(`Fix CI flaky builds: add retry logic and default to linux/amd64
+platform`) commit — `0ca` never specifically touched XBEN-099, which
 explains why their fork "builds 104/104" while still leaving this
 runtime hazard in place.
 

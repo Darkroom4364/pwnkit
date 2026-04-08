@@ -54,18 +54,18 @@ fully auditable data.
 
 ```mermaid
 flowchart TD
-    IN[Raw agent findings<br/>~50% FP baseline]
-    IN --> L1[Layer 1 &middot; Holding-it-wrong<br/>removes library-API-as-vuln]
-    L1 --> L2[Layer 2 &middot; 45-feature extractor<br/>~15.9% FPR alone - VulnBERT]
-    L2 --> L3[Layer 3 &middot; Reachability gate<br/>kills dead code - Endor ~95% depends on this]
-    L3 --> L4[Layer 4 &middot; Per-class oracles<br/>deterministic exploit proof]
-    L4 --> L5[Layer 5 &middot; Multi-modal foxguard<br/>rules+neural agreement]
-    L5 --> L6[Layer 6 &middot; Structured 4-step verify<br/>GitHub SL reference]
-    L6 --> L7[Layer 7 &middot; Consensus voting<br/>self-consistency majority]
-    L7 --> L8[Layer 8 &middot; PoV gate<br/>no executable PoC = FP]
-    L8 --> L9[Layer 9 &middot; Triage memories<br/>Semgrep ~96% with feedback]
-    L9 --> L10[Layer 10 &middot; Adversarial debate<br/>Anthropic arXiv:2402.06782]
-    L10 --> OUT[Verified findings<br/>under 5% FP target &middot; >=95% recall]
+    IN["Raw agent findings\n~50% FP baseline"]
+    IN --> L1["Layer 1 · Holding-it-wrong\nremoves library-API-as-vuln"]
+    L1 --> L2["Layer 2 · 45-feature extractor\n~15.9% FPR alone - VulnBERT"]
+    L2 --> L3["Layer 3 · Reachability gate\nkills dead code - Endor ~95% depends on this"]
+    L3 --> L4["Layer 4 · Per-class oracles\ndeterministic exploit proof"]
+    L4 --> L5["Layer 5 · Multi-modal foxguard\nrules+neural agreement"]
+    L5 --> L6["Layer 6 · Structured 4-step verify\nGitHub SL reference"]
+    L6 --> L7["Layer 7 · Consensus voting\nself-consistency majority"]
+    L7 --> L8["Layer 8 · PoV gate\nno executable PoC = FP"]
+    L8 --> L9["Layer 9 · Triage memories\nSemgrep ~96% with feedback"]
+    L9 --> L10["Layer 10 · Adversarial debate\nAnthropic arXiv:2402.06782"]
+    L10 --> OUT["Verified findings\nunder 5% FP target · at least 95% recall"]
 
     style IN fill:#ef4444,stroke:#991b1b,color:#fff
     style L1 fill:#7c2d12,stroke:#e94560,color:#fff

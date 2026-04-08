@@ -19,10 +19,10 @@ flowchart TB
         OAI[OpenAI]
         ANT[Anthropic]
         OR[OpenRouter]
-        PROC[Process runtimes<br/>Claude / Codex / Gemini CLI]
+        PROC["Process runtimes\nClaude / Codex / Gemini CLI"]
     end
 
-    ORCH[Scanner orchestrator<br/>mode + budget + flags]
+    ORCH["Scanner orchestrator\nmode + budget + flags"]
 
     subgraph Pipeline[5-stage pipeline]
         direction LR
@@ -30,13 +30,13 @@ flowchart TB
     end
 
     subgraph Stores[Data stores]
-        FDB[(SQLite<br/>findings)]
-        MDB[(Memories DB<br/>FP context)]
+        FDB["SQLite\nfindings"]
+        MDB["Memories DB\nFP context"]
     end
 
     subgraph Ext[External integrations]
-        GH[GitHub Issues<br/>SARIF upload]
-        FX[foxguard<br/>Rust pattern scanner]
+        GH["GitHub Issues\nSARIF upload"]
+        FX["foxguard\nRust pattern scanner"]
     end
 
     CLI --> ORCH
@@ -102,10 +102,10 @@ flowchart TD
     AA[Attack agent] --> F[Raw findings]
     F --> L1[1. Holding-it-wrong]
     L1 -->|library misuse| INFO[Downgrade to info]
-    L1 --> L2[2. Feature extractor<br/>45 features]
+    L1 --> L2["2. Feature extractor\n45 features"]
     L2 --> L3[3. Reachability gate]
     L3 -->|unreachable| SUP[Suppressed]
-    L3 --> L4[4. Multi-modal<br/>foxguard cross-check]
+    L3 --> L4["4. Multi-modal\nfoxguard cross-check"]
     L4 --> L5[5. Per-class oracles]
     L5 -->|exploit verified| ACC[Auto-accept]
     L5 --> L6[6. PoV gate]

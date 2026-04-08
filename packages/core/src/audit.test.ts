@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { parseOsvAdvisories, queryOsvAdvisories } from "./audit.js";
+import { parseOsvAdvisories, queryOsvAdvisories, summarizeKnownAdvisoriesFinding } from "./audit.js";
 
 describe("parseOsvAdvisories", () => {
   it("maps OSV vulnerabilities into NpmAuditFinding shape", () => {
@@ -76,5 +76,58 @@ describe("queryOsvAdvisories", () => {
 
     const findings = await queryOsvAdvisories("axios", "0.21.0");
     expect(findings).toEqual([]);
+  });
+});
+
+describe("summarizeKnownAdvisoriesFinding", () => {
+  it("emits a deterministic finding for root-package advisories", () => {
+    const finding = summarizeKnownAdvisoriesFinding(
+      {
+        name: "lodash",
+        version: "4.17.20",
+        path: "/tmp/pkg",
+        tempDir: "/tmp",
+      },
+      [
+        {
+          name: "lodash",
+          severity: "high",
+          title: "Prototype pollution in lodash",
+          source: "GHSA-35jh-r3h4-6jhm",
+          url: "https://osv.dev/vulnerability/GHSA-35jh-r3h4-6jhm",
+          via: ["CVE-2021-23337"],
+          fixAvailable: "4.17.21",
+        },
+        {
+          name: "lodash",
+          severity: "medium",
+          title: "Command injection in lodash template",
+          source: "GHSA-29mw-wpgm-hmr9",
+          url: "https://osv.dev/vulnerability/GHSA-29mw-wpgm-hmr9",
+          via: ["CVE-2021-23337"],
+          fixAvailable: "4.17.21",
+        },
+      ],
+    );
+
+    expect(finding).toBeTruthy();
+    expect(finding?.templateId).toBe("known-package-advisories");
+    expect(finding?.severity).toBe("high");
+    expect(finding?.title).toContain("lodash@4.17.20");
+    expect(finding?.description).toContain("Prototype pollution in lodash");
+    expect(finding?.description).toContain("fix: 4.17.21");
+  });
+
+  it("returns null when there are no advisories", () => {
+    const finding = summarizeKnownAdvisoriesFinding(
+      {
+        name: "express",
+        version: "latest",
+        path: "/tmp/pkg",
+        tempDir: "/tmp",
+      },
+      [],
+    );
+    expect(finding).toBeNull();
   });
 });

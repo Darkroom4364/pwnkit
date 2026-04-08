@@ -397,6 +397,68 @@ function mergeAdvisories(
   return merged;
 }
 
+function severityRank(severity: Severity): number {
+  switch (severity) {
+    case "critical":
+      return 5;
+    case "high":
+      return 4;
+    case "medium":
+      return 3;
+    case "low":
+      return 2;
+    case "info":
+    default:
+      return 1;
+  }
+}
+
+export function summarizeKnownAdvisoriesFinding(
+  pkg: InstalledPackage,
+  advisories: NpmAuditFinding[],
+): Finding | null {
+  if (advisories.length === 0) return null;
+
+  const ordered = [...advisories].sort(
+    (a, b) => severityRank(b.severity) - severityRank(a.severity),
+  );
+  const topSeverity = ordered[0]?.severity ?? "medium";
+  const lines = ordered.slice(0, 8).map((advisory) => {
+    const id = advisory.source ? ` (${advisory.source})` : "";
+    const fix =
+      typeof advisory.fixAvailable === "string" && advisory.fixAvailable.length > 0
+        ? ` — fix: ${advisory.fixAvailable}`
+        : "";
+    return `- [${advisory.severity.toUpperCase()}] ${advisory.title}${id}${fix}`;
+  });
+
+  return {
+    id: randomUUID(),
+    templateId: "known-package-advisories",
+    title: `${pkg.name}@${pkg.version} matches ${advisories.length} known advisory${advisories.length === 1 ? "" : "ies"}`,
+    description:
+      `Deterministic package-version match against registry advisory data for the audited root package.\n\n` +
+      `${lines.join("\n")}` +
+      (advisories.length > lines.length
+        ? `\n- ... ${advisories.length - lines.length} more advisory matches`
+        : ""),
+    severity: topSeverity,
+    category: "known-vulnerable-package" as any,
+    status: "open" as any,
+    evidence: {
+      request: `advisory lookup for ${pkg.name}@${pkg.version}`,
+      response: ordered
+        .slice(0, 8)
+        .map((advisory) => `${advisory.title} | ${advisory.source ?? "unknown"} | ${advisory.url ?? "no-url"}`)
+        .join("\n"),
+      analysis:
+        "Deterministic root-package advisory match (OSV/npm audit). This finding does not depend on the LLM reading the source code or rediscovering the issue manually.",
+    },
+    confidence: 0.95,
+    timestamp: Date.now(),
+  };
+}
+
 function buildCliAuditPrompt(
   pkg: InstalledPackage,
   semgrepFindings: SemgrepFinding[],
@@ -634,6 +696,7 @@ export async function packageAudit(
       await queryOsvAdvisories(pkg.name, pkg.version, emit),
     );
     const semgrepFindings = runSemgrepScan(pkg.path, emit, { noGitIgnore: true });
+    const advisoryFinding = summarizeKnownAdvisoriesFinding(pkg, npmAuditFindings);
 
     // Step 2.5: Deterministic malicious-package oracles. These run before
     // the LLM, do not depend on the model, and catch the supply-chain
@@ -669,7 +732,11 @@ export async function packageAudit(
     // Combine deterministic + LLM findings into the final report set.
     // Deterministic findings come FIRST so they're prominent in the
     // report ordering — they're higher confidence than LLM output.
-    const findings = [...maliciousFindings, ...agentResult.findings];
+    const findings = [
+      ...(advisoryFinding ? [advisoryFinding] : []),
+      ...maliciousFindings,
+      ...agentResult.findings,
+    ];
 
     // Step 4: Build report
     const durationMs = Date.now() - startTime;

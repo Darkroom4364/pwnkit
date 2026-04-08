@@ -64,6 +64,7 @@ export function registerScanCommand(program: Command): void {
     .option("--race", "Enable best-of-N strategy racing: run multiple attack strategies in parallel", false)
     .option("--egats", "Enable EGATS (Evidence-Gated Attack Tree Search): beam-search over a hypothesis tree", false)
     .option("--cost-ceiling <usd>", "Hard per-scan USD cost ceiling. Aborts cleanly with partial findings if exceeded. Overrides PWNKIT_COST_CEILING_USD.")
+    .option("--tui", "Open the local terminal UI after the scan completes", false)
     .option(
       "--features <list>",
       "Comma-separated list of opt-in feature flags to enable for this scan (e.g. 'wp_fingerprint,web_search'). Each flag maps to the corresponding PWNKIT_FEATURE_<NAME> environment variable.",
@@ -208,6 +209,7 @@ export function registerScanCommand(program: Command): void {
         race: opts.race as boolean | undefined,
         egats: opts.egats as boolean | undefined,
         costCeilingUsd,
+        tui: opts.tui as boolean,
       });
     });
 }

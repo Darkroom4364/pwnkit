@@ -15,6 +15,7 @@ export function registerAuditCommand(program: Command): void {
     .option("--api-key <key>", "API key for LLM provider")
     .option("--model <model>", "LLM model to use")
     .option("--cost-ceiling <usd>", "Hard per-audit USD cost ceiling. Aborts cleanly with partial findings if exceeded.")
+    .option("--tui", "Open the local terminal UI after the audit completes", false)
     .option("--verbose", "Show detailed output", false)
     .option("--timeout <ms>", "AI agent timeout in milliseconds", "600000")
     .action(async (packageName: string, opts: Record<string, string | boolean>) => {
@@ -41,6 +42,7 @@ export function registerAuditCommand(program: Command): void {
         model: opts.model as string | undefined,
         packageVersion: opts.version as string | undefined,
         costCeilingUsd,
+        tui: opts.tui as boolean,
       });
     });
 }

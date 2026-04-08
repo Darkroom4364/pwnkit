@@ -34,6 +34,8 @@ export interface RunOptions {
   egats?: boolean;
   /** Hard per-scan USD cost ceiling. Aborts cleanly with partial findings if exceeded. */
   costCeilingUsd?: number;
+  /** Open the operator TUI after the run completes. */
+  tui?: boolean;
 }
 
 interface ResultLinePayload {
@@ -258,6 +260,13 @@ export async function runUnified(opts: RunOptions): Promise<void> {
             : formatReport(reportAny, format);
         console.log(output);
       }
+    }
+
+    if (opts.tui && process.stdout.isTTY && process.stdin.isTTY) {
+      const { showOperatorTui } = await import("../ui/Tui.js");
+      await showOperatorTui({
+        dbPath: opts.dbPath,
+      });
     }
 
     let exitCode = 0;

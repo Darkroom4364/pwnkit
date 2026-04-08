@@ -14,6 +14,7 @@ export function registerReviewCommand(program: Command): void {
     .option("--api-key <key>", "API key for LLM provider")
     .option("--model <model>", "LLM model to use")
     .option("--cost-ceiling <usd>", "Hard per-review USD cost ceiling. Aborts cleanly with partial findings if exceeded.")
+    .option("--tui", "Open the local terminal UI after the review completes", false)
     .option("--diff-base <ref>", "Git base ref to review against (for diff-aware review)")
     .option("--changed-only", "Restrict semgrep + prioritization to changed files", false)
     .option("--verbose", "Show detailed output", false)
@@ -43,6 +44,7 @@ export function registerReviewCommand(program: Command): void {
         apiKey: opts.apiKey as string | undefined,
         model: opts.model as string | undefined,
         costCeilingUsd,
+        tui: opts.tui as boolean,
       });
     });
 }

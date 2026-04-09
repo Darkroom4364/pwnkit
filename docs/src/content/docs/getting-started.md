@@ -3,7 +3,7 @@ title: Getting Started
 description: Install pwnkit, set up your API key, and run your first scan.
 ---
 
-pwnkit is a general-purpose autonomous pentesting framework. It scans AI/LLM apps, web applications, REST/OpenAPI APIs, npm packages, and source code using an agentic pipeline that discovers, attacks, verifies, and reports — with blind verification to kill false positives. It ships as an npm package. You can run it directly with `npx` or install it globally.
+pwnkit is a general-purpose autonomous pentesting framework. It scans AI/LLM apps, web applications, REST/OpenAPI APIs, package ecosystems, and source code using an agentic pipeline that discovers, attacks, verifies, and reports — with blind verification to kill false positives. It ships as an npm package. You can run it directly with `npx` or install it globally.
 
 ## Installation
 
@@ -57,13 +57,16 @@ npx pwnkit-cli scan --target https://your-app.com --mode web
 
 Runs autonomous pentesting against a web application using a shell-first approach. The agent gets `bash` as its primary tool and uses curl, python3, bash pipelines, and standard pentesting utilities to probe for CORS misconfigurations, exposed files, SSRF, XSS, SQL injection, SSTI, and other traditional web vulnerabilities. See [Architecture](/architecture/) for why shell-first beats structured tools.
 
-### Audit an npm package
+### Audit a package ecosystem target
 
 ```bash
 npx pwnkit-cli audit lodash
+npx pwnkit-cli audit requests --ecosystem pypi
+npx pwnkit-cli audit serde --ecosystem cargo
+npx pwnkit-cli audit alpine:3.20 --ecosystem oci
 ```
 
-Installs the package in a sandbox, runs static analysis (semgrep), and performs an AI-powered code review.
+Installs the target in a sandbox, runs ecosystem-specific prep plus static analysis, and performs an AI-powered code review.
 
 ### Review a codebase
 

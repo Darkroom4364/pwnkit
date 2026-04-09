@@ -3,7 +3,7 @@ title: Architecture
 description: How the 5-stage pipeline, runtime adapters, and MCP integration work.
 ---
 
-pwnkit is a fully autonomous agentic pentesting framework that covers AI/LLM apps, web applications, npm packages, and source code. It runs autonomous AI agents in a plan-discover-attack-verify-report pipeline. For web pentesting, the agent uses a shell-first approach -- `bash` (curl, python3, bash) is the primary tool, not structured APIs. For LLM and code targets, the agent uses specialized tools (`send_prompt`, `read_file`). Blind verification kills false positives -- every finding is independently re-exploited by a second agent that never sees the original reasoning.
+pwnkit is a fully autonomous agentic pentesting framework that covers AI/LLM apps, web applications, package ecosystems, and source code. It runs autonomous AI agents in a plan-discover-attack-verify-report pipeline. For web pentesting, the agent uses a shell-first approach -- `bash` (curl, python3, bash) is the primary tool, not structured APIs. For LLM and code targets, the agent uses specialized tools (`send_prompt`, `read_file`). Blind verification kills false positives -- every finding is independently re-exploited by a second agent that never sees the original reasoning.
 
 ## System architecture
 
@@ -189,7 +189,7 @@ The pipeline adapts its tooling and attack strategy based on the target type:
 | `probe` | LLM API URL | Lightweight surface scan of an LLM API |
 | `web` | Web application URL | CORS, headers, exposed files, SSRF, XSS, path traversal, fingerprinting |
 | `mcp` | MCP server | Tool poisoning, schema abuse, permission escalation |
-| `audit` | npm package name | Supply chain analysis, malicious code detection, dependency risk |
+| `audit` | Package or image name | Supply chain analysis, malicious code detection, dependency risk across `npm`, `pypi`, `cargo`, and `oci` |
 | `review` | Local path or GitHub URL | AI-powered source code vulnerability analysis |
 
 The mode is auto-detected from the target when possible, or set explicitly with `--mode`.
@@ -219,7 +219,7 @@ The `McpRuntime` adapter can connect to MCP servers, using their exposed tools a
 
 ### Scanning MCP servers
 
-The `--mode mcp` scan mode (coming soon) will probe MCP servers for:
+The `--mode mcp` scan mode probes MCP servers for:
 
 - **Tool poisoning** — malicious tool definitions that inject instructions
 - **Schema abuse** — tool schemas designed to exfiltrate data

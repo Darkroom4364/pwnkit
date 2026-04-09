@@ -72,6 +72,7 @@ export default defineConfig({
           items: [
             { label: "Agent Loop", slug: "agent-loop" },
             { label: "Blind Verification", slug: "blind-verification" },
+            { label: "Adversarial Evals", slug: "adversarial-evals" },
             { label: "White-Box Mode", slug: "white-box-mode" },
             { label: "Budget Management", slug: "budget-management" },
           ],

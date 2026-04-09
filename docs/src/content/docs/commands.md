@@ -130,9 +130,11 @@ Install and security-audit a package with static analysis and AI review.
 
 ```bash
 npx pwnkit-cli audit express --version 4.18.2
+npx pwnkit-cli audit requests --ecosystem pypi
+npx pwnkit-cli audit serde --ecosystem cargo
+npx pwnkit-cli audit alpine:3.20 --ecosystem oci
 npx pwnkit-cli audit react --depth deep --runtime claude
 npx pwnkit-cli audit left-pad --format html
-npx pwnkit-cli audit requests --ecosystem pypi
 ```
 
 The package is installed in a sandbox, scanned with semgrep, and then reviewed by an AI agent that traces data flow and looks for supply-chain vulnerabilities.
@@ -142,7 +144,7 @@ The package is installed in a sandbox, scanned with semgrep, and then reviewed b
 | Flag | Description | Default |
 |------|-------------|---------|
 | `<package>` | Package name | (required) |
-| `--ecosystem <e>` | Package ecosystem: `npm`, `pypi` | `npm` |
+| `--ecosystem <e>` | Package ecosystem: `npm`, `pypi`, `cargo`, `oci` | `npm` |
 | `--version <v>` | Specific version to audit | `latest` |
 | `--depth <d>` | Audit depth: `quick`, `default`, `deep` | `default` |
 | `--runtime <rt>` | Runtime: `auto`, `api`, `claude`, `codex`, `gemini` | `auto` |

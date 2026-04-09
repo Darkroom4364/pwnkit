@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 
-const repo = args.includes("--repo") ? args[args.indexOf("--repo") + 1] : "peaktwilight/pwnkit";
+const repo = args.includes("--repo") ? args[args.indexOf("--repo") + 1] : "PwnKit-Labs/pwnkit";
 const workflow = args.includes("--workflow") ? args[args.indexOf("--workflow") + 1] : "xbow-bench.yml";
 const limitRuns = args.includes("--limit-runs") ? parseInt(args[args.indexOf("--limit-runs") + 1], 10) : 50;
 const outputPath = args.includes("--output")

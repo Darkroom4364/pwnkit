@@ -7,6 +7,12 @@ This page is the single source of truth for "why we made these decisions and wha
 
 ## Topics
 
+### [Adversarial Evals](/adversarial-evals/)
+
+Why attack-driven evaluation is a better fit than generic judge-model evals
+for high-stakes AI systems, and how pwnkit can expose that category
+without weakening the pentest wedge.
+
 ### [Triage Dataset](/research/triage-dataset/)
 
 How benchmark runs and verified findings are converted into labeled JSONL

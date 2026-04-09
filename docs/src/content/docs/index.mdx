@@ -3,7 +3,7 @@ title: pwnkit
 description: Let autonomous AI agents hack you so the real ones can't.
 template: splash
 hero:
-  tagline: Fully autonomous agentic pentesting framework. Attacks AI/LLM apps, web apps, npm packages, and source code. Blind PoC verification to minimize false positives.
+  tagline: Fully autonomous agentic pentesting framework. Attacks AI/LLM apps, web apps, package ecosystems, and source code. Blind PoC verification to minimize false positives.
   actions:
     - text: Get Started
       link: /getting-started/
@@ -27,7 +27,7 @@ import { Card, CardGrid } from "@astrojs/starlight/components";
     Use your API key (OpenRouter, Anthropic, Azure OpenAI, OpenAI) or spawn Claude Code, Codex, or Gemini CLI with your existing subscription.
   </Card>
   <Card title="Full-spectrum pentesting" icon="list-format">
-    AI/LLM apps, web applications, npm packages, and source code repositories. Not just AI security -- pwnkit covers traditional web vulnerabilities too. Current XBOW: 91/104 = 87.5% (black-box) and 96/104 = 92.3% (white-box best-of-N aggregate), plus 8/10 on the first Cybench subset.
+    AI/LLM apps, web applications, package ecosystems, and source code repositories. Not just AI security -- pwnkit covers traditional web vulnerabilities too. Current XBOW: 91/104 = 87.5% (black-box) and 96/104 = 92.3% (white-box best-of-N aggregate), plus 8/10 on the first Cybench subset.
   </Card>
 </CardGrid>
 
@@ -37,6 +37,7 @@ import { Card, CardGrid } from "@astrojs/starlight/components";
 
 - [Agent Loop](/agent-loop/) — how the autonomous loop thinks, calls tools, reflects, and stops
 - [Blind Verification](/blind-verification/) — why findings are re-exploited before they count
+- [Adversarial Evals](/adversarial-evals/) — how pwnkit extends beyond classic pentesting into attack-driven evaluation of AI systems
 - [White-Box Mode](/white-box-mode/) — source-aware scanning with `--repo`
 - [Budget Management](/budget-management/) — turn budgets, retries, and reflection checkpoints
 

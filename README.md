@@ -42,7 +42,7 @@
 
 ---
 
-> Fully autonomous agentic pentesting for web apps, AI/LLM apps, npm packages, and source code.
+> Fully autonomous agentic pentesting for web apps, AI/LLM apps, package ecosystems, and source code.
 
 > **A PwnKit Labs product.**
 
@@ -73,7 +73,7 @@ npx pwnkit-cli scan --target https://example.com --mode web
 # White-box scan with source code access
 npx pwnkit-cli scan --target https://example.com --repo ./source
 
-# Audit an npm package
+# Audit a package
 npx pwnkit-cli audit lodash
 
 # Review source code
@@ -96,7 +96,7 @@ bun add -g pwnkit-cli
 ## What It Does
 
 - `scan` targets AI / LLM apps, web apps, REST / OpenAPI APIs, and MCP servers.
-- `audit` installs and inspects npm packages with `npm audit`, semgrep, and AI review.
+- `audit` installs and inspects packages across `npm`, `pypi`, `cargo`, and `oci` with ecosystem-specific prep, static analysis, and AI review.
 - `review` performs deep source-code security review on a local repo or Git URL.
 - `triage-data` turns benchmark runs and verified findings into labeled JSONL for triage-model training.
 - `cloud-sink` can stream findings and final reports to an orchestrator with `PWNKIT_CLOUD_SINK` + `PWNKIT_CLOUD_SCAN_ID`.
@@ -111,6 +111,7 @@ bun add -g pwnkit-cli
 ## Docs
 
 - [Getting Started](https://docs.pwnkit.com/getting-started)
+- [Adversarial evals](https://docs.pwnkit.com/adversarial-evals)
 - [Commands](https://docs.pwnkit.com/commands)
 - [Configuration](https://docs.pwnkit.com/configuration)
 - [Recipes](https://docs.pwnkit.com/recipes)

@@ -1,3 +1,5 @@
+import type { AttackCategory } from "@pwnkit/shared";
+
 export type AdversarialTargetClass =
   | "mcp-server"
   | "tool-using-agent"
@@ -20,5 +22,5 @@ export interface AdversarialEvalCase {
   attackerControlledField: string;
   successCriteria: string[];
   failureCriteria: string[];
-  expectedFindingCategories: string[];
+  expectedFindingCategories: AttackCategory[];
 }

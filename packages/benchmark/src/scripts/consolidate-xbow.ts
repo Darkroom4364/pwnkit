@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -51,6 +51,22 @@ interface SolvedSource {
   runtime: string | null;
 }
 
+interface ArtifactSummary {
+  id: number;
+  name: string;
+  expired: boolean;
+  created_at: string;
+  archive_download_url: string;
+  workflow_run?: {
+    id: number;
+  };
+}
+
+interface ArtifactPage {
+  total_count?: number;
+  artifacts?: ArtifactSummary[];
+}
+
 function ghJson<T>(argv: string[]): T {
   const output = execFileSync("gh", argv, {
     encoding: "utf-8",
@@ -70,6 +86,63 @@ function walk(dir: string): string[] {
     else files.push(full);
   }
   return files;
+}
+
+function fetchXbowArtifacts(
+  repoName: string,
+  runIds: Set<number>,
+  oldestRunCreatedAt: string,
+): ArtifactSummary[] {
+  const matches: ArtifactSummary[] = [];
+  const oldestMs = Date.parse(oldestRunCreatedAt);
+
+  for (let page = 1; page <= 10; page += 1) {
+    const payload = ghJson<ArtifactPage>([
+      "api",
+      `repos/${repoName}/actions/artifacts?per_page=100&page=${page}`,
+    ]);
+    const artifacts = payload.artifacts ?? [];
+    if (artifacts.length === 0) break;
+
+    for (const artifact of artifacts) {
+      if (!artifact.name.startsWith("xbow-results-")) continue;
+      if (artifact.expired) continue;
+      if (!artifact.workflow_run?.id || !runIds.has(artifact.workflow_run.id)) continue;
+      matches.push(artifact);
+    }
+
+    const last = artifacts[artifacts.length - 1];
+    if (!last) break;
+    const lastMs = Date.parse(last.created_at);
+    if (Number.isFinite(oldestMs) && Number.isFinite(lastMs) && lastMs < oldestMs) {
+      break;
+    }
+  }
+
+  return matches;
+}
+
+function downloadArtifact(repoName: string, artifact: ArtifactSummary, outputDir: string): string[] {
+  const zipPath = join(outputDir, `${artifact.id}.zip`);
+  const extractDir = join(outputDir, String(artifact.id));
+  mkdirSync(extractDir, { recursive: true });
+
+  const zipBuffer = execFileSync(
+    "gh",
+    ["api", `repos/${repoName}/actions/artifacts/${artifact.id}/zip`],
+    {
+      stdio: ["pipe", "pipe", "pipe"],
+      maxBuffer: 100 * 1024 * 1024,
+      encoding: "buffer",
+    },
+  );
+  writeFileSync(zipPath, zipBuffer);
+  execFileSync("unzip", ["-qq", zipPath, "-d", extractDir], {
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 100 * 1024 * 1024,
+  });
+  rmSync(zipPath, { force: true });
+  return walk(extractDir).filter((file) => basename(file) === "xbow-latest.json");
 }
 
 function uniqueSorted(values: Iterable<string>): string[] {
@@ -98,7 +171,23 @@ const runs = ghJson<RunSummary[]>([
   String(limitRuns),
   "--json",
   "databaseId,status,conclusion,createdAt,updatedAt,url",
-]).filter((run) => run.status === "completed" && run.conclusion === "success");
+]).filter((run) => run.status === "completed");
+const runsById = new Map(runs.map((run) => [run.databaseId, run] as const));
+const xbowArtifacts = runs.length > 0
+  ? fetchXbowArtifacts(
+      repo,
+      new Set(runs.map((run) => run.databaseId)),
+      runs[runs.length - 1]!.createdAt,
+    )
+  : [];
+const artifactsByRunId = new Map<number, ArtifactSummary[]>();
+for (const artifact of xbowArtifacts) {
+  const runId = artifact.workflow_run?.id;
+  if (!runId) continue;
+  const list = artifactsByRunId.get(runId) ?? [];
+  list.push(artifact);
+  artifactsByRunId.set(runId, list);
+}
 
 const blackBoxSolved = new Map<string, SolvedSource[]>();
 const whiteBoxSolved = new Map<string, SolvedSource[]>();
@@ -106,15 +195,17 @@ const skippedRuns: Array<{ runId: number; reason: string }> = [];
 
 for (const run of runs) {
   const downloadDir = mkdtempSync(join(tmpdir(), "pwnkit-xbow-consolidate-"));
+  const artifacts = artifactsByRunId.get(run.databaseId) ?? [];
+  if (artifacts.length === 0) {
+    skippedRuns.push({ runId: run.databaseId, reason: "no xbow-results artifact found" });
+    continue;
+  }
+
+  let reportFiles: string[] = [];
   try {
-    execFileSync(
-      "gh",
-      ["run", "download", String(run.databaseId), "--repo", repo, "-D", downloadDir],
-      {
-        stdio: ["pipe", "pipe", "pipe"],
-        maxBuffer: 50 * 1024 * 1024,
-      },
-    );
+    for (const artifact of artifacts) {
+      reportFiles = reportFiles.concat(downloadArtifact(repo, artifact, downloadDir));
+    }
   } catch (err) {
     skippedRuns.push({
       runId: run.databaseId,
@@ -123,7 +214,6 @@ for (const run of runs) {
     continue;
   }
 
-  const reportFiles = walk(downloadDir).filter((file) => basename(file) === "xbow-latest.json");
   if (reportFiles.length === 0) {
     skippedRuns.push({ runId: run.databaseId, reason: "no xbow-latest.json artifact found" });
     continue;
@@ -162,7 +252,8 @@ const canonical = {
   workflow,
   runWindow: {
     limitRuns,
-    successfulRunsConsidered: runs.length,
+    completedRunsConsidered: runs.length,
+    xbowArtifactsConsidered: xbowArtifacts.length,
     skippedRuns,
   },
   counts: {

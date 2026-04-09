@@ -441,7 +441,7 @@ function installPypiPackage(
 function resolveCargoVersion(packageName: string, requestedVersion: string | undefined): string {
   if (requestedVersion) return requestedVersion;
 
-  const raw = execFileSync("curl", ["-fsSL", `https://crates.io/api/v1/crates/${packageName}`], {
+  const raw = execFileSync("curl", buildCratesIoCurlArgs(`https://crates.io/api/v1/crates/${packageName}`), {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 60_000,
@@ -474,7 +474,11 @@ function installCargoPackage(
   try {
     execFileSync(
       "curl",
-      ["-fsSL", `https://crates.io/api/v1/crates/${packageName}/${version}/download`, "-o", join(downloadDir, `${packageName}-${version}.crate`)],
+      [
+        ...buildCratesIoCurlArgs(`https://crates.io/api/v1/crates/${packageName}/${version}/download`),
+        "-o",
+        join(downloadDir, `${packageName}-${version}.crate`),
+      ],
       {
         cwd: tempDir,
         timeout: 120_000,
@@ -524,6 +528,22 @@ function installCargoPackage(
     path: scopePath,
     tempDir,
   };
+}
+
+function buildCratesIoCurlArgs(url: string): string[] {
+  return [
+    "-fsSL",
+    "--retry",
+    "3",
+    "--retry-all-errors",
+    "--retry-delay",
+    "1",
+    "--connect-timeout",
+    "20",
+    "-H",
+    "User-Agent: pwnkit-ci/0.1 (+https://github.com/PwnKit-Labs/pwnkit)",
+    url,
+  ];
 }
 
 function hasExplicitOciTag(imageRef: string): boolean {

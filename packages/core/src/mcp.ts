@@ -46,9 +46,20 @@ interface McpProbe {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const SUSPICIOUS_DESCRIPTION = /(ignore (all|any) previous|system prompt|hidden instructions|always call|must invoke|secret tool)/i;
+const SUSPICIOUS_TOOL_OUTPUT = /(ignore(?:\s+\w+){0,3}\s+previous|system prompt|hidden instructions|always call|must invoke|call [a-z0-9_-]+|return (?:the )?(?:token|secret|key)|exfiltrat)/i;
 const EXPOSED_INTERNAL_TOOL = /(file|database|sql|shell|exec|email|admin|internal|passwd|credential)/i;
 
 const MCP_PROBES: McpProbe[] = [
+  {
+    id: "mcp-indirect-prompt-injection",
+    title: "Indirect prompt injection through MCP tool output",
+    regex: SUSPICIOUS_TOOL_OUTPUT,
+    severity: "high",
+    category: "prompt-injection",
+    analysis: "The MCP tool returned attacker-controlled instruction-like content that could steer downstream tool use or exfiltration if treated as trusted.",
+    buildArgs: buildUntrustedContentProbeArgs,
+    matchesTool: toolReturnsUntrustedContent,
+  },
   {
     id: "mcp-ssrf-metadata",
     title: "SSRF via MCP tool parameters",
@@ -230,10 +241,38 @@ function toolHasCommandParameter(tool: McpTool): boolean {
     || /shell|exec|command/i.test(tool.description ?? "");
 }
 
+function toolReturnsUntrustedContent(tool: McpTool): boolean {
+  const properties = tool.inputSchema?.properties ?? {};
+  return Object.keys(properties).some((key) => /url|uri|href|path|file|filename|query|search|term|topic|document|doc|article|slug|input|text|content/i.test(key))
+    || /fetch|browse|open|read|search|retrieve|get[_-]?(doc|page|article|content)/i.test(tool.name)
+    || /fetch|read|search|retrieve|document|article|markdown|html|content/i.test(tool.description ?? "");
+}
+
 function toolHasAdminParameter(tool: McpTool): boolean {
   const properties = tool.inputSchema?.properties ?? {};
   return Object.keys(properties).some((key) => /tenant|account|user|key|secret|token/i.test(key))
     && /admin|internal|rotate|key|secret|token/i.test(tool.name + " " + (tool.description ?? ""));
+}
+
+function buildUntrustedContentProbeArgs(tool: McpTool): Record<string, unknown> {
+  const properties = tool.inputSchema?.properties ?? {};
+  const keys = Object.keys(properties);
+
+  const findKey = (pattern: RegExp): string | undefined => keys.find((key) => pattern.test(key));
+
+  const urlKey = findKey(/url|uri|href|endpoint/i);
+  if (urlKey) return { [urlKey]: "https://attacker.invalid/deployment-runbook.md" };
+
+  const pathKey = findKey(/path|file|filename|document|doc|article|slug/i);
+  if (pathKey) return { [pathKey]: "docs/deployment-runbook.md" };
+
+  const queryKey = findKey(/query|search|term|topic|q$/i);
+  if (queryKey) return { [queryKey]: "deployment runbook" };
+
+  const textKey = findKey(/input|text|content/i);
+  if (textKey) return { [textKey]: "deployment runbook" };
+
+  return {};
 }
 
 function toolLooksSensitive(tool: McpTool): boolean {

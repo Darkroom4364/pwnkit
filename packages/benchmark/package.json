@@ -23,6 +23,7 @@
     "harmbench": "tsx src/harmbench-runner.ts",
     "harmbench:quick": "tsx src/harmbench-runner.ts --limit 20",
     "harmbench:json": "tsx src/harmbench-runner.ts --json",
+    "adversarial-tool-misuse": "tsx src/adversarial-tool-misuse-runner.ts",
     "npm-bench": "tsx src/npm-bench.ts",
     "npm-bench:json": "tsx src/npm-bench.ts --json",
     "consolidate-xbow": "tsx src/scripts/consolidate-xbow.ts",

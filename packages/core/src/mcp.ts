@@ -35,12 +35,13 @@ interface McpRequestResult {
 
 interface McpProbe {
   id: string;
-  url: string;
   title: string;
   regex: RegExp;
   severity: Finding["severity"];
   category: Finding["category"];
   analysis: string;
+  buildArgs: (tool: McpTool) => Record<string, unknown>;
+  matchesTool: (tool: McpTool) => boolean;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -50,21 +51,53 @@ const EXPOSED_INTERNAL_TOOL = /(file|database|sql|shell|exec|email|admin|interna
 const MCP_PROBES: McpProbe[] = [
   {
     id: "mcp-ssrf-metadata",
-    url: "http://169.254.169.254/latest/meta-data/",
     title: "SSRF via MCP tool parameters",
     regex: /(ami-id|instance-id|security-credentials)/i,
     severity: "critical",
     category: "tool-misuse",
     analysis: "The MCP server fetched cloud metadata through a tool parameter without blocking internal network access.",
+    buildArgs: () => ({ url: "http://169.254.169.254/latest/meta-data/" }),
+    matchesTool: toolHasUrlParameter,
   },
   {
     id: "mcp-data-exfil-local",
-    url: "file:///etc/passwd",
     title: "Data exfiltration through MCP tool responses",
     regex: /(root:.*:\/bin\/|daemon:.*nologin)/i,
     severity: "high",
     category: "data-exfiltration",
     analysis: "The MCP tool response exposed local file contents, which indicates sensitive data can be exfiltrated through tool output.",
+    buildArgs: () => ({ url: "file:///etc/passwd" }),
+    matchesTool: toolHasUrlParameter,
+  },
+  {
+    id: "mcp-data-exfil-direct-file",
+    title: "Data exfiltration through direct file-read tools",
+    regex: /(root:.*:\/bin\/|daemon:.*nologin)/i,
+    severity: "high",
+    category: "data-exfiltration",
+    analysis: "The MCP server exposed a file-read style tool that returned host file contents for attacker-controlled paths.",
+    buildArgs: () => ({ path: "/etc/passwd" }),
+    matchesTool: toolHasFilePathParameter,
+  },
+  {
+    id: "mcp-shell-command-exec",
+    title: "Tool misuse via attacker-controlled shell command execution",
+    regex: /\buid=\d+\(/i,
+    severity: "critical",
+    category: "tool-misuse",
+    analysis: "The MCP server executed an attacker-controlled shell command instead of enforcing a safe diagnostic boundary.",
+    buildArgs: () => ({ command: "id" }),
+    matchesTool: toolHasCommandParameter,
+  },
+  {
+    id: "mcp-admin-api-misuse",
+    title: "Privileged internal API misuse through attacker-controlled identifiers",
+    regex: /\b(secret|api[_-]?key|token|rotated)\b/i,
+    severity: "high",
+    category: "information-disclosure",
+    analysis: "The MCP server let an attacker drive a privileged internal API call with attacker-chosen identifiers and leaked sensitive output.",
+    buildArgs: () => ({ tenant_id: "prod-admin" }),
+    matchesTool: toolHasAdminParameter,
   },
 ];
 
@@ -181,6 +214,26 @@ function toolHasUrlParameter(tool: McpTool): boolean {
   return Object.keys(properties).some((key) => /url|uri|href|endpoint/i.test(key))
     || /fetch|request|browse|open|url|http/i.test(tool.name)
     || /url|http|https|fetch/i.test(tool.description ?? "");
+}
+
+function toolHasFilePathParameter(tool: McpTool): boolean {
+  const properties = tool.inputSchema?.properties ?? {};
+  return Object.keys(properties).some((key) => /path|file|filename/i.test(key))
+    || /read[_-]?file|cat[_-]?file|get[_-]?file|open[_-]?file/i.test(tool.name)
+    || /read.*file|file.*read|path/i.test(tool.description ?? "");
+}
+
+function toolHasCommandParameter(tool: McpTool): boolean {
+  const properties = tool.inputSchema?.properties ?? {};
+  return Object.keys(properties).some((key) => /command|cmd|script/i.test(key))
+    || /bash|shell|exec|command|run[_-]?command/i.test(tool.name)
+    || /shell|exec|command/i.test(tool.description ?? "");
+}
+
+function toolHasAdminParameter(tool: McpTool): boolean {
+  const properties = tool.inputSchema?.properties ?? {};
+  return Object.keys(properties).some((key) => /tenant|account|user|key|secret|token/i.test(key))
+    && /admin|internal|rotate|key|secret|token/i.test(tool.name + " " + (tool.description ?? ""));
 }
 
 function toolLooksSensitive(tool: McpTool): boolean {
@@ -341,16 +394,14 @@ export async function runMcpSecurityChecks(
     );
   }
 
-  const urlTool = tools.find(toolHasUrlParameter);
-  if (!urlTool) {
-    return { results, findings };
-  }
-
   for (const probe of MCP_PROBES) {
+    const tool = tools.find(probe.matchesTool);
+    if (!tool) continue;
+    const argumentsObject = probe.buildArgs(tool);
     const { response: callResponse, text } = await callMcpTool(
       ctx.config.target,
-      urlTool.name,
-      { url: probe.url },
+      tool.name,
+      argumentsObject,
       timeout,
     );
 
@@ -358,9 +409,9 @@ export async function runMcpSecurityChecks(
     results.push(
       createAttackResult(
         probe.id,
-        urlTool.name,
+        tool.name,
         vulnerable ? "vulnerable" : "safe",
-        JSON.stringify({ tool: urlTool.name, arguments: { url: probe.url } }),
+        JSON.stringify({ tool: tool.name, arguments: argumentsObject }),
         text,
         callResponse.latencyMs,
         callResponse.json?.error?.message,
@@ -372,10 +423,10 @@ export async function runMcpSecurityChecks(
         createFinding(
           probe.id,
           probe.title,
-          `The MCP tool ${urlTool.name} accepted a high-risk URL and returned sensitive content instead of enforcing network or filesystem restrictions.`,
+          `The MCP tool ${tool.name} accepted attacker-controlled parameters and returned sensitive or privileged results instead of enforcing the expected trust boundary.`,
           probe.severity,
           probe.category,
-          JSON.stringify({ tool: urlTool.name, arguments: { url: probe.url } }),
+          JSON.stringify({ tool: tool.name, arguments: argumentsObject }),
           text,
           probe.analysis,
         ),

@@ -85,15 +85,18 @@ describe("CLI E2E", () => {
     expect(result.stdout).toContain("--runtime");
   });
 
-  it("audit is-odd --runtime api --format json fails loudly without API key", () => {
+  it("audit is-odd --runtime api --format json degrades cleanly without API key", () => {
     const result = run(
       ["audit", "is-odd", "--runtime", "api", "--format", "json", "--db-path", testDbPath],
       60_000,
       { OPENROUTER_API_KEY: "", ANTHROPIC_API_KEY: "", AZURE_OPENAI_API_KEY: "", OPENAI_API_KEY: "" },
     );
-    expect(result.status).toBe(2);
-    const output = result.stdout + result.stderr;
-    expect(output).toContain("No API key found");
+    expect(result.status).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.package).toBe("is-odd");
+    expect(parsed.summary.totalFindings).toBeTypeOf("number");
+    const combined = result.stdout + result.stderr;
+    expect(combined).toContain('"package": "is-odd"');
   }, 60_000);
 
   it("review --help shows review options", () => {
@@ -113,19 +116,19 @@ describe("CLI E2E", () => {
     expect(result.stdout).toContain("--mode");
   });
 
-  it("share URL is not generated when explicit api runtime is unusable", () => {
+  it("share URL is still generated for a successful degraded deterministic run", () => {
     const result = run(
       ["audit", "is-odd", "--runtime", "api", "--format", "terminal", "--db-path", testDbPath + "-share"],
       60_000,
       { OPENROUTER_API_KEY: "", ANTHROPIC_API_KEY: "", AZURE_OPENAI_API_KEY: "", OPENAI_API_KEY: "" },
     );
     const output = result.stdout + result.stderr;
-    expect(result.status).toBe(2);
-    expect(output).not.toContain("pwnkit.com/r#");
-    expect(output).toContain("No API key found");
+    expect(result.status).toBe(0);
+    expect(output).toContain("pwnkit.com/r#");
+    expect(output).toContain("No vulnerabilities found");
   }, 60_000);
 
-  it("emits a machine-readable result line on failure when requested", () => {
+  it("emits a machine-readable result line when requested on degraded api runs", () => {
     const result = run(
       ["audit", "is-odd", "--runtime", "api", "--format", "json", "--db-path", testDbPath + "-result-line"],
       60_000,
@@ -138,12 +141,12 @@ describe("CLI E2E", () => {
       },
     );
     const output = result.stdout + result.stderr;
-    expect(result.status).toBe(2);
+    expect(result.status).toBe(0);
     const line = output.split("\n").find((entry) => entry.startsWith("PWNKIT_RESULT="));
     expect(line).toBeTruthy();
     const parsed = JSON.parse(line!.slice("PWNKIT_RESULT=".length));
-    expect(parsed.ok).toBe(false);
-    expect(parsed.exitCode).toBe(2);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.exitCode).toBe(0);
     expect(parsed.targetType).toBe("npm-package");
   }, 60_000);
 });

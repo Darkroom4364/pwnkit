@@ -438,7 +438,7 @@ function assertApiRuntimeSelection(
   preferredRuntime: RuntimeMode | undefined,
   diagnostics: ApiRuntimeDiagnostics,
 ): void {
-  if (preferredRuntime === "api" && !diagnostics.valid) {
+  if (preferredRuntime === "api" && diagnostics.reason === "invalid_config") {
     throw new Error(diagnostics.fatalError ?? `${diagnostics.providerLabel} runtime is not available.`);
   }
 

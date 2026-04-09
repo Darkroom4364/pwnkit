@@ -9,6 +9,7 @@ describe("runAdversarialPersistenceBenchmark", () => {
     expect(report.failed).toBe(0);
     expect(report.passed).toBe(report.totalCases);
     expect(report.results.every((item) => item.persistenceDetected)).toBe(true);
+    expect(report.results.every((item) => item.replayCompromised)).toBe(true);
   });
 
   it("supports running a single named case", async () => {
@@ -19,5 +20,6 @@ describe("runAdversarialPersistenceBenchmark", () => {
     expect(report.results[0]?.id).toBe("persistence-claude-md-secret-exfil");
     expect(report.results[0]?.passed).toBe(true);
     expect(report.results[0]?.durableSurface).toBe("claude-md");
+    expect(report.results[0]?.replayCompromised).toBe(true);
   });
 });

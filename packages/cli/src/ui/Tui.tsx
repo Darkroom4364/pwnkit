@@ -42,11 +42,65 @@ type FindingRow = {
 type EventRow = {
   id: string;
   scanId: string;
+  scanTarget?: string;
   stage: string;
   eventType: string;
   findingId?: string | null;
   agentRole?: string | null;
   payload: string;
+  timestamp: number;
+};
+
+type WorkerRow = {
+  id: string;
+  status: string;
+  label: string;
+  currentCaseId?: string | null;
+  currentWorkItemId?: string | null;
+  currentScanId?: string | null;
+  pid?: number | null;
+  host?: string | null;
+  lastError?: string | null;
+  heartbeatAt: string;
+  startedAt: string;
+  updatedAt: string;
+};
+
+type WorkItemRow = {
+  id: string;
+  caseId: string;
+  kind: string;
+  title: string;
+  status: string;
+  dependsOn?: string | null;
+  summary?: string | null;
+  findingFingerprint?: string | null;
+};
+
+type QueueSummary = {
+  runnable: number;
+  active: number;
+  blockedByDependency: number;
+  manualReview: number;
+  staleWorkers: number;
+  recoveredClaims: number;
+};
+
+type ActiveWorkerSummary = {
+  id: string;
+  label: string;
+  status: string;
+  currentTitle: string;
+  heartbeatLabel: string;
+  lastError?: string | null;
+};
+
+type IncidentSummary = {
+  scanId: string;
+  scanTarget: string;
+  stage: string;
+  actor?: string | null;
+  headline: string;
   timestamp: number;
 };
 
@@ -117,6 +171,129 @@ function truncate(value: string | undefined | null, max = 120): string {
   return `${compact.slice(0, max - 1)}…`;
 }
 
+function parsePayload(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function formatHeartbeatAge(iso: string): string {
+  const at = Date.parse(iso);
+  if (!Number.isFinite(at)) return iso;
+  const elapsedMs = Math.max(0, Date.now() - at);
+  if (elapsedMs < 60_000) return `${Math.round(elapsedMs / 1000)}s ago`;
+  if (elapsedMs < 3_600_000) return `${Math.round(elapsedMs / 60_000)}m ago`;
+  return `${Math.round(elapsedMs / 3_600_000)}h ago`;
+}
+
+function isFreshWorker(worker: WorkerRow): boolean {
+  return Date.now() - Date.parse(worker.heartbeatAt) < 20_000;
+}
+
+function summarizeQueue(workItems: WorkItemRow[], workers: WorkerRow[]): QueueSummary {
+  const executableKinds = new Set(["surface_map", "hypothesis", "poc_build", "blind_verify", "consensus"]);
+  const executableScope = workItems.filter((item) => Boolean(item.findingFingerprint));
+  const workItemsById = new Map(executableScope.map((item) => [item.id, item] as const));
+  const workItemsByCaseId = new Map<string, WorkItemRow[]>();
+
+  for (const item of executableScope) {
+    const list = workItemsByCaseId.get(item.caseId) ?? [];
+    list.push(item);
+    workItemsByCaseId.set(item.caseId, list);
+  }
+
+  let runnable = 0;
+  let active = 0;
+  let blockedByDependency = 0;
+  let manualReview = 0;
+  let recoveredClaims = 0;
+
+  for (const item of executableScope) {
+    if (item.status === "in_progress") active += 1;
+    if (item.kind === "human_review" && item.status === "todo") manualReview += 1;
+    if ((item.summary ?? "").includes("Recovered after stale worker")) recoveredClaims += 1;
+
+    if (!executableKinds.has(item.kind)) continue;
+    const dependency = item.dependsOn ? workItemsById.get(item.dependsOn) : null;
+    const siblings = workItemsByCaseId.get(item.caseId) ?? [];
+    const hasActiveSibling = siblings.some((candidate) => candidate.id !== item.id && candidate.status === "in_progress");
+    const dependencyDone = !item.dependsOn || dependency?.status === "done";
+
+    if (item.status === "todo" && dependencyDone && !hasActiveSibling) {
+      runnable += 1;
+    } else if ((item.status === "todo" || item.status === "backlog") && !dependencyDone) {
+      blockedByDependency += 1;
+    }
+  }
+
+  const staleWorkers = workers.filter(
+    (worker) => worker.status === "error" && typeof worker.lastError === "string" && worker.lastError.includes("Heartbeat expired"),
+  ).length;
+
+  return {
+    runnable,
+    active,
+    blockedByDependency,
+    manualReview,
+    staleWorkers,
+    recoveredClaims,
+  };
+}
+
+function summarizeActiveWorkers(workers: WorkerRow[], workItems: WorkItemRow[]): ActiveWorkerSummary[] {
+  const workItemsById = new Map(workItems.map((item) => [item.id, item] as const));
+  return workers
+    .filter((worker) => isFreshWorker(worker) && worker.status !== "stopped")
+    .map((worker) => {
+      const currentWorkItem = worker.currentWorkItemId ? workItemsById.get(worker.currentWorkItemId) : null;
+      return {
+        id: worker.id,
+        label: worker.label,
+        status: worker.status,
+        currentTitle: currentWorkItem?.title ?? worker.currentWorkItemId ?? "Idle",
+        heartbeatLabel: formatHeartbeatAge(worker.heartbeatAt),
+        lastError: worker.lastError ?? null,
+      };
+    });
+}
+
+function summarizeIncidents(events: EventRow[]): IncidentSummary[] {
+  const byScan = new Map<string, IncidentSummary>();
+  for (const event of events) {
+    const payload = parsePayload(event.payload);
+    const summaryText =
+      typeof payload.summary === "string" && payload.summary.trim()
+        ? payload.summary.trim()
+        : event.payload;
+    const isExecutionStall =
+      ["stage_complete", "agent_complete", "runtime_incompatible"].includes(event.eventType)
+      && /max turns|did not emit required tool_call/i.test(summaryText);
+    if (!["agent_error", "scan_error", "worker_failed"].includes(event.eventType) && !isExecutionStall) continue;
+    if (byScan.has(event.scanId)) continue;
+
+    const headline =
+      typeof payload.error === "string" && payload.error.trim()
+        ? payload.error.trim()
+        : typeof payload.summary === "string" && payload.summary.trim()
+          ? payload.summary.trim()
+          : truncate(event.payload, 120);
+
+    byScan.set(event.scanId, {
+      scanId: event.scanId,
+      scanTarget: event.scanTarget ?? event.scanId,
+      stage: event.stage,
+      actor: event.agentRole ?? null,
+      headline,
+      timestamp: event.timestamp,
+    });
+  }
+
+  return [...byScan.values()].slice(0, 4);
+}
+
 function originTags(finding: FindingRow): string[] {
   const tags: string[] = [];
   const templateId = finding.templateId ?? "";
@@ -170,6 +347,8 @@ async function loadState(dbPath?: string): Promise<{
   scans: ScanRow[];
   findings: FindingRow[];
   events: EventRow[];
+  workItems: WorkItemRow[];
+  workers: WorkerRow[];
 }> {
   const { pwnkitDB } = await import("@pwnkit/db");
   const db = new pwnkitDB(dbPath);
@@ -178,6 +357,8 @@ async function loadState(dbPath?: string): Promise<{
       scans: db.listScans(50) as ScanRow[],
       findings: db.listFindings({ limit: 500 }) as FindingRow[],
       events: db.listRecentEvents(100) as EventRow[],
+      workItems: (db.listWorkItems?.({ limit: 500 }) ?? []) as WorkItemRow[],
+      workers: (db.listWorkers?.(50) ?? []) as WorkerRow[],
     };
   } finally {
     db.close();
@@ -265,7 +446,9 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
     scans: ScanRow[];
     findings: FindingRow[];
     events: EventRow[];
-  }>({ scans: [], findings: [], events: [] });
+    workItems: WorkItemRow[];
+    workers: WorkerRow[];
+  }>({ scans: [], findings: [], events: [], workItems: [], workers: [] });
 
   useEffect(() => {
     let alive = true;
@@ -349,6 +532,18 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
       .filter((event) => !event.findingId || event.findingId === selectedFinding.id)
       .slice(0, 8);
   }, [selectedScan, selectedFinding, state.events]);
+  const queueSummary = useMemo(
+    () => summarizeQueue(state.workItems, state.workers),
+    [state.workItems, state.workers],
+  );
+  const activeWorkers = useMemo(
+    () => summarizeActiveWorkers(state.workers, state.workItems),
+    [state.workItems, state.workers],
+  );
+  const recentIncidents = useMemo(
+    () => summarizeIncidents(state.events),
+    [state.events],
+  );
 
   const detailLines = useMemo(() => {
     const lines: Array<{ color: string; text: string; bold?: boolean }> = [];
@@ -673,6 +868,9 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
         <Stat label="pane" value={pane} color="#06B6D4" />
         <Stat label="refresh" value={`${refreshMs}ms`} color="#9CA3AF" />
         <Stat label="family" value={familyFocus ? "on" : "off"} color={familyFocus ? "#F97316" : "#9CA3AF"} />
+        <Stat label="runnable" value={String(queueSummary.runnable)} color="#22C55E" />
+        <Stat label="workers" value={String(activeWorkers.length)} color={activeWorkers.length > 0 ? "#06B6D4" : "#9CA3AF"} />
+        <Stat label="incidents" value={String(recentIncidents.length)} color={recentIncidents.length > 0 ? "#DC2626" : "#9CA3AF"} />
       </Box>
       <Text color="#9CA3AF">
         {"  "}tab/←/→ switch pane · ↑/↓ navigate · / filter · f family · n note · a/s triage · A/S triage+note · r refresh · q quit
@@ -707,6 +905,78 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
       {error ? <Text color="#DC2626">  {error}</Text> : null}
       {!loading && !error && scans.length === 0 ? (
         <Text color="#9CA3AF">  No local scans found. Run a scan, audit, or review first.</Text>
+      ) : null}
+
+      {!loading && !error && scans.length > 0 ? (
+        <Box flexDirection="row" gap={2} marginTop={1} marginBottom={1}>
+          <Box
+            flexDirection="column"
+            width={36}
+            borderStyle="round"
+            borderColor="#444"
+            paddingX={1}
+            paddingY={0}
+          >
+            <PaneTitle label="Queue" active={false} />
+            <Text color="#D1D5DB">runnable: <Text color="#22C55E">{String(queueSummary.runnable)}</Text></Text>
+            <Text color="#D1D5DB">active claims: <Text color="#EAB308">{String(queueSummary.active)}</Text></Text>
+            <Text color="#D1D5DB">blocked deps: <Text color="#9CA3AF">{String(queueSummary.blockedByDependency)}</Text></Text>
+            <Text color="#D1D5DB">manual review: <Text color="#F97316">{String(queueSummary.manualReview)}</Text></Text>
+            <Text color="#D1D5DB">stale workers: <Text color={queueSummary.staleWorkers > 0 ? "#DC2626" : "#9CA3AF"}>{String(queueSummary.staleWorkers)}</Text></Text>
+            <Text color="#D1D5DB">recovered: <Text color="#06B6D4">{String(queueSummary.recoveredClaims)}</Text></Text>
+          </Box>
+
+          <Box
+            flexDirection="column"
+            width={52}
+            borderStyle="round"
+            borderColor="#444"
+            paddingX={1}
+            paddingY={0}
+          >
+            <PaneTitle label="Workers" active={false} meta={`${activeWorkers.length} active`} />
+            {activeWorkers.length === 0 ? (
+              <Text color="#9CA3AF">No active orchestration daemons.</Text>
+            ) : (
+              activeWorkers.slice(0, 3).map((worker) => (
+                <Box key={worker.id} flexDirection="column" marginBottom={1}>
+                  <Text color="#FFFFFF">
+                    {worker.label} · <Text color={statusColor(worker.status)}>{worker.status}</Text>
+                  </Text>
+                  <Text color="#6B7280">{truncate(worker.currentTitle, 46)}</Text>
+                  <Text color="#6B7280">heartbeat {worker.heartbeatLabel}</Text>
+                  {worker.lastError ? <Text color="#DC2626">{truncate(worker.lastError, 52)}</Text> : null}
+                </Box>
+              ))
+            )}
+          </Box>
+
+          <Box
+            flexDirection="column"
+            flexGrow={1}
+            borderStyle="round"
+            borderColor={recentIncidents.length > 0 ? "#DC2626" : "#444"}
+            paddingX={1}
+            paddingY={0}
+          >
+            <PaneTitle label="Incidents" active={false} meta={recentIncidents.length > 0 ? "attention" : "clear"} />
+            {recentIncidents.length === 0 ? (
+              <Text color="#22C55E">No recent runtime incidents.</Text>
+            ) : (
+              recentIncidents.slice(0, 3).map((incident) => (
+                <Box key={`${incident.scanId}:${incident.timestamp}`} flexDirection="column" marginBottom={1}>
+                  <Text color="#FFFFFF">{truncate(incident.scanTarget, 54)}</Text>
+                  <Text color="#DC2626">{truncate(incident.headline, 72)}</Text>
+                  <Text color="#6B7280">
+                    {incident.stage}
+                    {incident.actor ? ` · ${incident.actor}` : ""}
+                    {` · ${formatStarted(new Date(incident.timestamp).toISOString())}`}
+                  </Text>
+                </Box>
+              ))
+            )}
+          </Box>
+        </Box>
       ) : null}
 
       {!loading && !error && scans.length > 0 ? (
@@ -850,6 +1120,9 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
             {selectedFinding ? ` · ${selectedFinding.severity}/${selectedFinding.category}` : ""}
             {activeFingerprint ? ` · fp:${activeFingerprint.slice(0, 8)}` : ""}
             {filter ? ` · filter:${filter}` : ""}
+            {` · queue:${queueSummary.runnable}/${queueSummary.active}/${queueSummary.manualReview}`}
+            {activeWorkers.length > 0 ? ` · workers:${activeWorkers.length}` : ""}
+            {recentIncidents.length > 0 ? ` · incidents:${recentIncidents.length}` : ""}
           </Text>
         </Box>
       ) : null}

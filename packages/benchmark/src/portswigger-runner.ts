@@ -186,7 +186,7 @@ async function authenticate(): Promise<void> {
   const loginPageResp = await fetch(PS_LOGIN_URL, {
     redirect: "manual",
     headers: {
-      "User-Agent": "Mozilla/5.0 (pwnkit benchmark runner)",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       Accept: "text/html",
     },
   });
@@ -194,27 +194,30 @@ async function authenticate(): Promise<void> {
 
   const loginPageHtml = await loginPageResp.text();
 
-  // Extract CSRF token — PortSwigger uses a hidden input named "csrf" or "TokenCSRF"
+  // Extract CSRF token — PortSwigger uses a hidden input named "RequestVerificationToken"
+  // (with fallback to "csrf" / "TokenCSRF" for resilience)
   const csrfMatch = loginPageHtml.match(
-    /name=["'](?:csrf|TokenCSRF|_csrf_token)["']\s+value=["']([^"']+)["']/i
+    /name=["'](?:RequestVerificationToken|csrf|TokenCSRF|_csrf_token)["']\s+value=["']([^"']+)["']/i
   ) ?? loginPageHtml.match(
-    /value=["']([^"']+)["']\s+name=["'](?:csrf|TokenCSRF|_csrf_token)["']/i
+    /value=["']([^"']+)["']\s+name=["'](?:RequestVerificationToken|csrf|TokenCSRF|_csrf_token)["']/i
   );
 
   const csrfToken = csrfMatch?.[1] ?? "";
 
   // Step 2: POST the login form
   const formBody = new URLSearchParams({
-    csrf: csrfToken,
-    username: PS_USERNAME,
-    password: PS_PASSWORD,
+    RequestVerificationToken: csrfToken,
+    EmailAddress: PS_USERNAME,
+    Password: PS_PASSWORD,
+    RememberMe: "false",
+    ajaxRequest: "true",
   });
 
   const loginResp = await fetch(PS_LOGIN_URL, {
     method: "POST",
     redirect: "manual",
     headers: {
-      "User-Agent": "Mozilla/5.0 (pwnkit benchmark runner)",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       "Content-Type": "application/x-www-form-urlencoded",
       Cookie: jar.toString(),
       Referer: PS_LOGIN_URL,
@@ -238,11 +241,19 @@ async function authenticate(): Promise<void> {
     const followResp = await fetch(followUrl, {
       redirect: "manual",
       headers: {
-        "User-Agent": "Mozilla/5.0 (pwnkit benchmark runner)",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         Cookie: jar.toString(),
       },
     });
     jar.addFromResponse(followResp);
+  }
+
+  // Validate that the auth cookie is present
+  if (!jar.get("Authenticated_UserVerificationId")) {
+    throw new Error(
+      "PortSwigger login failed: Authenticated_UserVerificationId cookie not set after login. " +
+      "Check credentials or whether the login flow has changed."
+    );
   }
 
   if (!jsonOutput) {
@@ -253,48 +264,102 @@ async function authenticate(): Promise<void> {
 /**
  * Launch a lab instance and return the ephemeral lab URL.
  *
- * The PortSwigger API works like this:
- * - POST to the lab launch endpoint
- * - Poll until the lab URL appears (usually takes 5-20 seconds)
- * - Lab URL is like https://0a1b2c3d04e5f6g7.web-security-academy.net
+ * BoxPwnr-compatible Widget API flow:
+ * 1. GET the lab page, find div[widget-id="academy-launchlab"] and extract widget-lab-id
+ * 2. POST to /api/widgets with the widget ID to get launch button HTML
+ * 3. Extract the launch href from `a.button-orange`
+ * 4. GET the launch URL (which 302-redirects to the academy.net URL)
+ * 5. Poll until the lab URL is available
  */
 async function launchLab(lab: PortSwiggerLab): Promise<string | null> {
-  // The lab launch URL pattern based on BoxPwnr's implementation
-  const launchUrl = `${PS_LAB_BASE}/${lab.id}/launch`;
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  const labPageUrl = `${PS_LAB_BASE}/${lab.id}`;
 
   try {
-    const resp = await fetch(launchUrl, {
-      method: "POST",
-      redirect: "manual",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (pwnkit benchmark runner)",
-        Cookie: jar.toString(),
-        Referer: `${PS_LAB_BASE}/${lab.id}`,
-        Accept: "text/html,application/json",
-      },
+    // Step 1: GET the lab page and extract the widget-lab-id
+    const pageResp = await fetch(labPageUrl, {
+      headers: { "User-Agent": UA, Cookie: jar.toString(), Accept: "text/html" },
     });
-    jar.addFromResponse(resp);
+    jar.addFromResponse(pageResp);
+    const pageHtml = await pageResp.text();
 
-    // The response may include the lab URL directly, or we need to poll
-    const body = await resp.text();
+    // Extract widget-lab-id from div[widget-id="academy-launchlab"]
+    const widgetMatch = pageHtml.match(
+      /widget-id=["']academy-launchlab["'][^>]*widget-lab-id=["']([^"']+)["']/i
+    ) ?? pageHtml.match(
+      /widget-lab-id=["']([^"']+)["'][^>]*widget-id=["']academy-launchlab["']/i
+    );
 
-    // Try to extract lab URL from response
-    const labUrlMatch = body.match(/(https?:\/\/[a-z0-9]+\.web-security-academy\.net)/i);
-    if (labUrlMatch) {
-      return labUrlMatch[1];
+    if (!widgetMatch) {
+      if (!jsonOutput) console.error(`    could not find academy-launchlab widget on ${labPageUrl}`);
+      return null;
     }
 
-    // If not immediately available, poll the lab page for the URL
-    const deadline = Date.now() + 60_000; // 60s to provision
+    const widgetLabId = widgetMatch[1];
+
+    // Step 2: POST to /api/widgets to get the launch button HTML
+    const widgetResp = await fetch(`${PS_BASE}/api/widgets`, {
+      method: "POST",
+      headers: {
+        "User-Agent": UA,
+        Cookie: jar.toString(),
+        "Content-Type": "application/x-www-form-urlencoded",
+        Referer: labPageUrl,
+      },
+      body: new URLSearchParams({
+        widgetId: "academy-launchlab",
+        labId: widgetLabId,
+      }).toString(),
+    });
+    jar.addFromResponse(widgetResp);
+    const widgetHtml = await widgetResp.text();
+
+    // Step 3: Extract the launch href from a.button-orange (or any anchor with the launch URL)
+    const launchHrefMatch = widgetHtml.match(
+      /href=["']([^"']*\/launch-lab[^"']*)["']/i
+    ) ?? widgetHtml.match(
+      /<a[^>]*class=["'][^"']*button-orange[^"']*["'][^>]*href=["']([^"']+)["']/i
+    ) ?? widgetHtml.match(
+      /href=["']([^"']+)["'][^>]*class=["'][^"']*button-orange/i
+    );
+
+    if (!launchHrefMatch) {
+      if (!jsonOutput) console.error(`    could not find launch button in widget response`);
+      return null;
+    }
+
+    const launchHref = launchHrefMatch[1].startsWith("http")
+      ? launchHrefMatch[1]
+      : `${PS_BASE}${launchHrefMatch[1]}`;
+
+    // Step 4: GET the launch URL (follows a 302 redirect to the academy.net URL)
+    const launchResp = await fetch(launchHref, {
+      redirect: "manual",
+      headers: { "User-Agent": UA, Cookie: jar.toString(), Referer: labPageUrl },
+    });
+    jar.addFromResponse(launchResp);
+
+    // Check if the redirect gives us the lab URL directly
+    const redirectLocation = launchResp.headers.get("location") ?? "";
+    const directMatch = redirectLocation.match(/(https?:\/\/[a-z0-9]+\.web-security-academy\.net)/i);
+    if (directMatch) {
+      return directMatch[1];
+    }
+
+    // Also check the response body
+    const launchBody = await launchResp.text();
+    const bodyUrlMatch = launchBody.match(/(https?:\/\/[a-z0-9]+\.web-security-academy\.net)/i);
+    if (bodyUrlMatch) {
+      return bodyUrlMatch[1];
+    }
+
+    // Step 5: Poll the lab page for the URL (lab takes 5-20s to provision)
+    const deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
       await sleep(3_000);
 
-      const checkResp = await fetch(`${PS_LAB_BASE}/${lab.id}`, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (pwnkit benchmark runner)",
-          Cookie: jar.toString(),
-          Accept: "text/html",
-        },
+      const checkResp = await fetch(labPageUrl, {
+        headers: { "User-Agent": UA, Cookie: jar.toString(), Accept: "text/html" },
       });
       jar.addFromResponse(checkResp);
       const checkBody = await checkResp.text();
@@ -304,12 +369,26 @@ async function launchLab(lab: PortSwiggerLab): Promise<string | null> {
         return urlMatch[1];
       }
 
-      // Check if the lab button says something like "Access the lab"
-      if (checkBody.includes("ACCESS THE LAB") || checkBody.includes("access-the-lab")) {
-        const linkMatch = checkBody.match(/href=["'](https?:\/\/[a-z0-9]+\.web-security-academy\.net[^"']*)["']/i);
-        if (linkMatch) {
-          return linkMatch[1];
-        }
+      // Also try the widget API to check for the lab URL in the status widget
+      const statusResp = await fetch(`${PS_BASE}/api/widgets`, {
+        method: "POST",
+        headers: {
+          "User-Agent": UA,
+          Cookie: jar.toString(),
+          "Content-Type": "application/x-www-form-urlencoded",
+          Referer: labPageUrl,
+        },
+        body: new URLSearchParams({
+          widgetId: "academy-launchlab",
+          labId: widgetLabId,
+        }).toString(),
+      });
+      jar.addFromResponse(statusResp);
+      const statusBody = await statusResp.text();
+
+      const statusUrlMatch = statusBody.match(/(https?:\/\/[a-z0-9]+\.web-security-academy\.net)/i);
+      if (statusUrlMatch) {
+        return statusUrlMatch[1];
       }
     }
 
@@ -325,30 +404,46 @@ async function launchLab(lab: PortSwiggerLab): Promise<string | null> {
 /**
  * Check whether a lab has been solved.
  *
- * PortSwigger labs auto-detect completion. We check by:
- * 1. Fetching the lab page and looking for "Congratulations" or solved status
- * 2. Checking the lab status via the academy page
+ * Uses the Widget API (academy-labstatus) to check for the `is-solved` CSS class,
+ * matching BoxPwnr's implementation. Falls back to page scraping.
  */
 async function checkLabSolved(lab: PortSwiggerLab, labUrl: string): Promise<boolean> {
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  const labPageUrl = `${PS_LAB_BASE}/${lab.id}`;
+
   try {
-    // Check the lab instance itself for the congratulations banner
-    const labResp = await fetch(labUrl, {
+    // Primary: use the Widget API to check lab status
+    const widgetResp = await fetch(`${PS_BASE}/api/widgets`, {
+      method: "POST",
       headers: {
-        "User-Agent": "Mozilla/5.0 (pwnkit benchmark runner)",
+        "User-Agent": UA,
         Cookie: jar.toString(),
+        "Content-Type": "application/x-www-form-urlencoded",
+        Referer: labPageUrl,
       },
+      body: new URLSearchParams({
+        widgetId: "academy-labstatus",
+      }).toString(),
+    });
+    jar.addFromResponse(widgetResp);
+    const widgetBody = await widgetResp.text();
+
+    if (widgetBody.includes("is-solved")) {
+      return true;
+    }
+
+    // Fallback: check the lab instance itself for the congratulations banner
+    const labResp = await fetch(labUrl, {
+      headers: { "User-Agent": UA, Cookie: jar.toString() },
     });
     const labBody = await labResp.text();
     if (labBody.includes("Congratulations") || labBody.includes("congratulations")) {
       return true;
     }
 
-    // Also check the PortSwigger lab page for solved status
-    const statusResp = await fetch(`${PS_LAB_BASE}/${lab.id}`, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (pwnkit benchmark runner)",
-        Cookie: jar.toString(),
-      },
+    // Fallback: check the PortSwigger lab page for solved status
+    const statusResp = await fetch(labPageUrl, {
+      headers: { "User-Agent": UA, Cookie: jar.toString() },
     });
     jar.addFromResponse(statusResp);
     const statusBody = await statusResp.text();

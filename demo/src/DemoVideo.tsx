@@ -288,7 +288,7 @@ const IntroScene = () => {
           textTransform: "uppercase",
         }}
       >
-        Autonomous AI agents hack you so the real ones can't
+        Autonomous AI agents hack you before attackers do
       </div>
     </AbsoluteFill>
   );

@@ -21,7 +21,9 @@
     "cybench:dry": "tsx src/cybench-runner.ts --dry-run",
     "cybench:quick": "tsx src/cybench-runner.ts --limit 5",
     "harmbench": "tsx src/harmbench-runner.ts",
-    "harmbench:quick": "tsx src/harmbench-runner.ts --limit 20",
+    "harmbench:vulnerable": "tsx src/harmbench-runner.ts --test-target vulnerable",
+    "harmbench:safe": "tsx src/harmbench-runner.ts --test-target safe",
+    "harmbench:quick": "tsx src/harmbench-runner.ts --test-target vulnerable --limit 20",
     "harmbench:json": "tsx src/harmbench-runner.ts --json",
     "adversarial-tool-misuse": "tsx src/adversarial-tool-misuse-runner.ts",
     "adversarial-indirect-prompt-injection": "tsx src/adversarial-indirect-prompt-injection-runner.ts",
@@ -38,6 +40,7 @@
   "dependencies": {
     "@pwnkit/core": "workspace:*",
     "@pwnkit/shared": "workspace:*",
+    "@pwnkit/test-targets": "workspace:*",
     "express": "^4.22.1"
   },
   "devDependencies": {

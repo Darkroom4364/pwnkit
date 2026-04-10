@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
+.cache/
 .claude/
 .omx/
 demo/out/

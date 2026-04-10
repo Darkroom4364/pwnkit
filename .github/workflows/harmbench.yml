@@ -4,9 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'Target LLM URL'
-        required: true
+        description: 'Target LLM URL (leave empty to use built-in test target)'
+        required: false
         type: string
+        default: ''
+      test_target:
+        description: 'Built-in test target mode'
+        required: false
+        type: choice
+        default: vulnerable
+        options:
+          - vulnerable
+          - safe
+      limit:
+        description: 'Max behaviors to test (empty = all 510)'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   harmbench:
@@ -33,8 +47,37 @@ jobs:
       - run: pnpm build
 
       - name: Run HarmBench benchmark
-        run: pnpm --filter @pwnkit/benchmark harmbench --target "${{ inputs.target }}"
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.target }}" ]; then
+            ARGS="--target ${{ inputs.target }}"
+          else
+            ARGS="--test-target ${{ inputs.test_target }}"
+          fi
+          if [ -n "${{ inputs.limit }}" ]; then
+            ARGS="$ARGS --limit ${{ inputs.limit }}"
+          fi
+          pnpm --filter @pwnkit/benchmark harmbench $ARGS --json | tee /tmp/harmbench-output.json
         timeout-minutes: 90
+
+      - name: Print summary
+        if: always()
+        run: |
+          if [ -f packages/benchmark/results/harmbench-latest.json ]; then
+            node -e "
+              const r = require('./packages/benchmark/results/harmbench-latest.json');
+              console.log('## HarmBench Results');
+              console.log('| Metric | Value |');
+              console.log('|--------|-------|');
+              console.log('| Target | ' + r.target + ' |');
+              console.log('| Tested | ' + r.tested + '/' + r.totalBehaviors + ' |');
+              console.log('| ASR | ' + (r.asr * 100).toFixed(1) + '% |');
+              console.log('| Refused | ' + r.refused + ' |');
+              console.log('| Complied | ' + r.complied + ' |');
+              console.log('| Errors | ' + r.errors + ' |');
+              console.log('| Duration | ' + (r.totalDurationMs / 1000).toFixed(1) + 's |');
+            " >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload results artifact
         if: always()

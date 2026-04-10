@@ -37,7 +37,7 @@ import { tmpdir } from "node:os";
 import {
   runNativeAgentLoop,
   getToolsForRole,
-
+  LlmApiRuntime,
 } from "@pwnkit/core";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -195,23 +195,44 @@ function startContainers(task: AutoPenBenchTask, allTasks: AutoPenBenchTask[]): 
   const composes = getAllComposePaths(allTasks);
   const composeArgs = composes.flatMap((p) => ["-f", p]);
 
+  // Ensure the kali tmp_script volume directory exists (setup.sh creates it
+  // upstream, but we skip that script).
+  const tmpScriptDir = join(MACHINES_DIR, "kali", "tmp_script");
+  mkdirSync(tmpScriptDir, { recursive: true });
+
+  const run = (cmd: string, timeoutMs: number): void => {
+    try {
+      execSync(cmd, { stdio: "pipe", timeout: timeoutMs, cwd: AUTOPENBENCH_PATH });
+    } catch (err) {
+      const stderr = (err as any)?.stderr?.toString?.()?.slice(0, 500) ?? "";
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`    docker error: ${msg}`);
+      if (stderr) console.error(`    stderr: ${stderr}`);
+      throw err;
+    }
+  };
+
   try {
     // Tear down everything first
-    execSync(
-      `docker compose -f ${BASE_COMPOSE} ${composeArgs.join(" ")} down --remove-orphans`,
-      { stdio: "pipe", timeout: 60_000, cwd: AUTOPENBENCH_PATH },
-    );
+    try {
+      run(
+        `docker compose -f ${BASE_COMPOSE} ${composeArgs.join(" ")} down --remove-orphans`,
+        60_000,
+      );
+    } catch {
+      // Ignore — containers may not be running
+    }
 
     // Start Kali master
-    execSync(
+    run(
       `docker compose -f ${BASE_COMPOSE} ${composeArgs.join(" ")} up -d kali_master`,
-      { stdio: "pipe", timeout: 120_000, cwd: AUTOPENBENCH_PATH },
+      120_000,
     );
 
     // Start the target VM
-    execSync(
+    run(
       `docker compose -f ${BASE_COMPOSE} -f ${taskCompose} up -d ${task.target}`,
-      { stdio: "pipe", timeout: 120_000, cwd: AUTOPENBENCH_PATH },
+      120_000,
     );
 
     // Handle companion services (databases, second VMs)
@@ -221,9 +242,9 @@ function startContainers(task: AutoPenBenchTask, allTasks: AutoPenBenchTask[]): 
       "in-vitro_network_security_vm5": ["in-vitro_network_security_vm5b"],
     };
     for (const companion of companions[task.target] ?? []) {
-      execSync(
+      run(
         `docker compose -f ${BASE_COMPOSE} -f ${taskCompose} up -d ${companion}`,
-        { stdio: "pipe", timeout: 60_000, cwd: AUTOPENBENCH_PATH },
+        60_000,
       );
     }
 
@@ -233,9 +254,20 @@ function startContainers(task: AutoPenBenchTask, allTasks: AutoPenBenchTask[]): 
       execSync("sleep 20");
     }
 
-    // Wait a moment for SSH to come up on Kali
-    execSync("sleep 3");
-    return true;
+    // Wait for Kali SSH to accept connections (up to 30s)
+    for (let i = 0; i < 10; i++) {
+      try {
+        execSync(
+          `sshpass -p '${KALI_SSH_PASS}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 ${KALI_SSH_USER}@${KALI_IP} 'echo ok'`,
+          { stdio: "pipe", timeout: 10_000 },
+        );
+        return true;
+      } catch {
+        execSync("sleep 3");
+      }
+    }
+    console.error(`    Kali SSH at ${KALI_IP} not reachable after 30s`);
+    return false;
   } catch (err) {
     return false;
   }
@@ -337,8 +369,7 @@ async function runTask(task: AutoPenBenchTask, allTasks: AutoPenBenchTask[]): Pr
   }
 
   try {
-    // Create LLM runtime
-    const { LlmApiRuntime } = await import("@pwnkit/core");
+    // Create LLM runtime (fresh per task to avoid stale connections)
     const runtime = new LlmApiRuntime({ type: "api" as const, timeout: 120_000 });
 
     // Get shell-first tools: bash + save_finding + done

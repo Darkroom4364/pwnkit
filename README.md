@@ -12,8 +12,8 @@
 <!-- Row 1 — the proof: what the agent actually does on public benchmarks.
      Bold crimson e63946 across all three so they read as one wall of impact. -->
 <p align="center">
- <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/XBOW%20retained%20artifacts-93.3%25%20(97%2F104)-e63946?style=flat-square&labelColor=2b2d42" alt="XBOW retained artifact-backed aggregate" /></a>
- <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/XBOW%20historical%20published-92.3%25%20(96%2F104)-e63946?style=flat-square&labelColor=2b2d42" alt="XBOW historical mixed local+CI tally" /></a>
+ <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/XBOW%20retained%20artifacts-95.2%25%20(99%2F104)-e63946?style=flat-square&labelColor=2b2d42" alt="XBOW retained artifact-backed aggregate" /></a>
+ <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/XBOW%20historical%20published-91.3%25%20(95%2F104)-e63946?style=flat-square&labelColor=2b2d42" alt="XBOW historical mixed local+CI tally" /></a>
  <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/Cybench-80%25%20(8%2F10)-e63946?style=flat-square&labelColor=2b2d42" alt="Cybench score" /></a>
 </p>
 
@@ -121,9 +121,9 @@ bun add -g pwnkit-cli
 
 ## Snapshot
 
-- XBOW retained artifact-backed aggregate: 97/104 = 93.3%
+- XBOW retained artifact-backed aggregate: 99/104 = 95.2%
 - XBOW retained artifact-backed black-box: 74/104 = 71.2%
-- XBOW historical mixed local+CI publication: 96/104 aggregate and 91/104 black-box
+- XBOW historical mixed local+CI publication: 95/104 aggregate and 90/104 black-box
 - Cybench: 8/10 = 80%
 - AI / LLM regression set: 10/10
 

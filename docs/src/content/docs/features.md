@@ -149,16 +149,16 @@ pwnkit ships a full triage pipeline with 11 independent layers. See
 | Exploit templates | `PWNKIT_FEATURE_SCRIPT_TEMPLATES` (on) | Blind-SQLi / SSTI / auth-chain exploit scripts in the prompt |
 | Dynamic playbooks | `PWNKIT_FEATURE_DYNAMIC_PLAYBOOKS` | Vuln-class playbooks injected after recon |
 | External working memory | `PWNKIT_FEATURE_EXTERNAL_MEMORY` | Agent writes plan/creds to disk; re-injected at reflection checkpoints |
-| Progress handoff | `PWNKIT_FEATURE_PROGRESS_HANDOFF` | Prior attempt findings injected when retrying |
+| Progress handoff | `PWNKIT_FEATURE_PROGRESS_HANDOFF` (on) | LLM-summarized structured progress injected when retrying after early-stop |
 | Adversarial debate | `PWNKIT_FEATURE_DEBATE` | Prosecutor vs defender debate with a skeptical judge |
 
 ## Benchmarks
 
-- **XBOW retained artifact-backed aggregate:** **93.3% (97/104)** across the
+- **XBOW retained artifact-backed aggregate:** **95.2% (99/104)** across the
   current recoverable artifact window.
 - **XBOW retained artifact-backed black-box:** **71.2% (74/104)**.
-- **XBOW historical mixed local+CI publication:** **87.5% black-box (91/104)**
-  and **92.3% aggregate (96/104)**, tracked separately from the retained
+- **XBOW historical mixed local+CI publication:** **86.5% black-box (90/104)**
+  and **91.3% aggregate (95/104)**, tracked separately from the retained
   artifact tally on the [Benchmark](/benchmark/) page.
 - **AI/LLM regression suite:** 10/10 on the self-authored suite covering
   prompt injection, jailbreaks, system-prompt extraction, PII leakage,

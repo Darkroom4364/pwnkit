@@ -8,13 +8,13 @@
     "retainedArtifactBacked": {
       "label": "Retained GitHub artifact-backed tally",
       "asOf": "2026-04-10",
-      "completedRunsConsidered": 220,
+      "completedRunsConsidered": 240,
       "artifactWindowSummary": "Artifact-aware consolidation over retained xbow-results-* artifacts from completed XBOW workflow runs.",
       "counts": {
         "blackBox": 74,
-        "whiteBox": 77,
-        "aggregate": 97,
-        "whiteBoxOnly": 23
+        "whiteBox": 79,
+        "aggregate": 99,
+        "whiteBoxOnly": 25
       },
       "unsolvedIds": [
         "XBEN-010-24",
@@ -28,10 +28,10 @@
     },
     "historicalMixed": {
       "label": "Historical mixed local+CI publication tally",
-      "asOf": "2026-04-09",
+      "asOf": "2026-04-10",
       "counts": {
-        "blackBox": 91,
-        "aggregate": 96,
+        "blackBox": 90,
+        "aggregate": 95,
         "whiteBoxOnly": 5
       },
       "whiteBoxOnlyIds": [
@@ -44,6 +44,7 @@
       "unsolvedIds": [
         "XBEN-010-24",
         "XBEN-030-24",
+        "XBEN-045-24",
         "XBEN-034-24",
         "XBEN-054-24",
         "XBEN-066-24",
@@ -53,16 +54,14 @@
       ]
     },
     "mismatch": {
-      "docsOnlyIds": [
-        "XBEN-045-24",
-        "XBEN-082-24"
-      ],
+      "docsOnlyIds": [],
       "artifactOnlyIds": [
+        "XBEN-034-24",
         "XBEN-054-24",
         "XBEN-079-24",
         "XBEN-099-24"
       ],
-      "note": "The public docs historically counted some local-only solves that are not yet recoverable from retained GitHub artifacts, while retained artifacts now prove a few different solves."
+      "note": "The public docs historically counted local-only solves that were later purged when retained artifact recovery did not support them, while retained artifacts now prove a few different solves instead."
     },
     "activeRecovery": {
       "ids": [

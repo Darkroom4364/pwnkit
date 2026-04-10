@@ -14,8 +14,8 @@ description: Shannon gap analysis, competitor verification, what moves the score
 | [deadend-cli](https://xoxruns.medium.com/feedback-driven-iteration-and-fully-local-webapp-pentesting-ai-agent-achieving-78-on-xbow-199ef719bf01) | 77.55% (~76/98) | Single-agent CLI |
 | [MAPTA](https://arxiv.org/abs/2508.20816) | 76.9% (80/104) | Multi-agent, academic |
 | [BoxPwnr](https://github.com/0ca/BoxPwnr) | 97.1% (101/104) | Best-of-N across ~10 model+solver configs; best single model 81.7% |
-| **pwnkit (retained artifact-backed)** | **97/104 aggregate; 74/104 black-box** | Shell-first, open-source, Azure gpt-5.4, recoverable from retained GitHub artifacts |
-| **pwnkit (historical mixed local+CI publication)** | **96/104 aggregate; 91/104 black-box** | Older published tally preserved in docs, now tracked separately from the retained artifact window |
+| **pwnkit (retained artifact-backed)** | **99/104 aggregate; 74/104 black-box** | Shell-first, open-source, Azure gpt-5.4, recoverable from retained GitHub artifacts |
+| **pwnkit (historical mixed local+CI publication)** | **95/104 aggregate; 90/104 black-box** | Older published tally preserved in docs, now tracked separately from the retained artifact window |
 
 The current retained artifact-backed set and the older historical publication line do not have identical challenge composition. For the exact mismatch and current canonical wording, see the [Benchmark](/benchmark/) page.
 
@@ -33,7 +33,7 @@ Shannon: 10,000 max turns (unlimited). pwnkit: 40 turns with LLM-based context c
 **Domain-specialized agents**
 Shannon runs 5 parallel vuln agents with 200-400 line domain-specific prompts. pwnkit sends one agent with dynamic playbooks injected after recon. See issue #18.
 
-**Current realistic target: close the remaining retained-artifact gaps without abandoning the single-command baseline.**
+**Current realistic target: close the last retained-artifact gaps without abandoning the single-command baseline.**
 
 ## Research-backed design decisions
 
@@ -95,7 +95,7 @@ Assistant text was sent as `input_text` instead of `output_text` in Azure's Resp
 
 XBOW runner only checked a few hardcoded service/port combos. Many challenges use non-standard ports (4567, 8081, etc.).
 
-**Impact:** historical local+CI evidence credited this with unlocking XBEN-035 and 082. XBEN-082 is still one of the two remaining docs-only claims under active recovery.
+**Impact:** historical local+CI evidence credited this with unlocking XBEN-035 and 082. XBEN-082 is now backed by retained artifacts; the former XBEN-045 historical claim was purged from the published line pending reproducible evidence.
 
 ### Challenge hints
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Box, Text, useApp, useInput, render } from "ink";
+import { Box, Text, useApp, useInput, render, type Key } from "ink";
 import type { FindingTriageStatus } from "@pwnkit/shared";
 import { printBanner } from "./banner.js";
 
@@ -478,7 +478,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
   const scans = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return state.scans;
-    return state.scans.filter((scan) =>
+    return state.scans.filter((scan: ScanRow) =>
       [
         scan.target,
         scan.depth,
@@ -495,7 +495,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
   const selectedScan = scans[scanIndex] ?? null;
   const selectedScanFindings = useMemo(() => {
     if (!selectedScan) return [] as FindingRow[];
-    return state.findings.filter((finding) => finding.scanId === selectedScan.id);
+    return state.findings.filter((finding: FindingRow) => finding.scanId === selectedScan.id);
   }, [selectedScan, state.findings]);
   const selectedScanCandidate = selectedScanFindings[findingIndex] ?? null;
   const activeFingerprint =
@@ -505,11 +505,11 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
   const findingsForScan = useMemo(() => {
     if (!selectedScan) return [] as FindingRow[];
     const source = activeFingerprint
-      ? state.findings.filter((finding) => (finding.fingerprint ?? finding.id) === activeFingerprint)
+      ? state.findings.filter((finding: FindingRow) => (finding.fingerprint ?? finding.id) === activeFingerprint)
       : selectedScanFindings;
     const q = filter.trim().toLowerCase();
     if (!q) return source;
-    return source.filter((finding) =>
+    return source.filter((finding: FindingRow) =>
       [
         finding.title,
         finding.category,
@@ -526,10 +526,10 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
   const selectedFinding = findingsForScan[findingIndex] ?? null;
   const eventsForSelection = useMemo(() => {
     if (!selectedScan) return [] as EventRow[];
-    const source = state.events.filter((event) => event.scanId === selectedScan.id);
+    const source = state.events.filter((event: EventRow) => event.scanId === selectedScan.id);
     if (!selectedFinding) return source.slice(0, 8);
     return source
-      .filter((event) => !event.findingId || event.findingId === selectedFinding.id)
+      .filter((event: EventRow) => !event.findingId || event.findingId === selectedFinding.id)
       .slice(0, 8);
   }, [selectedScan, selectedFinding, state.events]);
   const queueSummary = useMemo(
@@ -654,7 +654,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
     setPendingTriageNote("");
   }, [selectedFinding?.id]);
 
-  useInput((input, key) => {
+  useInput((input: string, key: Key) => {
     if (mode === "filter") {
       if (key.escape) {
         setMode("normal");
@@ -666,11 +666,11 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
         return;
       }
       if (key.backspace || key.delete) {
-        setFilter((current) => current.slice(0, -1));
+        setFilter((current: string) => current.slice(0, -1));
         return;
       }
       if (input && !key.ctrl && !key.meta) {
-        setFilter((current) => current + input);
+        setFilter((current: string) => current + input);
       }
       return;
     }
@@ -685,7 +685,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
         return;
       }
       if (key.backspace || key.delete) {
-        setPendingTriageNote((current) => current.slice(0, -1));
+        setPendingTriageNote((current: string) => current.slice(0, -1));
         return;
       }
       if (
@@ -698,7 +698,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
         return;
       }
       if (input && !key.ctrl && !key.meta) {
-        setPendingTriageNote((current) => current + input);
+        setPendingTriageNote((current: string) => current + input);
       }
       return;
     }
@@ -747,56 +747,56 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
     }
 
     if (input === "\t" || key.rightArrow) {
-      setPane((current) => nextPane(current));
+      setPane((current: Pane) => nextPane(current));
       return;
     }
 
     if (key.leftArrow) {
-      setPane((current) => previousPane(current));
+      setPane((current: Pane) => previousPane(current));
       return;
     }
 
     if (key.upArrow) {
       if (pane === "scans") {
-        setScanIndex((current) => Math.max(0, current - 1));
+        setScanIndex((current: number) => Math.max(0, current - 1));
         setFindingIndex(0);
       } else if (pane === "findings") {
-        setFindingIndex((current) => Math.max(0, current - 1));
+        setFindingIndex((current: number) => Math.max(0, current - 1));
       } else {
-        setDetailOffset((current) => Math.max(0, current - 1));
+        setDetailOffset((current: number) => Math.max(0, current - 1));
       }
       return;
     }
 
     if (key.downArrow) {
       if (pane === "scans") {
-        setScanIndex((current) => Math.min(scans.length - 1, current + 1));
+        setScanIndex((current: number) => Math.min(scans.length - 1, current + 1));
         setFindingIndex(0);
       } else if (pane === "findings") {
-        setFindingIndex((current) =>
+        setFindingIndex((current: number) =>
           Math.min(findingsForScan.length - 1, current + 1),
         );
       } else {
-        setDetailOffset((current) => Math.min(maxDetailOffset, current + 1));
+        setDetailOffset((current: number) => Math.min(maxDetailOffset, current + 1));
       }
       return;
     }
 
     if (pane === "details") {
       if (input === "j") {
-        setDetailOffset((current) => Math.min(maxDetailOffset, current + 1));
+        setDetailOffset((current: number) => Math.min(maxDetailOffset, current + 1));
         return;
       }
       if (input === "k") {
-        setDetailOffset((current) => Math.max(0, current - 1));
+        setDetailOffset((current: number) => Math.max(0, current - 1));
         return;
       }
       if (input === "d" || key.pageDown) {
-        setDetailOffset((current) => Math.min(maxDetailOffset, current + detailPageSize));
+        setDetailOffset((current: number) => Math.min(maxDetailOffset, current + detailPageSize));
         return;
       }
       if (input === "u" || key.pageUp) {
-        setDetailOffset((current) => Math.max(0, current - detailPageSize));
+        setDetailOffset((current: number) => Math.max(0, current - detailPageSize));
         return;
       }
       if (input === "g") {
@@ -822,7 +822,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
 
     if ((pane === "findings" || pane === "details") && selectedFinding) {
       if (input === "f") {
-        setFamilyFocus((current) => !current);
+        setFamilyFocus((current: boolean) => !current);
         setFindingIndex(0);
         return;
       }
@@ -857,12 +857,12 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
         <Stat label="findings" value={String(state.findings.length)} />
         <Stat
           label="critical"
-          value={String(state.findings.filter((finding) => finding.severity === "critical").length)}
+          value={String(state.findings.filter((finding: FindingRow) => finding.severity === "critical").length)}
           color="#DC2626"
         />
         <Stat
           label="high"
-          value={String(state.findings.filter((finding) => finding.severity === "high").length)}
+          value={String(state.findings.filter((finding: FindingRow) => finding.severity === "high").length)}
           color="#EAB308"
         />
         <Stat label="pane" value={pane} color="#06B6D4" />
@@ -938,7 +938,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
             {activeWorkers.length === 0 ? (
               <Text color="#9CA3AF">No active orchestration daemons.</Text>
             ) : (
-              activeWorkers.slice(0, 3).map((worker) => (
+              activeWorkers.slice(0, 3).map((worker: ActiveWorkerSummary) => (
                 <Box key={worker.id} flexDirection="column" marginBottom={1}>
                   <Text color="#FFFFFF">
                     {worker.label} · <Text color={statusColor(worker.status)}>{worker.status}</Text>
@@ -963,7 +963,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
             {recentIncidents.length === 0 ? (
               <Text color="#22C55E">No recent runtime incidents.</Text>
             ) : (
-              recentIncidents.slice(0, 3).map((incident) => (
+              recentIncidents.slice(0, 3).map((incident: IncidentSummary) => (
                 <Box key={`${incident.scanId}:${incident.timestamp}`} flexDirection="column" marginBottom={1}>
                   <Text color="#FFFFFF">{truncate(incident.scanTarget, 54)}</Text>
                   <Text color="#DC2626">{truncate(incident.headline, 72)}</Text>
@@ -995,7 +995,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
               meta={`${scans.length} total`}
             />
             <Box flexDirection="column" marginTop={1}>
-              {scans.slice(0, 14).map((scan, index) => {
+              {scans.slice(0, 14).map((scan: ScanRow, index: number) => {
                 const selected = index === scanIndex;
                 const summary = parseSummary(scan.summary);
                 return (
@@ -1044,7 +1044,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
               {findingsForScan.length === 0 ? (
                 <Text color="#9CA3AF">  No findings for this run.</Text>
               ) : (
-                findingsForScan.slice(0, 14).map((finding, index) => {
+                findingsForScan.slice(0, 14).map((finding: FindingRow, index: number) => {
                   const selected = index === findingIndex;
                   return (
                     <Box key={finding.id} marginBottom={1}>
@@ -1093,7 +1093,7 @@ function OperatorTui({ dbPath, refreshMs = 4000 }: TuiOptions): React.ReactEleme
               meta={`${detailOffset + 1}-${Math.min(detailOffset + detailPageSize, detailLines.length)}/${detailLines.length || 0}`}
             />
             <Box flexDirection="column" marginTop={1}>
-              {visibleDetailLines.map((line, index) => (
+              {visibleDetailLines.map((line: { color: string; text: string; bold?: boolean }, index: number) => (
                 <Text
                   key={`${detailOffset}-${index}-${line.text.slice(0, 16)}`}
                   color={line.color}

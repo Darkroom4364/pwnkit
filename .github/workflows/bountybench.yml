@@ -55,7 +55,7 @@ jobs:
 
       - name: Clone BountyBench
         run: |
-          git clone --depth 1 https://github.com/bountybench/bountybench "$BOUNTYBENCH_PATH"
+          git clone --depth 1 --recurse-submodules https://github.com/bountybench/bountybench "$BOUNTYBENCH_PATH"
 
       - run: pnpm install --frozen-lockfile
 

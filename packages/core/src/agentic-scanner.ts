@@ -594,6 +594,10 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
       };
       try { db.completeScan(scanId, summary); } catch { /* best effort */ }
 
+      const partialTraceMessages = [
+        ...(discoveryState.messages ?? []),
+        ...(attackState.messages ?? []),
+      ];
       const partialReport: ScanReport = {
         target: config.target,
         scanDepth: config.depth,
@@ -615,6 +619,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
         },
         exitReason: "cost_ceiling_exceeded",
         costCeilingExceeded: true,
+        ...(partialTraceMessages.length > 0 ? { trace: partialTraceMessages } : {}),
       };
 
       const dbScan = db.getScan(scanId);
@@ -1132,6 +1137,16 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
       },
     };
 
+    // Attach conversation trace (discovery + attack) when available.
+    // Only native-mode runs produce messages; legacy CLI runs don't.
+    const traceMessages = [
+      ...(discoveryState.messages ?? []),
+      ...(attackState.messages ?? []),
+    ];
+    if (traceMessages.length > 0) {
+      report.trace = traceMessages;
+    }
+
     // Compute actual duration from DB
     const dbScan = db.getScan(scanId);
     if (dbScan) {
@@ -1190,6 +1205,8 @@ interface AgentOutput {
   estimatedCostUsd: number;
   /** True when this stage terminated because the cost ceiling was hit. */
   costCeilingExceeded?: boolean;
+  /** Full conversation trace (messages) from the agent loop. */
+  messages?: NativeMessage[];
 }
 
 // ── Native (Claude API) stage runners ──
@@ -1254,6 +1271,7 @@ async function runNativeDiscovery(
     summary: state.summary,
     turnCount: state.turnCount,
     estimatedCostUsd: state.estimatedCostUsd,
+    messages: state.messages,
   };
 }
 
@@ -1484,6 +1502,7 @@ async function runNativeAttack(
       turnCount: totalTurns,
       estimatedCostUsd: state.estimatedCostUsd + retryState.estimatedCostUsd,
       costCeilingExceeded: state.costCeilingExceeded || retryState.costCeilingExceeded,
+      messages: [...state.messages, ...retryState.messages],
     };
   }
 
@@ -1496,6 +1515,7 @@ async function runNativeAttack(
     turnCount: state.turnCount,
     estimatedCostUsd: state.estimatedCostUsd,
     costCeilingExceeded: state.costCeilingExceeded,
+    messages: state.messages,
   };
 }
 

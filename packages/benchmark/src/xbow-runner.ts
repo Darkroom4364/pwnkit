@@ -37,6 +37,45 @@ import { aggregateRuns, type RepeatAggregate, type RepeatRun } from "./wilson.js
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// ── Trace sanitization ──
+// Strip API keys, tokens, and other sensitive values that may have leaked
+// into tool results (e.g. env var dumps, config file reads).
+
+const SENSITIVE_PATTERNS = [
+  // Generic API keys / tokens / secrets in env-var-like assignments
+  /(?:API_KEY|API_SECRET|SECRET_KEY|ACCESS_KEY|AUTH_TOKEN|BEARER|JWT|SESSION_SECRET|PRIVATE_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|AZURE_OPENAI_API_KEY|OPENROUTER_API_KEY|AWS_SECRET_ACCESS_KEY)[\s]*[=:]\s*["']?([^\s"'\n]{8,})["']?/gi,
+  // Bearer tokens in HTTP headers
+  /(?:Authorization|X-Api-Key):\s*(?:Bearer\s+)?([A-Za-z0-9_\-.]{20,})/gi,
+  // sk-... style keys (OpenAI, Anthropic, etc.)
+  /\bsk-[A-Za-z0-9_-]{20,}\b/g,
+  // Azure-style keys (hex, 32+ chars)
+  /\b[0-9a-f]{32,}\b/gi,
+];
+
+function sanitizeTraceText(text: string): string {
+  let sanitized = text;
+  for (const pattern of SENSITIVE_PATTERNS) {
+    // Reset lastIndex for global regexes
+    pattern.lastIndex = 0;
+    sanitized = sanitized.replace(pattern, (match) => {
+      // Keep the key name / prefix, redact the value
+      const eqIdx = match.search(/[=:]\s*/);
+      if (eqIdx !== -1) {
+        return match.slice(0, eqIdx + 1) + " [REDACTED]";
+      }
+      return "[REDACTED]";
+    });
+  }
+  return sanitized;
+}
+
+function sanitizeTrace(trace: unknown[]): unknown[] {
+  // Deep-clone and walk every string value in the trace, applying sanitization
+  const raw = JSON.stringify(trace);
+  const sanitized = sanitizeTraceText(raw);
+  return JSON.parse(sanitized) as unknown[];
+}
+
 // ── CLI Args ──
 const args = process.argv.slice(2);
 const limit = args.includes("--limit") ? parseInt(args[args.indexOf("--limit") + 1]) : Infinity;
@@ -457,6 +496,30 @@ async function runChallengeOnce(challenge: XbowChallenge, model?: string): Promi
               );
             }
           }
+        }
+      }
+    }
+
+    // ── Persist conversation trace for transparency (issue #106) ──
+    if (report.trace && Array.isArray(report.trace) && report.trace.length > 0) {
+      try {
+        const tracesDir = join(__dirname, "..", "results", "traces");
+        mkdirSync(tracesDir, { recursive: true });
+        const tracePayload = {
+          challengeId: challenge.id,
+          timestamp: new Date().toISOString(),
+          flagFound,
+          turns: report.benchmarkMeta?.attackTurns ?? 0,
+          messages: sanitizeTrace(report.trace),
+        };
+        writeFileSync(
+          join(tracesDir, `${challenge.id}-trace.json`),
+          JSON.stringify(tracePayload, null, 2),
+        );
+      } catch (traceErr) {
+        // Trace export is best-effort — never fail the benchmark because of it
+        if (!jsonOutput) {
+          console.log(`  [trace] failed to write trace for ${challenge.id}: ${traceErr instanceof Error ? traceErr.message : String(traceErr)}`);
         }
       }
     }

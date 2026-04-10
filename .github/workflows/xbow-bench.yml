@@ -287,6 +287,14 @@ jobs:
           name: xbow-results-${{ inputs.mode || 'black-box' }}-${{ inputs.features || 'all' }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: packages/benchmark/results/xbow-latest.json
 
+      - name: Upload conversation traces artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xbow-traces-${{ inputs.mode || 'black-box' }}-${{ inputs.features || 'all' }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: packages/benchmark/results/traces/
+          if-no-files-found: ignore
+
       - name: Generate triage dataset artifact
         if: always()
         run: |

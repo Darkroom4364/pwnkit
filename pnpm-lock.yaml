@@ -54,6 +54,9 @@ importers:
       '@pwnkit/shared':
         specifier: workspace:*
         version: link:../shared
+      '@pwnkit/test-targets':
+        specifier: workspace:*
+        version: link:../../test-targets
       express:
         specifier: ^4.22.1
         version: 4.22.1

@@ -10,15 +10,35 @@
  * whether the model refuses. ASR = behaviors where the model complied / total.
  *
  * Usage:
+ *   # Against a built-in test target (no external deps needed):
+ *   tsx src/harmbench-runner.ts --test-target vulnerable
+ *   tsx src/harmbench-runner.ts --test-target safe --limit 20
+ *
+ *   # Against an external endpoint:
  *   tsx src/harmbench-runner.ts --target http://localhost:8080/v1/chat/completions
- *   tsx src/harmbench-runner.ts --target http://localhost:8080/v1/chat/completions --limit 20
- *   tsx src/harmbench-runner.ts --target http://localhost:8080/v1/chat/completions --json
+ *
+ *   # Via env var:
+ *   HARMBENCH_TARGET_URL=http://localhost:8080/v1/chat/completions tsx src/harmbench-runner.ts
+ *
+ * Options:
+ *   --target <url>              Target LLM endpoint (OpenAI-compatible chat completions)
+ *   --test-target <mode>        Use built-in test target: "vulnerable" or "safe"
+ *   --limit <N>                 Only test first N behaviors (default: all 510)
+ *   --json                      Output JSON report instead of human-readable
+ *   --timeout <ms>              Per-request timeout in ms (default: 30000)
+ *   --header "Key: Value"       Add custom header (repeatable)
+ *
+ * Environment:
+ *   HARMBENCH_TARGET_URL        Fallback target URL if --target is not provided
  */
 
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { sendPrompt, extractResponseText } from "@pwnkit/core";
+// Import directly from the http module to avoid pulling in the full @pwnkit/core
+// barrel (which has heavy transitive deps that may not be built).
+import { sendPrompt, extractResponseText } from "@pwnkit/core/dist/http.js";
+import type { Server } from "node:http";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -35,7 +55,8 @@ function flag(name: string): string | undefined {
   return idx !== -1 ? args[idx + 1] : undefined;
 }
 
-const target = flag("--target");
+const targetFlag = flag("--target") ?? process.env.HARMBENCH_TARGET_URL;
+const testTarget = flag("--test-target"); // "vulnerable" | "safe"
 const limit = flag("--limit") ? parseInt(flag("--limit")!, 10) : Infinity;
 const jsonOutput = args.includes("--json");
 const timeout = flag("--timeout") ? parseInt(flag("--timeout")!, 10) : 30_000;
@@ -51,10 +72,23 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-if (!target) {
-  console.error("Usage: harmbench-runner --target <llm-endpoint-url> [--limit N] [--json] [--timeout ms] [--header 'Key: Value']");
+if (!targetFlag && !testTarget) {
+  console.error(
+    "Usage: harmbench-runner --target <url> | --test-target <vulnerable|safe> [--limit N] [--json] [--timeout ms] [--header 'Key: Value']\n" +
+    "       Or set HARMBENCH_TARGET_URL env var.\n\n" +
+    "  --test-target vulnerable   Starts the built-in vulnerable test server automatically\n" +
+    "  --test-target safe         Starts the built-in safe (hardened) test server automatically"
+  );
   process.exit(1);
 }
+
+if (testTarget && !["vulnerable", "safe"].includes(testTarget)) {
+  console.error(`Invalid --test-target value: "${testTarget}". Must be "vulnerable" or "safe".`);
+  process.exit(1);
+}
+
+// Resolved in main() after optionally starting a test server
+let target: string = targetFlag ?? "";
 
 // ── Refusal Detection ──
 
@@ -230,7 +264,7 @@ async function run(): Promise<HarmBenchReport> {
   for (let i = 0; i < behaviors.length; i++) {
     const b = behaviors[i];
     try {
-      const res = await sendPrompt(target!, b.behavior, { timeout, headers });
+      const res = await sendPrompt(target, b.behavior, { timeout, headers });
       const text = extractResponseText(res.body);
       const refused = isRefusal(text);
 
@@ -287,7 +321,7 @@ async function run(): Promise<HarmBenchReport> {
 
   return {
     timestamp: new Date().toISOString(),
-    target: target!,
+    target,
     totalBehaviors: allBehaviors.length,
     tested: behaviors.length,
     refused,
@@ -300,35 +334,79 @@ async function run(): Promise<HarmBenchReport> {
   };
 }
 
+// ── Test Target Lifecycle ──
+
+async function startTestTarget(): Promise<{ server: Server; url: string }> {
+  if (testTarget === "vulnerable") {
+    const { createVulnerableApp } = await import("@pwnkit/test-targets/vulnerable");
+    const app = createVulnerableApp();
+    return new Promise((resolve) => {
+      const server = app.listen(0, () => {
+        const addr = server.address() as import("node:net").AddressInfo;
+        const url = `http://localhost:${addr.port}/v1/chat/completions`;
+        if (!jsonOutput) console.log(`  Started built-in vulnerable test target on port ${addr.port}`);
+        resolve({ server, url });
+      });
+    });
+  } else {
+    const { createSafeApp } = await import("@pwnkit/test-targets/safe");
+    const app = createSafeApp();
+    return new Promise((resolve) => {
+      const server = app.listen(0, () => {
+        const addr = server.address() as import("node:net").AddressInfo;
+        const url = `http://localhost:${addr.port}/v1/chat/completions`;
+        if (!jsonOutput) console.log(`  Started built-in safe test target on port ${addr.port}`);
+        resolve({ server, url });
+      });
+    });
+  }
+}
+
 // ── Main ──
 
 async function main() {
-  const report = await run();
+  let testServer: Server | undefined;
 
-  if (jsonOutput) {
-    console.log(JSON.stringify(report, null, 2));
-  } else {
-    console.log("\n  ──────────────────────────────────────");
-    console.log(`  ASR (Attack Success Rate): \x1b[1m${(report.asr * 100).toFixed(1)}%\x1b[0m  (${report.complied}/${report.tested})`);
-    console.log(`  Refused:  ${report.refused}    Complied: ${report.complied}    Errors: ${report.errors}`);
-    console.log(`  Total time: ${(report.totalDurationMs / 1000).toFixed(1)}s`);
-
-    if (Object.keys(report.categoryBreakdown).length > 1) {
-      console.log("\n  By category:");
-      for (const [cat, data] of Object.entries(report.categoryBreakdown).sort((a, b) => b[1].asr - a[1].asr)) {
-        const bar = "\x1b[31m" + "█".repeat(Math.round(data.asr * 10)) + "\x1b[0m" + "░".repeat(10 - Math.round(data.asr * 10));
-        console.log(`    ${cat.padEnd(28)} ${bar} ${data.complied}/${data.total} (${(data.asr * 100).toFixed(0)}%)`);
-      }
-    }
-    console.log("");
+  // If using a built-in test target, start it and resolve the target URL
+  if (testTarget) {
+    const started = await startTestTarget();
+    testServer = started.server;
+    target = started.url;
   }
 
-  // Save results
-  const resultsDir = join(__dirname, "..", "results");
-  mkdirSync(resultsDir, { recursive: true });
-  const outPath = join(resultsDir, "harmbench-latest.json");
-  writeFileSync(outPath, JSON.stringify(report, null, 2));
-  if (!jsonOutput) console.log(`  Results saved to ${outPath}\n`);
+  try {
+    const report = await run();
+
+    if (jsonOutput) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log("\n  ──────────────────────────────────────");
+      console.log(`  ASR (Attack Success Rate): \x1b[1m${(report.asr * 100).toFixed(1)}%\x1b[0m  (${report.complied}/${report.tested})`);
+      console.log(`  Refused:  ${report.refused}    Complied: ${report.complied}    Errors: ${report.errors}`);
+      console.log(`  Total time: ${(report.totalDurationMs / 1000).toFixed(1)}s`);
+
+      if (Object.keys(report.categoryBreakdown).length > 1) {
+        console.log("\n  By category:");
+        for (const [cat, data] of Object.entries(report.categoryBreakdown).sort((a, b) => b[1].asr - a[1].asr)) {
+          const bar = "\x1b[31m" + "█".repeat(Math.round(data.asr * 10)) + "\x1b[0m" + "░".repeat(10 - Math.round(data.asr * 10));
+          console.log(`    ${cat.padEnd(28)} ${bar} ${data.complied}/${data.total} (${(data.asr * 100).toFixed(0)}%)`);
+        }
+      }
+      console.log("");
+    }
+
+    // Save results
+    const resultsDir = join(__dirname, "..", "results");
+    mkdirSync(resultsDir, { recursive: true });
+    const outPath = join(resultsDir, "harmbench-latest.json");
+    writeFileSync(outPath, JSON.stringify(report, null, 2));
+    if (!jsonOutput) console.log(`  Results saved to ${outPath}\n`);
+  } finally {
+    // Clean up test server if we started one
+    if (testServer) {
+      testServer.close();
+    }
+  }
 }
 
 main().catch((err) => {

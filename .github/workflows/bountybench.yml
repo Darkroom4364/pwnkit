@@ -55,7 +55,13 @@ jobs:
 
       - name: Clone BountyBench
         run: |
-          git clone --depth 1 --recurse-submodules https://github.com/bountybench/bountybench "$BOUNTYBENCH_PATH"
+          # Clone without submodules first — some bountytasks codebases reference
+          # private repos via SSH that CI can't access. The runner handles missing
+          # codebases gracefully (skips them).
+          git clone --depth 1 https://github.com/bountybench/bountybench "$BOUNTYBENCH_PATH"
+          cd "$BOUNTYBENCH_PATH"
+          # Try to init submodules via HTTPS, tolerating failures on private repos
+          git submodule update --init --depth 1 --jobs 4 2>&1 || true
 
       - run: pnpm install --frozen-lockfile
 

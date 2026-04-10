@@ -972,16 +972,13 @@ export class ToolExecutor {
     const formAuthHeaders = buildAuthHeaders(this.ctx.authConfig);
     const extraHeaders = { ...formAuthHeaders, ...(args.headers as Record<string, string>) ?? {} };
 
-    // Resolve URL relative to target
+    // Validate URL against same-origin policy (same as http_request)
     let resolved: URL;
     try {
-      resolved = new URL(rawUrl, this.ctx.target);
-    } catch {
-      return { success: false, output: null, error: `Invalid URL: ${rawUrl}` };
-    }
-
-    if (!["http:", "https:"].includes(resolved.protocol)) {
-      return { success: false, output: null, error: `Unsupported protocol: ${resolved.protocol}` };
+      const validated = validateTargetUrl(this.ctx.target, rawUrl);
+      resolved = new URL(validated);
+    } catch (err) {
+      return { success: false, output: null, error: err instanceof Error ? err.message : `Invalid URL: ${rawUrl}` };
     }
 
     // Encode fields as application/x-www-form-urlencoded
@@ -1142,8 +1139,15 @@ export class ToolExecutor {
 
       switch (action) {
         case "navigate": {
-          const url = args.url as string;
-          if (!url) return { success: false, output: null, error: "url is required for navigate" };
+          const rawNavUrl = args.url as string;
+          if (!rawNavUrl) return { success: false, output: null, error: "url is required for navigate" };
+          // Validate against same-origin policy (same as http_request/submit_form)
+          let url: string;
+          try {
+            url = validateTargetUrl(this.ctx.target, rawNavUrl);
+          } catch (err) {
+            return { success: false, output: null, error: err instanceof Error ? err.message : `Invalid URL: ${rawNavUrl}` };
+          }
           const response = await page.goto(url, { timeout: ACTION_TIMEOUT, waitUntil: "domcontentloaded" });
           result = {
             url: page.url(),

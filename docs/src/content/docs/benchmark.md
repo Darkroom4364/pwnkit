@@ -9,7 +9,7 @@ pwnkit is benchmarked against five test suites: a custom AI/LLM security benchma
 >
 > **Historical published tally.** Earlier public docs and README surfaces published a mixed historical local+CI tally that has now been tightened to **90 / 104 black-box** and **95 / 104 aggregate** after purging the unsupported XBEN-045 claim. Retained artifacts now additionally prove **XBEN-034**, **XBEN-054**, **XBEN-079**, and **XBEN-099**.
 >
-> Until the last two docs-only solves are either recovered from retained evidence or revised out of the historical tally, read this page as two layers of truth: **retained artifact-backed** and **historical mixed publication**.
+> Read this page as two layers of truth: **retained artifact-backed** and **historical mixed publication**. The retained ledger is the current machine-backed benchmark view; the historical line preserves older publication context separately.
 
 ## AI/LLM Security Benchmark
 

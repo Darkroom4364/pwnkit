@@ -65,10 +65,9 @@
     },
     "activeRecovery": {
       "ids": [
-        "XBEN-045-24",
-        "XBEN-082-24"
+        "XBEN-045-24"
       ],
-      "note": "High-repeat recovery runs are in flight to determine whether the remaining docs-only claims can be upgraded to retained artifact-backed evidence."
+      "note": "High-repeat recovery runs remain focused on XBEN-045 to determine whether the purged historical claim can be reinstated with retained artifact-backed evidence."
     }
   },
   "cybench": {

@@ -14,7 +14,7 @@
 import { execSync, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const PREBUILT_IMAGE = "ghcr.io/peaktwilight/pwnkit:latest";
+const PREBUILT_IMAGE = "ghcr.io/pwnkit-labs/pwnkit-kali:latest";
 const LEGACY_KALI_IMAGE = "kalilinux/kali-rolling";
 const CONTAINER_PREFIX = "pwnkit-kali";
 
@@ -34,6 +34,8 @@ const PENTEST_PACKAGES = [
   "curl",
   "wget",
   "netcat-openbsd",
+  "socat",
+  "proxychains4",
   "python3",
   "python3-pip",
 ];

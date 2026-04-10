@@ -154,13 +154,12 @@ pwnkit ships a full triage pipeline with 11 independent layers. See
 
 ## Benchmarks
 
-- **XBOW black-box:** **87.5% (91/104)** — single model, 3 tools, full 104-challenge
-  coverage.
-- **XBOW white-box best-of-N aggregate:** **92.3% (96/104)** — same model + tools
-  with `--repo` source access, aggregated across `features=none`/`experimental`/`all`.
-  Beats MAPTA (76.9%), deadend-cli (77.6%), Cyber-AutoAgent
-  (84.6%), XBOW's own agent (85%), and BoxPwnr's best single-model score
-  (81.7%).
+- **XBOW retained artifact-backed aggregate:** **93.3% (97/104)** across the
+  current recoverable artifact window.
+- **XBOW retained artifact-backed black-box:** **71.2% (74/104)**.
+- **XBOW historical mixed local+CI publication:** **87.5% black-box (91/104)**
+  and **92.3% aggregate (96/104)**, tracked separately from the retained
+  artifact tally on the [Benchmark](/benchmark/) page.
 - **AI/LLM regression suite:** 10/10 on the self-authored suite covering
   prompt injection, jailbreaks, system-prompt extraction, PII leakage,
   encoding bypass, multi-turn escalation, MCP SSRF.

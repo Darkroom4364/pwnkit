@@ -3,9 +3,13 @@ title: Benchmark
 description: Comprehensive benchmark results for pwnkit across five domains -- AI/LLM security, web pentesting, network/CVE pentesting, LLM safety, and npm auditing.
 ---
 
-pwnkit is benchmarked against five test suites: a custom AI/LLM security benchmark (10 challenges), the XBOW traditional web vulnerability benchmark (104 challenges), AutoPenBench network/CVE pentesting (33 tasks), HarmBench LLM safety (510 behaviors), and an npm audit benchmark (81 packages). This page is the single source of truth for all benchmark results.
+pwnkit is benchmarked against five test suites: a custom AI/LLM security benchmark (10 challenges), the XBOW traditional web vulnerability benchmark (104 challenges), AutoPenBench network/CVE pentesting (33 tasks), HarmBench LLM safety (510 behaviors), and an npm audit benchmark (81 packages). This page is the canonical human-readable benchmark view, backed by [`packages/benchmark/results/benchmark-ledger.json`](https://github.com/PwnKit-Labs/pwnkit/blob/main/packages/benchmark/results/benchmark-ledger.json).
 
-> **Latest (April 2026).** Best-of-N aggregate across all configurations: **96 unique flags / 104 = 92.3%**. Black-box published mode: **91 / 104 = 87.5%**. White-box runs (`--repo` source access) contribute 5 additional flags (XBEN-023, 056, 063, 075, 061), all cracked in the latest holdouts sweep. Both numbers reported separately throughout this page — no methodology blending. All 104 challenges were tested on `0ca/xbow-validation-benchmarks-patched` at short SHA `9e6d443`. Only 8 challenges remain unsolved (down from 13). XBEN-099 had a historical startup hazard that is documented separately in the [XBEN-099 investigation](/research/xben-099-investigation/); it should not be read here as evidence that the whole patched fork is unusable. The aggregate beats MAPTA (76.9%), deadend-cli (77.6%), Cyber-AutoAgent (84.6%), XBOW's own agent (85%), and BoxPwnr's best single-model score (GLM-5: 81.7%) — and the black-box number alone still beats all of those except KinoSec (92.3% black-box, still ahead). First Cybench run: **8/10 = 80%** including a Medium-difficulty solve.
+> **Latest retained artifact-backed XBOW tally (April 10, 2026).** The current machine-reconstructible union across retained `xbow-results-*` GitHub Actions artifacts is **97 / 104 = 93.3% aggregate**, split as **74 / 104 = 71.2% black-box** and **77 / 104 = 74.0% white-box**. This is the strongest number we can currently prove from retained artifacts alone.
+>
+> **Historical published tally.** Earlier public docs and README surfaces published **91 / 104 black-box** and **96 / 104 white-box best-of-N aggregate** as a mixed historical local+CI tally. That historical set does not perfectly match the retained artifact set: the remaining docs-only claims are **XBEN-045** and **XBEN-082**, while retained artifacts now prove **XBEN-054**, **XBEN-079**, and **XBEN-099** instead.
+>
+> Until the last two docs-only solves are either recovered from retained evidence or revised out of the historical tally, read this page as two layers of truth: **retained artifact-backed** and **historical mixed publication**.
 
 ## AI/LLM Security Benchmark
 
@@ -45,18 +49,14 @@ By difficulty: Easy 5/5 (100%) -- Medium 3/3 (100%) -- Hard 2/2 (100%).
 
 104 Docker CTF challenges from [xbow-engineering/validation-benchmarks](https://github.com/xbow-engineering/validation-benchmarks). Each hides a `FLAG{...}` behind a real web vulnerability. The agent used the shell-first tool set: `bash` + `save_finding` + `done`.
 
-### Overall (split publication, both modes reported separately)
+### Overall
 
-| Metric | Black-box | White-box / best-of-N aggregate |
-|--------|-----------|--------------------------------|
-| Total challenges | 104 | 104 |
-| Challenges tested | **104** (full coverage) | **104** (full coverage) |
-| **Unique flags extracted** | **91** | **96** |
-| **Score** | **91/104 = 87.5%** | **96/104 = 92.3%** |
-| Unsolved | 13/104 = 12.5% | 8/104 = 7.7% |
-| Vulnerability categories cracked | 20+ | 20+ |
+| Publication surface | Black-box | White-box / aggregate |
+|---------------------|-----------|------------------------|
+| **Retained artifact-backed tally** | **74 / 104 = 71.2%** | **77 white-box / 97 aggregate = 93.3%** |
+| **Historical mixed local+CI tally** | **91 / 104 = 87.5%** | **96 / 104 = 92.3%** |
 
-**Methodology note.** Both modes use the same single Azure gpt-5.4 model with the same `bash` + `save_finding` + `done` tool set. The only difference is `--repo <path>` source access (white-box). The 5 white-box-only flags are XBEN-023, 056, 063, 075, 061 — cracked in the latest holdouts sweep across `features=none`, `features=experimental`, and `features=all` configurations. The aggregate is a best-of-N across all configurations, the same way Shannon (96.15% white-box) and BoxPwnr (97.1% best-of-N across ~10 configs) report their numbers. We publish both clean black-box and best-of-N aggregate numbers because either alone is misleading without the other.
+**Methodology note.** The retained artifact-backed tally is a union over surviving `xbow-results-*` GitHub artifacts from completed runs. The historical mixed local+CI tally is the older public publication line. These should not be conflated: the retained tally is stronger machine-backed evidence, while the historical tally preserves earlier local/CI results that are not yet fully reconstructible from retained artifacts.
 
 ### Latest CI Runs (April 2026)
 
@@ -70,7 +70,7 @@ Key improvements over previous runs: LLM-based context compaction, 3 retries (up
 
 ### Flag catalogue (sample)
 
-The table below is a representative sample of extracted flags across local + CI runs. The current best-of-N aggregate is **96 solved challenges** (91 black-box + 5 white-box-only) across the full 104-challenge suite. For raw artifacts, see [`packages/benchmark/results`](https://github.com/PwnKit-Labs/pwnkit/tree/main/packages/benchmark/results).
+The table below is historical context, not the canonical retained-artifact ledger. Some rows came from local-only or mixed local+CI runs. The canonical current retained tally lives in [`benchmark-ledger.json`](https://github.com/PwnKit-Labs/pwnkit/blob/main/packages/benchmark/results/benchmark-ledger.json) and is summarized above.
 
 | # | Challenge | Source |
 |---|-----------|--------|
@@ -130,11 +130,15 @@ The table below is a representative sample of extracted flags across local + CI 
 | 54 | XBEN-102 Email Updates | local |
 | 55 | XBEN-103 Trusty Cookie | local |
 
-This sample is historical context, not the full leaderboard artifact. Use the summary tables above as the canonical current count.
+This sample is historical context, not the canonical retained-artifact set.
 
-### Remaining challenge classes
+### Remaining retained-artifact gaps
 
-The remaining 8 unsolved challenges cluster into a few recurring problem types (XBEN-010, 030, 034, 054, 066, 079, 092, 099 — XBEN-099 is a persistent Docker-start infrastructure failure across every config, candidate for upstream patched-fork fix):
+As of the current retained artifact-backed tally, the unresolved set is **7 challenges**: `XBEN-010`, `030`, `034`, `045`, `066`, `082`, `092`.
+
+The historical publication line is different. It still lists `XBEN-054`, `079`, and `099` as unsolved while retaining older local-only claims for `XBEN-045` and `082`. That mismatch is tracked explicitly in the ledger and is the main benchmark-integrity cleanup still in flight.
+
+At the retained-artifact layer, the remaining unsolved challenges cluster into a few recurring problem types:
 
 | Class | Why it is still hard |
 |------|-----------------------|

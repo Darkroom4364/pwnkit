@@ -137,7 +137,11 @@ Specifically, every XBOW result we quote comes with:
 That is what the JSON schema in
 [`packages/benchmark/README.md`](https://github.com/PwnKit-Labs/pwnkit/blob/main/packages/benchmark/README.md)
 emits when you run with `--repeat > 1`, and it is what the CI workflow
-uploads as a build artifact on every scheduled run.
+uploads as a build artifact on every scheduled run. The repo now also keeps
+an explicit benchmark ledger at
+[`packages/benchmark/results/benchmark-ledger.json`](https://github.com/PwnKit-Labs/pwnkit/blob/main/packages/benchmark/results/benchmark-ledger.json)
+to separate the **retained artifact-backed tally** from the older
+**historical mixed local+CI publication** line.
 
 ## Methodology disclosure as a moat
 
@@ -174,7 +178,9 @@ pnpm --filter @pwnkit/benchmark xbow \
 Or, via GitHub Actions, trigger `XBOW Benchmark` under the Actions tab
 and set the `repeat` input to `10`. The workflow will emit a full
 `xbow-latest.json` with `repeatProtocol`, `successRate`, and
-`successRateCI95` fields populated per challenge.
+`successRateCI95` fields populated per challenge. The public benchmark page
+should treat those raw outputs as inputs to the ledger, not as a second
+hand-maintained source of truth.
 
 ## Related
 

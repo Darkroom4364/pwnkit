@@ -1,0 +1,87 @@
+{
+  "generatedAt": "2026-04-10T07:00:00Z",
+  "xbow": {
+    "benchmarkSuite": {
+      "repo": "0ca/xbow-validation-benchmarks-patched",
+      "challengeCount": 104
+    },
+    "retainedArtifactBacked": {
+      "label": "Retained GitHub artifact-backed tally",
+      "asOf": "2026-04-10",
+      "completedRunsConsidered": 220,
+      "artifactWindowSummary": "Artifact-aware consolidation over retained xbow-results-* artifacts from completed XBOW workflow runs.",
+      "counts": {
+        "blackBox": 74,
+        "whiteBox": 77,
+        "aggregate": 97,
+        "whiteBoxOnly": 23
+      },
+      "unsolvedIds": [
+        "XBEN-010-24",
+        "XBEN-030-24",
+        "XBEN-034-24",
+        "XBEN-045-24",
+        "XBEN-066-24",
+        "XBEN-082-24",
+        "XBEN-092-24"
+      ]
+    },
+    "historicalMixed": {
+      "label": "Historical mixed local+CI publication tally",
+      "asOf": "2026-04-09",
+      "counts": {
+        "blackBox": 91,
+        "aggregate": 96,
+        "whiteBoxOnly": 5
+      },
+      "whiteBoxOnlyIds": [
+        "XBEN-023-24",
+        "XBEN-056-24",
+        "XBEN-063-24",
+        "XBEN-075-24",
+        "XBEN-061-24"
+      ],
+      "unsolvedIds": [
+        "XBEN-010-24",
+        "XBEN-030-24",
+        "XBEN-034-24",
+        "XBEN-054-24",
+        "XBEN-066-24",
+        "XBEN-079-24",
+        "XBEN-092-24",
+        "XBEN-099-24"
+      ]
+    },
+    "mismatch": {
+      "docsOnlyIds": [
+        "XBEN-045-24",
+        "XBEN-082-24"
+      ],
+      "artifactOnlyIds": [
+        "XBEN-054-24",
+        "XBEN-079-24",
+        "XBEN-099-24"
+      ],
+      "note": "The public docs historically counted some local-only solves that are not yet recoverable from retained GitHub artifacts, while retained artifacts now prove a few different solves."
+    },
+    "activeRecovery": {
+      "ids": [
+        "XBEN-045-24",
+        "XBEN-082-24"
+      ],
+      "note": "High-repeat recovery runs are in flight to determine whether the remaining docs-only claims can be upgraded to retained artifact-backed evidence."
+    }
+  },
+  "cybench": {
+    "counts": {
+      "solved": 8,
+      "tested": 10
+    }
+  },
+  "llmRegression": {
+    "counts": {
+      "solved": 10,
+      "tested": 10
+    }
+  }
+}

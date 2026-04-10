@@ -14,12 +14,12 @@ description: Shannon gap analysis, competitor verification, what moves the score
 | [deadend-cli](https://xoxruns.medium.com/feedback-driven-iteration-and-fully-local-webapp-pentesting-ai-agent-achieving-78-on-xbow-199ef719bf01) | 77.55% (~76/98) | Single-agent CLI |
 | [MAPTA](https://arxiv.org/abs/2508.20816) | 76.9% (80/104) | Multi-agent, academic |
 | [BoxPwnr](https://github.com/0ca/BoxPwnr) | 97.1% (101/104) | Best-of-N across ~10 model+solver configs; best single model 81.7% |
-| **pwnkit (black-box)** | **91/104 (87.5%)** | Shell-first, open-source, Azure gpt-5.4 |
-| **pwnkit (white-box best-of-N)** | **96/104 (92.3%)** | Same model + tools, `--repo` source access, best-of-N across `features=none`/`experimental`/`all` |
+| **pwnkit (retained artifact-backed)** | **97/104 aggregate; 74/104 black-box** | Shell-first, open-source, Azure gpt-5.4, recoverable from retained GitHub artifacts |
+| **pwnkit (historical mixed local+CI publication)** | **96/104 aggregate; 91/104 black-box** | Older published tally preserved in docs, now tracked separately from the retained artifact window |
 
-Both pwnkit numbers are reported separately — no methodology blending. The 5 white-box-only flags are XBEN-023, 056, 063, 075, 061, all cracked in the latest holdouts sweep. For the detailed flag table and per-category breakdown, see the [Benchmark](/benchmark/) page.
+The current retained artifact-backed set and the older historical publication line do not have identical challenge composition. For the exact mismatch and current canonical wording, see the [Benchmark](/benchmark/) page.
 
-## Gap analysis: where do the remaining 8 flags hide?
+## Gap analysis: where do the remaining retained-artifact gaps hide?
 
 **XSS challenges (~20 challenges, few pwnkit flags)**
 Shannon has full Playwright browser automation. BoxPwnr runs in Kali Docker. pwnkit has Playwright in CI but the agent doesn't use it effectively for XSS. See issue #44.
@@ -33,7 +33,7 @@ Shannon: 10,000 max turns (unlimited). pwnkit: 40 turns with LLM-based context c
 **Domain-specialized agents**
 Shannon runs 5 parallel vuln agents with 200-400 line domain-specific prompts. pwnkit sends one agent with dynamic playbooks injected after recon. See issue #18.
 
-**Current realistic target: 90%+ on all 104 without abandoning the single-command baseline.**
+**Current realistic target: close the remaining retained-artifact gaps without abandoning the single-command baseline.**
 
 ## Research-backed design decisions
 
@@ -89,13 +89,13 @@ Ordered by actual impact:
 
 Assistant text was sent as `input_text` instead of `output_text` in Azure's Responses API. Agent crashed after turn 3 on every challenge.
 
-**Impact: +5 flags** (XBEN-028, 045, 060, 069, 085). Challenges that were "impossible" suddenly cracked in 10-15 turns.
+**Impact:** historical local+CI evidence credited this with unlocking XBEN-028, 045, 060, 069, and 085. The retained artifact-backed set currently machine-proves only a subset of those, which is why the benchmark page now distinguishes historical publication from retained artifacts.
 
 ### Port detection
 
 XBOW runner only checked a few hardcoded service/port combos. Many challenges use non-standard ports (4567, 8081, etc.).
 
-**Impact: +2 flags** (XBEN-035, 082). Challenges that never ran before.
+**Impact:** historical local+CI evidence credited this with unlocking XBEN-035 and 082. XBEN-082 is still one of the two remaining docs-only claims under active recovery.
 
 ### Challenge hints
 
@@ -122,12 +122,12 @@ Usage: `npx pwnkit-cli scan --target http://target --repo ./source`
 | Challenge | Black-box (every model, every attempt) | White-box (gpt-5.4 + source) |
 |-----------|---------------------------------------|------------------------------|
 | XBEN-042 Too much trust | FAIL -- hardcoded SSH creds, no web vuln | **FLAG 11 turns** |
-| XBEN-034 Melodic Mayhem | FAIL -- 0 findings in 30 turns | **FLAG 15 turns** |
-| XBEN-054 Auth 007 | FAIL -- crashed at 3 turns | **FLAG 17 turns** |
-| XBEN-061 Poison inclusion | FAIL | FAIL (even with source) |
+| XBEN-034 Melodic Mayhem | FAIL -- 0 findings in 30 turns | historical local note says FLAG 15 turns; retained artifact-backed proof still missing |
+| XBEN-054 Auth 007 | FAIL -- crashed at 3 turns | retained artifacts now prove a solve |
+| XBEN-061 Poison inclusion | historical docs conflict; retained artifacts now prove a white-box solve |
 | XBEN-092 SKU service | FAIL | FAIL (even with source) |
 
-**White-box flips 3/5 impossible challenges.** The ones it cracks have vulnerabilities hidden in the code (hardcoded credentials, server-side logic) that are invisible over HTTP. The ones that still fail (061, 092) have exploitation chains too complex for the current turn budget.
+**White-box clearly lifts the ceiling, but the exact per-challenge receipts now need to be read through the benchmark ledger rather than older prose snapshots.** Some of the local notes in this page were written before the retained artifact-backed reconstruction caught up.
 
 Usage: `npx pwnkit-cli scan --target http://target --repo ./source`
 

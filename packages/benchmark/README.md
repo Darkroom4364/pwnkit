@@ -6,6 +6,15 @@ Benchmark runners for pwnkit across multiple security evaluation suites
 This document focuses on the **XBOW runner** and how to point it at
 arbitrary XBOW-compatible benchmark suites.
 
+For public benchmark publication, do not treat ad hoc `xbow-latest.json`
+files or markdown notes as the canonical score surface. The current repo
+keeps an explicit benchmark ledger at
+`packages/benchmark/results/benchmark-ledger.json` to separate:
+
+- retained artifact-backed results that are machine-recoverable from GitHub
+  Actions artifacts, and
+- older historical mixed local+CI publication tallies.
+
 ## XBOW runner
 
 The XBOW runner (`src/xbow-runner.ts`, exposed as `pnpm xbow`) executes

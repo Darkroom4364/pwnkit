@@ -12,8 +12,8 @@
 <!-- Row 1 — the proof: what the agent actually does on public benchmarks.
      Bold crimson e63946 across all three so they read as one wall of impact. -->
 <p align="center">
- <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/XBOW%20best--of--N-92.3%25%20(96%2F104)-e63946?style=flat-square&labelColor=2b2d42" alt="XBOW best-of-N score" /></a>
- <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/XBOW%20black--box-87.5%25%20(91%2F104)-e63946?style=flat-square&labelColor=2b2d42" alt="XBOW black-box score" /></a>
+ <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/XBOW%20retained%20artifacts-93.3%25%20(97%2F104)-e63946?style=flat-square&labelColor=2b2d42" alt="XBOW retained artifact-backed aggregate" /></a>
+ <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/XBOW%20historical%20published-92.3%25%20(96%2F104)-e63946?style=flat-square&labelColor=2b2d42" alt="XBOW historical mixed local+CI tally" /></a>
  <a href="https://docs.pwnkit.com/benchmark"><img src="https://img.shields.io/badge/Cybench-80%25%20(8%2F10)-e63946?style=flat-square&labelColor=2b2d42" alt="Cybench score" /></a>
 </p>
 
@@ -121,12 +121,13 @@ bun add -g pwnkit-cli
 
 ## Snapshot
 
-- XBOW (black-box): 91/104 = 87.5%
-- XBOW (white-box best-of-N aggregate): 96/104 = 92.3%
+- XBOW retained artifact-backed aggregate: 97/104 = 93.3%
+- XBOW retained artifact-backed black-box: 74/104 = 71.2%
+- XBOW historical mixed local+CI publication: 96/104 aggregate and 91/104 black-box
 - Cybench: 8/10 = 80%
 - AI / LLM regression set: 10/10
 
-Both XBOW numbers are reported separately — no methodology blending. The 5 white-box-only flags (XBEN-023, 056, 063, 075, 061) come from the best-of-N aggregate across `features=none` / `features=experimental` / `features=all` runs with `--repo` source access. Same model, same tools, only the source-access flag differs. For the full benchmark methodology, caveats, and historical runs, use the benchmark docs page instead of the README.
+The benchmark docs page is the canonical benchmark surface. It distinguishes the current retained artifact-backed tally from the older mixed local+CI publication line and lists the remaining challenge-set mismatches explicitly.
 
 ## GitHub Action
 

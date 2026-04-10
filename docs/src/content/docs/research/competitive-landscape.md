@@ -5,7 +5,7 @@ description: Competitor analysis, evidence-based improvement techniques, and res
 
 Synthesis of competitive intelligence and published research on autonomous pentesting agents, benchmarked against the [XBOW validation suite](https://github.com/xbow-engineering/validation-benchmarks) (104 Docker CTF challenges). Data current as of April 2026.
 
-> **pwnkit status (April 2026):** **87.5% black-box (91/104)** and **92.3% white-box best-of-N aggregate (96/104)**, both reported separately. The aggregate beats MAPTA (76.9%), deadend-cli (77.6%), Cyber-AutoAgent (84.6%), XBOW's own agent (85%), and **BoxPwnr's best single-model score of 81.7%** (GLM-5). The black-box number alone still beats every one of those except KinoSec (92.3% black-box). Still behind BoxPwnr's 97.1% best-of-N aggregate and Shannon's 96.15% white-box score.
+> **pwnkit status (April 2026):** the current retained artifact-backed XBOW tally is **97/104 aggregate**, with **74/104 black-box** and **77/104 white-box** recoverable from GitHub artifacts alone. Older public docs also preserve a historical mixed local+CI publication line of **91/104 black-box** and **96/104 aggregate**; see [Benchmark](/benchmark/) for the exact distinction and challenge-set mismatch.
 
 For pwnkit's own benchmark scores, see the [Benchmark](/benchmark/) page. For the Shannon-specific gap analysis, see [XBOW Analysis](/research/xbow-analysis/).
 
@@ -60,9 +60,9 @@ Endor Labs' triage accuracy comes from forcing neural + rules to agree. pwnkit h
 
 Implementation: `packages/core/src/triage/multi-modal.ts`.
 
-### 92.3% XBOW best-of-N aggregate — beats BoxPwnr's best single-model by ~10.6pp
+### Artifact-backed XBOW aggregate now reaches 97/104
 
-BoxPwnr's headline 97.1% is a best-of-N aggregate across ~10 model+solver configurations (527 traces / 104 challenges ≈ 5 attempts each). Their **best single model (GLM-5 + `single_loop`) scores 81.7%**. pwnkit's **92.3% white-box best-of-N aggregate** beats that single-model number by ~10.6pp, and pwnkit's **87.5% black-box** number alone still beats it by ~5.8pp — while pwnkit's aggregate trails BoxPwnr's full multi-config aggregate.
+BoxPwnr's headline 97.1% is a best-of-N aggregate across ~10 model+solver configurations (527 traces / 104 challenges ≈ 5 attempts each). Their **best single model (GLM-5 + `single_loop`) scores 81.7%**. pwnkit's retained artifact-backed aggregate is now **97/104**, but with a different methodology and challenge-set composition than the older 96/104 publication line. The benchmark page is the canonical place where those distinctions are spelled out.
 
 ## The meta-finding
 

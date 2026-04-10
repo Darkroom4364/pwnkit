@@ -691,6 +691,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
         finding.triageNote = `rejected: holding-it-wrong — ${hiw.reason}`;
         db.updateFindingStatus?.(finding.id, "false-positive");
         finding.status = "false-positive";
+        db.saveFinding?.(scanId, finding);
         emit({
           type: "stage:end",
           stage: "attack",
@@ -704,6 +705,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
         finding.triageNote = `rejected: evidence_completeness=${evidenceCompleteness.toFixed(2)} <= 0.5`;
         db.updateFindingStatus?.(finding.id, "false-positive");
         finding.status = "false-positive";
+        db.saveFinding?.(scanId, finding);
         emit({
           type: "stage:end",
           stage: "attack",
@@ -741,6 +743,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
             finding.triageNote = `unreachable: ${reach.reason}`;
             db.updateFindingStatus?.(finding.id, "false-positive");
             finding.status = "false-positive";
+            db.saveFinding?.(scanId, finding);
             emit({
               type: "stage:end",
               stage: "attack",
@@ -805,6 +808,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
             finding.triageNote = `multi_modal_reject: ${fused.reasoning}`;
             db.updateFindingStatus?.(finding.id, "false-positive");
             finding.status = "false-positive";
+            db.saveFinding?.(scanId, finding);
             emit({
               type: "stage:end",
               stage: "attack",
@@ -950,6 +954,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
         }
       }
 
+      db.saveFinding?.(scanId, finding);
       verifyCandidates.push(finding);
     }
 
@@ -1018,6 +1023,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
               finding.triageNote = `rejected by self-consistency vote (${Math.round(consensus.confidence * 100)}% agreement, ${consensus.runs.length} runs)`;
               db.updateFindingStatus?.(finding.id, "false-positive");
               finding.status = "false-positive";
+              db.saveFinding?.(scanId, finding);
               continue;
             }
             survivors.push(finding);

@@ -1045,8 +1045,16 @@ export class pwnkitDB {
       .onConflictDoUpdate({
         target: schema.findings.id,
         set: {
+          templateId: finding.templateId,
+          title: finding.title,
+          description: finding.description,
+          severity: finding.severity,
+          category: finding.category,
           status: finding.status,
           fingerprint,
+          triageStatus: finding.triageStatus ?? inheritedTriage?.triageStatus ?? "new",
+          triageNote: finding.triageNote ?? inheritedTriage?.triageNote ?? null,
+          triagedAt: finding.triageStatus || inheritedTriage?.triageStatus ? new Date().toISOString() : null,
           workflowStatus: inheritedWorkflowStatus,
           workflowAssignee: inheritedWorkflowAssignee,
           workflowUpdatedAt: new Date().toISOString(),
@@ -1056,6 +1064,7 @@ export class pwnkitDB {
           evidenceRequest: finding.evidence.request,
           evidenceResponse: finding.evidence.response,
           evidenceAnalysis: finding.evidence.analysis ?? null,
+          timestamp: finding.timestamp,
         },
       })
       .run();

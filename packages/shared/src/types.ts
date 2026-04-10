@@ -358,6 +358,12 @@ export interface ScanReport {
   exitReason?: ScanExitReason;
   /** True when the scan was aborted by the per-scan cost ceiling. */
   costCeilingExceeded?: boolean;
+  /**
+   * Full conversation trace from the agent loop (discovery + attack messages).
+   * Populated only when the caller opts in (e.g. benchmark runs). Not included
+   * in normal scan output to avoid bloating JSON reports.
+   */
+  trace?: unknown[];
 }
 
 export interface ReportSummary {

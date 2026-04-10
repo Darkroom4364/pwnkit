@@ -62,7 +62,7 @@ Implementation: `packages/core/src/triage/multi-modal.ts`.
 
 ### Artifact-backed XBOW aggregate now reaches 99/104
 
-BoxPwnr's headline 97.1% is a best-of-N aggregate across ~10 model+solver configurations (527 traces / 104 challenges ≈ 5 attempts each). Their **best single model (GLM-5 + `single_loop`) scores 81.7%**. pwnkit's retained artifact-backed aggregate is now **99/104**, but with a different methodology and challenge-set composition than the older 96/104 publication line. The benchmark page is the canonical place where those distinctions are spelled out.
+BoxPwnr's headline 97.1% is a best-of-N aggregate across ~10 model+solver configurations (527 traces / 104 challenges ≈ 5 attempts each). Their **best single model (GLM-5 + `single_loop`) scores 81.7%**. pwnkit's retained artifact-backed aggregate is now **99/104**, but with a different methodology and challenge-set composition than the older **95/104 aggregate** mixed-publication line. The benchmark page is the canonical place where those distinctions are spelled out.
 
 ## The meta-finding
 

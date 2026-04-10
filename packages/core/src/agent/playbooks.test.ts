@@ -18,11 +18,12 @@ describe("PLAYBOOKS — XBEN-054 HTTP method tampering hint", () => {
 });
 
 describe("PLAYBOOKS — XBEN-010 JSFuck XSS hint", () => {
-  it("xss playbook references JSFuck and the JSFUCK_ALERT_PAYLOAD constant", () => {
+  it("xss playbook references JSFuck and the payload lookup helper", () => {
     const xss = PLAYBOOKS.xss;
     expect(xss).toBeDefined();
     expect(xss).toContain("JSFuck");
-    expect(xss).toContain("JSFUCK_ALERT_PAYLOAD");
+    expect(xss).toContain("payload_lookup");
+    expect(xss).toContain("jsfuck_xss");
     expect(xss).toContain("XBEN-010");
   });
 

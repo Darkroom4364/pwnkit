@@ -8,7 +8,7 @@ describe("TOOL_DEFINITIONS", () => {
   it("defines all expected tools", () => {
     const expected = [
       "http_request", "send_prompt", "save_finding", "query_findings",
-      "update_finding", "read_file", "run_command", "update_target", "done",
+      "update_finding", "read_file", "run_command", "update_target", "payload_lookup", "done",
     ];
     for (const name of expected) {
       expect(TOOL_DEFINITIONS[name]).toBeDefined();
@@ -38,6 +38,8 @@ describe("getToolsForRole", () => {
     expect(names).toContain("http_request");
     expect(names).toContain("send_prompt");
     expect(names).toContain("save_finding");
+    expect(names).toContain("payload_lookup");
+    expect(names).toContain("wp_fingerprint");
   });
 
   it("gives verify agent file tools when hasScope is true", () => {
@@ -102,6 +104,19 @@ describe("ToolExecutor", () => {
   });
 
   // ── query_findings ──
+
+  it("payload_lookup returns reusable JSFuck payloads", async () => {
+    const result = await executor.execute({
+      name: "payload_lookup",
+      arguments: { name: "jsfuck_xss" },
+    });
+
+    expect(result.success).toBe(true);
+    const output = result.output as { name: string; payload: string };
+    expect(output.name).toBe("jsfuck_xss");
+    expect(output.payload).toContain("[]");
+    expect(output.payload.length).toBeGreaterThan(3000);
+  });
 
   it("query_findings returns in-memory findings", async () => {
     await executor.execute({

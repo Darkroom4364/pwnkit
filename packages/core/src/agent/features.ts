@@ -52,8 +52,9 @@ export const features = {
   /**
    * WordPress plugin/theme fingerprinter + OSV CVE lookup.
    * Exposes the `wp_fingerprint` tool to the attack agent. Off by default —
-   * opt in via `--features wp_fingerprint` (or PWNKIT_FEATURE_WP_FINGERPRINT=1)
-   * when the target is known or suspected to be WordPress. See
+   * can be disabled via `--features no-wp_fingerprint` / env if needed.
+   * WordPress detection is cheap and the resulting plugin/CVE hints are
+   * broadly useful on real web targets, so the default is ON. See
    * packages/core/src/agent/wp-fingerprint.ts for the implementation.
    *
    * Implemented as a getter so the CLI `--features` flag — which sets the env
@@ -61,7 +62,7 @@ export const features = {
    * still honored at tool-dispatch time.
    */
   get wpFingerprint(): boolean {
-    return env("PWNKIT_FEATURE_WP_FINGERPRINT", false);
+    return env("PWNKIT_FEATURE_WP_FINGERPRINT", true);
   },
 
   /**

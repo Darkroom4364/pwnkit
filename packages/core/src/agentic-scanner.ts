@@ -1375,8 +1375,28 @@ async function runNativeAttack(
     (challengeHint ? basePrompt + "\n" + challengeHint : basePrompt) + preReconBlock;
 
   const shellToolNames = hasSource
-    ? ["bash", ...(hasBrowser ? ["browser"] : []), "read_file", "run_command", "spawn_agent", "save_finding", "done"]
-    : ["bash", ...(hasBrowser ? ["browser"] : []), "spawn_agent", "save_finding", "done"];
+    ? [
+        "bash",
+        ...(hasBrowser ? ["browser"] : []),
+        "payload_lookup",
+        ...(features.wpFingerprint ? ["wp_fingerprint"] : []),
+        ...(features.mongoObjectIdForge ? ["mongo_objectid"] : []),
+        "read_file",
+        "run_command",
+        "spawn_agent",
+        "save_finding",
+        "done",
+      ]
+    : [
+        "bash",
+        ...(hasBrowser ? ["browser"] : []),
+        "payload_lookup",
+        ...(features.wpFingerprint ? ["wp_fingerprint"] : []),
+        ...(features.mongoObjectIdForge ? ["mongo_objectid"] : []),
+        "spawn_agent",
+        "save_finding",
+        "done",
+      ];
   const shellTools: import("./agent/types.js").ToolDefinition[] = shellToolNames
     .map((n) => TOOL_DEFINITIONS[n])
     .filter((t): t is import("./agent/types.js").ToolDefinition => t !== undefined);

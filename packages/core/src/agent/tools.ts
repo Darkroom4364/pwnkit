@@ -21,6 +21,10 @@ import {
   forgeObjectIdSequence,
   parseObjectId,
 } from "./objectid-forge.js";
+import {
+  JSFUCK_ALERT_PAYLOAD,
+  JSFUCK_XSS_PAYLOAD,
+} from "./payloads.js";
 
 // ── Tool Registry ──
 
@@ -260,6 +264,20 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
       query: { type: "string", description: "Search query" },
     },
     required: ["query"],
+  },
+
+  payload_lookup: {
+    name: "payload_lookup",
+    description:
+      "Return a reusable payload or payload template for tricky exploit classes that are hard to synthesize in-context, such as JSFuck XSS encodings. Use this instead of trying to hand-build long encoded payloads under turn pressure.",
+    parameters: {
+      name: {
+        type: "string",
+        description: "Payload identifier",
+        enum: ["jsfuck_alert", "jsfuck_xss"],
+      },
+    },
+    required: ["name"],
   },
 
   pty_session: {
@@ -653,6 +671,8 @@ export class ToolExecutor {
           return await this.browserAction(call.arguments);
         case "web_search":
           return await this.webSearch(call.arguments);
+        case "payload_lookup":
+          return this.payloadLookup(call.arguments);
         case "pty_session":
           return await this.ptySession(call.arguments);
         case "spawn_agent":
@@ -1718,6 +1738,35 @@ export class ToolExecutor {
     }
   }
 
+  private payloadLookup(args: Record<string, unknown>): ToolResult {
+    const name = String(args.name ?? "");
+    if (name === "jsfuck_alert") {
+      return {
+        success: true,
+        output: {
+          name,
+          payload: JSFUCK_ALERT_PAYLOAD,
+          description: "JSFuck-encoded alert(1) using only []()!+",
+        },
+      };
+    }
+    if (name === "jsfuck_xss") {
+      return {
+        success: true,
+        output: {
+          name,
+          payload: JSFUCK_XSS_PAYLOAD,
+          description: "JSFuck-encoded alert('XSS') using only []()!+",
+        },
+      };
+    }
+    return {
+      success: false,
+      output: null,
+      error: `Unknown payload: ${name}. Valid: jsfuck_alert, jsfuck_xss`,
+    };
+  }
+
   // ── MongoDB ObjectID forge (feature-gated, default ON) ──
 
   private mongoObjectIdForge(args: Record<string, unknown>): ToolResult {
@@ -1818,9 +1867,10 @@ export function getToolsForRole(role: string, opts?: { hasScope?: boolean; webMo
   const browserTools = opts?.hasBrowser ? ["browser"] : [];
   const webSearchTools = featureFlags.webSearch ? ["web_search"] : [];
   const ptyTools = featureFlags.ptySession ? ["pty_session"] : [];
+  const payloadTools = ["payload_lookup"];
   const wpTools = featureFlags.wpFingerprint ? ["wp_fingerprint"] : [];
   const mongoTools = featureFlags.mongoObjectIdForge ? ["mongo_objectid"] : [];
-  const networkTools = ["http_request", "crawl", "submit_form", "bash", ...browserTools, ...webSearchTools, ...ptyTools, ...wpTools, ...mongoTools, "send_prompt", "save_finding", "update_finding", "update_target", ...common];
+  const networkTools = ["http_request", "crawl", "submit_form", "bash", ...browserTools, ...webSearchTools, ...ptyTools, ...payloadTools, ...wpTools, ...mongoTools, "send_prompt", "save_finding", "update_finding", "update_target", ...common];
   const fileTools = ["read_file", "run_command"];
 
   const roleTools: Record<string, string[]> = {

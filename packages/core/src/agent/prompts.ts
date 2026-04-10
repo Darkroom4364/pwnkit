@@ -200,6 +200,7 @@ Perform a comprehensive web application penetration test against the target. You
 - Test stored XSS on forms that save data (comments, profiles, etc.)
 - Check for DOM-based XSS in JavaScript-heavy pages
 - Try encoding bypasses: HTML entities, URL encoding, Unicode
+- If the filter blocks letters or digits but leaves \`[]()!+\`, call \`payload_lookup\` for a JSFuck payload instead of trying to hand-encode one in-context
 
 ### Path Traversal
 - Test file-serving endpoints with: ../../../etc/passwd, ..\\..\\..\\windows\\system32\\drivers\\etc\\hosts
@@ -358,6 +359,7 @@ Try in every input, especially search, ping, or lookup fields:
 - \`; ls -la /\`
 - \`| find / -name 'flag*' 2>/dev/null\`
 - \`; env | grep -i flag\`
+- If the endpoint wraps shell output in a parser/summary, shape your injected command to emit the parser's expected format instead of relying on raw stdout being displayed
 
 ### 4. IDOR (Insecure Direct Object Reference)
 - Find any URL with an ID: /user/1, /profile?id=1, /api/users/1, /order/1001

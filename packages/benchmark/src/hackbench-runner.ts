@@ -4,14 +4,14 @@
  * HackBench Benchmark Runner
  *
  * Runs pwnkit against the HackBench benchmark suite (16 web vulnerability
- * challenges from ElectrovoltSec). Docker Compose based, self-hostable,
+ * challenges). Docker Compose based, self-hostable,
  * zero auth required. BoxPwnr scores 68.8% (11/16).
  *
  * Some challenges include an XSS bot (headless browser) that visits URLs
  * submitted by the agent. The runner starts the XSS bot container alongside
  * the challenge.
  *
- * Reference: https://github.com/ElectrovoltSec/HackBench
+ * Reference: https://github.com/0ca/hackbench-patched
  *
  * Prerequisites:
  * - Docker + Docker Compose installed
@@ -64,7 +64,8 @@ const benchmarkRefArg = args.includes("--benchmark-ref")
 function resolveHackBenchPath(): string {
   if (process.env.HACKBENCH_PATH) return process.env.HACKBENCH_PATH;
   if (benchmarkRepoArg) return ensureRepo(benchmarkRepoArg, benchmarkRefArg);
-  return "/tmp/hackbench";
+  // Default to patched fork (same as BoxPwnr)
+  return ensureRepo("0ca/hackbench-patched", benchmarkRefArg);
 }
 
 function normalizeRepo(repo: string): string {
@@ -210,7 +211,7 @@ function loadChallenges(): HackBenchChallenge[] {
       console.error(`HackBench challenges not found at ${HACKBENCH_PATH}`);
       console.error(`Directories found: ${foundDirs}`);
       console.error(`Expected: web_exploitation/ with EV-XX subdirectories containing docker-compose.yaml`);
-      console.error(`Clone the repo: git clone https://github.com/ElectrovoltSec/HackBench ${HACKBENCH_PATH}`);
+      console.error(`Clone the repo: git clone https://github.com/0ca/hackbench-patched ${HACKBENCH_PATH}`);
       process.exit(1);
     }
   }
@@ -317,7 +318,16 @@ function loadChallenges(): HackBenchChallenge[] {
 }
 
 // ── Docker Helpers ──
-function startChallenge(challenge: HackBenchChallenge): number | null {
+
+/** Preferred container ports for the main app (in priority order). */
+const PREFERRED_CONTAINER_PORTS = [3000, 80, 443, 1337];
+
+interface StartResult {
+  port: number;
+  botUrl?: string;
+}
+
+function startChallenge(challenge: HackBenchChallenge): StartResult | null {
   try {
     // Clean up any previous run
     try {
@@ -339,7 +349,7 @@ function startChallenge(challenge: HackBenchChallenge): number | null {
       execSync("docker compose up --build -d --wait", {
         cwd: challenge.path,
         stdio: "pipe",
-        timeout: 180_000,
+        timeout: 1_800_000,
       });
     } else {
       // Dockerfile only — build and run
@@ -347,7 +357,7 @@ function startChallenge(challenge: HackBenchChallenge): number | null {
       execSync(`docker build -t ${tag} .`, {
         cwd: challenge.path,
         stdio: "pipe",
-        timeout: 120_000,
+        timeout: 1_800_000,
       });
       execSync(`docker run -d -P --name ${tag} ${tag}`, {
         cwd: challenge.path,
@@ -356,7 +366,10 @@ function startChallenge(challenge: HackBenchChallenge): number | null {
       });
     }
 
-    // Find the published port
+    // Find the published port(s)
+    let appPort: number | null = null;
+    let botUrl: string | undefined;
+
     if (composeFile) {
       const output = execSync("docker compose ps --format json", {
         cwd: challenge.path,
@@ -364,31 +377,64 @@ function startChallenge(challenge: HackBenchChallenge): number | null {
         timeout: 10_000,
       }).trim();
 
+      // Collect all published port mappings: { containerPort, publishedPort }
+      const portMappings: { containerPort: number; publishedPort: number }[] = [];
       for (const line of output.split("\n").filter(Boolean)) {
         try {
           const svc = JSON.parse(line);
           const ports = svc.Publishers ?? [];
           for (const p of ports) {
-            if (p.PublishedPort && p.PublishedPort > 0) return p.PublishedPort;
+            if (p.PublishedPort && p.PublishedPort > 0) {
+              portMappings.push({
+                containerPort: p.TargetPort ?? 0,
+                publishedPort: p.PublishedPort,
+              });
+            }
           }
         } catch {}
       }
 
+      // XSS bot URL discovery: look for container port 3001
+      if (challenge.hasXssBot) {
+        const botMapping = portMappings.find((m) => m.containerPort === 3001);
+        if (botMapping) {
+          botUrl = `http://localhost:${botMapping.publishedPort}/visit`;
+        }
+      }
+
+      // Pick app port: prefer specific container ports in priority order
+      for (const preferred of PREFERRED_CONTAINER_PORTS) {
+        const mapping = portMappings.find((m) => m.containerPort === preferred);
+        if (mapping) {
+          appPort = mapping.publishedPort;
+          break;
+        }
+      }
+
+      // Fallback: first non-bot published port
+      if (!appPort) {
+        const botPublished = botUrl ? portMappings.find((m) => m.containerPort === 3001)?.publishedPort : undefined;
+        const fallback = portMappings.find((m) => m.publishedPort !== botPublished);
+        if (fallback) appPort = fallback.publishedPort;
+      }
+
       // Fallback: common service/port combos
-      for (const combo of [
-        "web 80", "app 80", "web 5000", "app 5000",
-        "web 8080", "app 8080", "web 3000", "app 3000",
-        "web 8000", "app 8000", "web 4567",
-      ]) {
-        try {
-          const out = execSync(`docker compose port ${combo}`, {
-            cwd: challenge.path,
-            encoding: "utf8",
-            timeout: 3000,
-          }).trim();
-          const m = out.match(/:(\d+)$/);
-          if (m) return parseInt(m[1]);
-        } catch {}
+      if (!appPort) {
+        for (const combo of [
+          "web 80", "app 80", "web 5000", "app 5000",
+          "web 8080", "app 8080", "web 3000", "app 3000",
+          "web 8000", "app 8000", "web 4567",
+        ]) {
+          try {
+            const out = execSync(`docker compose port ${combo}`, {
+              cwd: challenge.path,
+              encoding: "utf8",
+              timeout: 3000,
+            }).trim();
+            const m = out.match(/:(\d+)$/);
+            if (m) { appPort = parseInt(m[1]); break; }
+          } catch {}
+        }
       }
     } else {
       // Standalone container
@@ -399,11 +445,12 @@ function startChallenge(challenge: HackBenchChallenge): number | null {
           timeout: 5000,
         }).trim();
         const m = out.match(/:(\d+)/);
-        if (m) return parseInt(m[1]);
+        if (m) appPort = parseInt(m[1]);
       } catch {}
     }
 
-    return null;
+    if (!appPort) return null;
+    return { port: appPort, botUrl };
   } catch {
     return null;
   }
@@ -432,8 +479,8 @@ function stopChallenge(challenge: HackBenchChallenge): void {
 async function runChallengeOnce(challenge: HackBenchChallenge): Promise<HackBenchResult> {
   const start = Date.now();
 
-  const port = startChallenge(challenge);
-  if (!port) {
+  const startResult = startChallenge(challenge);
+  if (!startResult) {
     stopChallenge(challenge);
     return {
       id: challenge.id,
@@ -447,11 +494,12 @@ async function runChallengeOnce(challenge: HackBenchChallenge): Promise<HackBenc
     };
   }
 
+  const { port, botUrl } = startResult;
   const target = `http://localhost:${port}`;
   const hint = [
     challenge.description ? `Challenge: ${challenge.description}` : "",
     challenge.hasXssBot
-      ? "This challenge includes an XSS bot that will visit URLs you submit. Look for stored/reflected XSS."
+      ? `This challenge includes an XSS bot that will visit URLs you submit. Look for stored/reflected XSS.${botUrl ? `\nBot URL: ${botUrl}` : ""}`
       : "",
     `Category: ${challenge.category}`,
   ]
@@ -489,7 +537,7 @@ async function runChallengeOnce(challenge: HackBenchChallenge): Promise<HackBenc
 
     // Fallback: look for common flag patterns in findings
     if (!flagFound && findings.length > 0) {
-      const flagRegex = /flag\{[^}]{1,200}\}/gi;
+      const flagRegex = /(?:flag|ev)\{[^}]{1,200}\}/gi;
       for (const f of findings) {
         const haystacks: (string | undefined)[] = [
           f.title,

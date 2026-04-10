@@ -32,7 +32,6 @@ import { execSync, spawnSync } from "node:child_process";
 import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, statSync, appendFileSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomBytes } from "node:crypto";
 import { agenticScan, scan } from "@pwnkit/core";
 import { tmpdir } from "node:os";
 import type { RuntimeMode } from "@pwnkit/shared";
@@ -262,6 +261,13 @@ function loadChallenges(): ArgusChallenge[] {
         description = config.description ?? "";
         tags = config.tags ?? [];
         flag = config.flag ?? config.expected_flag ?? "";
+        // Some Argus challenges store the flag in metadata.canaries
+        if (!flag && Array.isArray(config.canaries) && config.canaries.length > 0) {
+          flag = config.canaries[0];
+        }
+        if (!flag && config.metadata?.canaries && Array.isArray(config.metadata.canaries) && config.metadata.canaries.length > 0) {
+          flag = config.metadata.canaries[0];
+        }
       } catch {}
     }
 
@@ -292,6 +298,13 @@ function loadChallenges(): ArgusChallenge[] {
           description = meta.description ?? meta.prompt ?? description;
           tags = meta.tags ?? meta.categories ?? tags;
           flag = meta.flag ?? meta.expected_flag ?? flag;
+          // Canary extraction from metadata
+          if (!flag && Array.isArray(meta.canaries) && meta.canaries.length > 0) {
+            flag = meta.canaries[0];
+          }
+          if (!flag && meta.metadata?.canaries && Array.isArray(meta.metadata.canaries) && meta.metadata.canaries.length > 0) {
+            flag = meta.metadata.canaries[0];
+          }
         } catch {}
       }
     }
@@ -362,22 +375,16 @@ function projectName(challenge: ArgusChallenge): string {
   return `argus-${challenge.id}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
 }
 
-function buildChallenge(challenge: ArgusChallenge, flag: string): boolean {
+function buildChallenge(challenge: ArgusChallenge): boolean {
   try {
-    // Inject FLAG as a build arg if the compose file references it
-    const composePath = join(challenge.path, "docker-compose.yml");
     let buildCmd = "docker compose";
     buildCmd += ` -p ${projectName(challenge)}`;
     buildCmd += ` build`;
 
-    // Pass FLAG as build-arg if possible — many Argus challenges accept it
-    buildCmd += ` --build-arg FLAG=${flag}`;
-
     execSync(buildCmd, {
       cwd: challenge.path,
       stdio: "pipe",
-      timeout: 120_000,
-      env: { ...process.env, FLAG: flag },
+      timeout: 600_000,
     });
     return true;
   } catch {
@@ -385,7 +392,7 @@ function buildChallenge(challenge: ArgusChallenge, flag: string): boolean {
   }
 }
 
-function startChallenge(challenge: ArgusChallenge, flag: string): number | null {
+function startChallenge(challenge: ArgusChallenge): number | null {
   try {
     const pn = projectName(challenge);
 
@@ -403,7 +410,6 @@ function startChallenge(challenge: ArgusChallenge, flag: string): number | null 
       cwd: challenge.path,
       stdio: "pipe",
       timeout: 180_000,
-      env: { ...process.env, FLAG: flag },
     });
 
     // Find published port
@@ -458,12 +464,11 @@ function stopChallenge(challenge: ArgusChallenge): void {
 
 // ── Run Single Challenge ──
 async function runChallengeOnce(challenge: ArgusChallenge): Promise<ArgusResult> {
-  // Generate a unique flag per run so we can verify extraction
-  const flag = challenge.flag || `FLAG{${randomBytes(12).toString("hex")}}`;
+  const flag = challenge.flag;
   const start = Date.now();
 
   // Build
-  if (!buildChallenge(challenge, flag)) {
+  if (!buildChallenge(challenge)) {
     return {
       id: challenge.id,
       name: challenge.name,
@@ -477,7 +482,7 @@ async function runChallengeOnce(challenge: ArgusChallenge): Promise<ArgusResult>
   }
 
   // Start
-  const port = startChallenge(challenge, flag);
+  const port = startChallenge(challenge);
   if (!port) {
     stopChallenge(challenge);
     return {
@@ -520,10 +525,10 @@ async function runChallengeOnce(challenge: ArgusChallenge): Promise<ArgusResult>
 
     const findings = report.findings ?? [];
     const allText = JSON.stringify(report).toLowerCase();
-    let flagFound = allText.includes(flag.toLowerCase());
+    let flagFound = flag ? allText.includes(flag.toLowerCase()) : false;
 
     // Defense-in-depth: walk findings for flag patterns
-    if (!flagFound && findings.length > 0) {
+    if (!flagFound && flag && findings.length > 0) {
       const flagRegex = /flag\{[^}]{1,200}\}/gi;
       const knownFlagLower = flag.toLowerCase();
       for (const f of findings) {

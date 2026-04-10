@@ -29,11 +29,13 @@ interface XbowResult {
   id: string;
   flagFound?: boolean;
   error?: string;
+  model?: string;
 }
 
 interface XbowReport {
   timestamp?: string;
   runtime?: string;
+  model?: string;
   whiteBox?: boolean;
   retries?: number;
   challenges?: number;
@@ -49,6 +51,7 @@ interface SolvedSource {
   whiteBox: boolean;
   retries: number | null;
   runtime: string | null;
+  model: string | null;
 }
 
 interface ArtifactSummary {
@@ -193,6 +196,26 @@ const blackBoxSolved = new Map<string, SolvedSource[]>();
 const whiteBoxSolved = new Map<string, SolvedSource[]>();
 const skippedRuns: Array<{ runId: number; reason: string }> = [];
 
+// Per-model tracking: for each model, track which challenge IDs were
+// attempted and which were solved (flag found). A challenge counts as
+// "attempted by model X" if any run ever produced a result for it with
+// that model. It counts as "solved" if any such result had flagFound.
+interface PerModelStats {
+  attempted: Set<string>;
+  solved: Set<string>;
+}
+const perModelStats = new Map<string, PerModelStats>();
+
+function trackModelResult(model: string, challengeId: string, flagFound: boolean): void {
+  let stats = perModelStats.get(model);
+  if (!stats) {
+    stats = { attempted: new Set(), solved: new Set() };
+    perModelStats.set(model, stats);
+  }
+  stats.attempted.add(challengeId);
+  if (flagFound) stats.solved.add(challengeId);
+}
+
 for (const run of runs) {
   const downloadDir = mkdtempSync(join(tmpdir(), "pwnkit-xbow-consolidate-"));
   const artifacts = artifactsByRunId.get(run.databaseId) ?? [];
@@ -225,6 +248,10 @@ for (const run of runs) {
     const artifact = basename(dirname(file));
 
     for (const result of report.results ?? []) {
+      // Track per-model stats for every result, not just solved ones.
+      const resultModel = result.model ?? report.model ?? "unknown";
+      trackModelResult(resultModel, result.id, !!result.flagFound);
+
       if (!result.flagFound) continue;
       const sources = solvedMap.get(result.id) ?? [];
       sources.push({
@@ -235,6 +262,7 @@ for (const run of runs) {
         whiteBox: !!report.whiteBox,
         retries: report.retries ?? null,
         runtime: report.runtime ?? null,
+        model: result.model ?? report.model ?? null,
       });
       solvedMap.set(result.id, sources);
     }
@@ -245,6 +273,19 @@ const blackIds = uniqueSorted(blackBoxSolved.keys());
 const whiteIds = uniqueSorted(whiteBoxSolved.keys());
 const aggregateIds = uniqueSorted([...blackIds, ...whiteIds]);
 const whiteOnlyIds = whiteIds.filter((id) => !blackBoxSolved.has(id));
+
+// Build per-model breakdown sorted by solve rate descending
+const perModel: Record<string, { solved: number; attempted: number; rate: number; challengesSolved: string[] }> =
+  Object.fromEntries(
+    [...perModelStats.entries()]
+      .map(([model, stats]) => {
+        const solved = stats.solved.size;
+        const attempted = stats.attempted.size;
+        const rate = attempted > 0 ? Math.round((solved / attempted) * 1000) / 10 : 0;
+        return [model, { solved, attempted, rate, challengesSolved: uniqueSorted(stats.solved) }] as const;
+      })
+      .sort(([, a], [, b]) => b.rate - a.rate || b.solved - a.solved),
+  );
 
 const canonical = {
   generatedAt: new Date().toISOString(),
@@ -272,6 +313,7 @@ const canonical = {
     blackBox: sortedEntries(blackBoxSolved),
     whiteBox: sortedEntries(whiteBoxSolved),
   },
+  perModel,
 };
 
 mkdirSync(dirname(outputPath), { recursive: true });
@@ -282,3 +324,10 @@ console.log(`  black-box solved:   ${blackIds.length}`);
 console.log(`  white-box solved:   ${whiteIds.length}`);
 console.log(`  aggregate solved:   ${aggregateIds.length}`);
 console.log(`  white-box only:     ${whiteOnlyIds.length}`);
+
+if (Object.keys(perModel).length > 0) {
+  console.log(`\n  Per-model breakdown:`);
+  for (const [model, stats] of Object.entries(perModel)) {
+    console.log(`    ${model}: ${stats.solved}/${stats.attempted} (${stats.rate}%)`);
+  }
+}

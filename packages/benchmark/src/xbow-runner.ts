@@ -56,6 +56,37 @@ const modelsArg = args.includes("--models")
   ? args[args.indexOf("--models") + 1].split(",").map((s) => s.trim()).filter(Boolean)
   : [];
 
+/**
+ * Resolve the effective model identifier for single-model runs (no --models).
+ *
+ * Priority mirrors LlmApiRuntime.constructor in llm-api.ts:
+ *   1. PWNKIT_MODEL env var (explicit override)
+ *   2. Provider-specific env vars (AZURE_OPENAI_MODEL, etc.)
+ *   3. Provider-specific defaults
+ *
+ * For multi-model runs (--models), each result already carries the model from
+ * the loop, so this function is only used when modelsArg is empty.
+ */
+function resolveEffectiveModel(): string {
+  const explicit = process.env.PWNKIT_MODEL;
+  if (explicit) return explicit;
+
+  // Mirror detectProvider priority: openrouter > anthropic > azure > openai
+  if (process.env.OPENROUTER_API_KEY) {
+    return process.env.OPENROUTER_MODEL ?? "anthropic/claude-sonnet-4.6";
+  }
+  if (process.env.ANTHROPIC_API_KEY) {
+    return "claude-sonnet-4-6";
+  }
+  if (process.env.AZURE_OPENAI_API_KEY) {
+    return process.env.AZURE_OPENAI_MODEL ?? "gpt-4o";
+  }
+  if (process.env.OPENAI_API_KEY) {
+    return process.env.OPENAI_MODEL ?? "gpt-4o";
+  }
+  return "unknown";
+}
+
 // ── n=10 statistical evaluation harness (issue #81) ──
 //
 // `--repeat N` runs each enabled challenge N independent times and reports
@@ -203,6 +234,7 @@ interface XbowReport {
   timestamp: string;
   mode: "baseline" | "agentic";
   runtime: string;
+  model?: string;
   whiteBox: boolean;
   retries: number;
   challenges: number;
@@ -361,19 +393,22 @@ function stopChallenge(challenge: XbowChallenge): void {
 
 // ── Run Single Challenge ──
 async function runChallengeOnce(challenge: XbowChallenge, model?: string): Promise<XbowResult> {
+  // Resolve the model name eagerly so every result carries it, even for
+  // single-model runs where the caller doesn't pass one explicitly.
+  const effectiveModel = model ?? resolveEffectiveModel();
   const flag = `FLAG{${randomBytes(12).toString("hex")}}`;
   const start = Date.now();
 
   // Build
   if (!buildChallenge(challenge, flag)) {
-    return { id: challenge.id, name: challenge.name, level: challenge.level, tags: challenge.tags, passed: false, flagFound: false, findingsCount: 0, durationMs: Date.now() - start, error: "Docker build failed" };
+    return { id: challenge.id, name: challenge.name, level: challenge.level, tags: challenge.tags, model: effectiveModel, passed: false, flagFound: false, findingsCount: 0, durationMs: Date.now() - start, error: "Docker build failed" };
   }
 
   // Start
   const port = startChallenge(challenge);
   if (!port) {
     stopChallenge(challenge);
-    return { id: challenge.id, name: challenge.name, level: challenge.level, tags: challenge.tags, passed: false, flagFound: false, findingsCount: 0, durationMs: Date.now() - start, error: "Docker start failed or port not found" };
+    return { id: challenge.id, name: challenge.name, level: challenge.level, tags: challenge.tags, model: effectiveModel, passed: false, flagFound: false, findingsCount: 0, durationMs: Date.now() - start, error: "Docker start failed or port not found" };
   }
 
   const target = `http://localhost:${port}`;
@@ -396,7 +431,7 @@ async function runChallengeOnce(challenge: XbowChallenge, model?: string): Promi
           mode: "web",
           timeout: 60_000,
           runtime: effectiveRuntime as RuntimeMode,
-          model,
+          model: effectiveModel,
           verbose: hint ? true : false,
           repoPath,
         },
@@ -466,7 +501,7 @@ async function runChallengeOnce(challenge: XbowChallenge, model?: string): Promi
       name: challenge.name,
       level: challenge.level,
       tags: challenge.tags,
-      model,
+      model: effectiveModel,
       attackTurns: report.benchmarkMeta?.attackTurns,
       estimatedCostUsd: report.benchmarkMeta?.estimatedCostUsd,
       // XBOW uses flag extraction as the only valid pass condition.
@@ -484,7 +519,7 @@ async function runChallengeOnce(challenge: XbowChallenge, model?: string): Promi
       name: challenge.name,
       level: challenge.level,
       tags: challenge.tags,
-      model,
+      model: effectiveModel,
       passed: false,
       flagFound: false,
       findingsCount: 0,
@@ -704,6 +739,7 @@ async function main() {
     runtime: useAgentic
       ? (modelsArg.length > 0 ? `api(best-of-${modelsArg.length})` : runtimeArg)
       : "baseline",
+    model: modelsArg.length > 0 ? modelsArg.join(",") : resolveEffectiveModel(),
     whiteBox,
     retries,
     challenges: challenges.length,

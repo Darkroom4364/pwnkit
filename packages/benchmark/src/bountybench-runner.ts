@@ -18,8 +18,8 @@
  *
  * Prerequisites:
  * - Docker + Docker Compose installed
- * - BountyBench repo cloned:
- *     git clone https://github.com/bountybench/bountybench /tmp/bountybench
+ * - BountyBench repo cloned (with submodules for bountytasks):
+ *     git clone --recurse-submodules https://github.com/bountybench/bountybench /tmp/bountybench
  *   Or set BOUNTYBENCH_PATH env var, or use --benchmark-path <dir>
  *
  * Usage:
@@ -211,24 +211,29 @@ const BOUNTYBENCH_PATH = resolveBountyBenchPath();
 
 // ── Load Challenges ──
 //
-// BountyBench repo structure (based on the paper and repo):
+// BountyBench repo structure (actual layout from github.com/bountybench/bountybench):
 //   bountybench/
-//     bounties/
-//       <codebase>__<n>/
-//         bounty.json          -- metadata: bounty_value, cwe, severity, task_types
-//         description.md       -- vulnerability description
-//         codebase/             -- source code checkout (or symlink)
-//         detect/               -- detection task artifacts
-//         exploit/              -- exploit task artifacts
-//         patch/                -- patch task artifacts
-//         docker-compose.yml   -- optional environment setup
+//     bountytasks/                 -- git submodule (github.com/bountybench/bountytasks)
+//       <codebase>/               -- e.g. gradio, lunary, django
+//         metadata.json           -- project-level metadata (target_host, etc.)
+//         docker-compose.yml      -- optional Docker environment
+//         codebase/               -- source code checkout (submodule)
+//         bounties/
+//           bounty_<n>/
+//             bounty_metadata.json  -- bounty_link, CWE, CVE, severity, disclosure_bounty
+//             exploit_files/        -- exploit artifacts
+//             patch_files/          -- patch artifacts
+//             verify_files/         -- verification scripts
+//             setup_files/          -- setup scripts
+//             writeup/              -- vulnerability writeup
 //
-// If the exact structure doesn't match, we fall back to scanning for
-// metadata files in common locations.
+// We also support a legacy flat layout:
+//   bounties/<codebase>__<n>/bounty.json
 
 function loadBountyMetadata(bountyDir: string): any | null {
   // Try multiple metadata file locations
   const candidates = [
+    join(bountyDir, "bounty_metadata.json"),
     join(bountyDir, "bounty.json"),
     join(bountyDir, "metadata.json"),
     join(bountyDir, "config.json"),
@@ -272,11 +277,11 @@ function inferTaskTypes(bountyDir: string, metadata: any): BountyTaskType[] {
     ) as BountyTaskType[];
   }
 
-  // Infer from directory structure
+  // Infer from directory structure (supports both layouts)
   const types: BountyTaskType[] = [];
-  if (existsSync(join(bountyDir, "detect"))) types.push("detect");
-  if (existsSync(join(bountyDir, "exploit"))) types.push("exploit");
-  if (existsSync(join(bountyDir, "patch"))) types.push("patch");
+  if (existsSync(join(bountyDir, "detect")) || existsSync(join(bountyDir, "verify_files"))) types.push("detect");
+  if (existsSync(join(bountyDir, "exploit")) || existsSync(join(bountyDir, "exploit_files"))) types.push("exploit");
+  if (existsSync(join(bountyDir, "patch")) || existsSync(join(bountyDir, "patch_files"))) types.push("patch");
 
   // Default: all three if none detected
   return types.length > 0 ? types : ["detect", "exploit", "patch"];
@@ -312,78 +317,195 @@ function loadDescription(bountyDir: string, metadata: any): string {
 }
 
 function loadChallenges(): BountyBenchChallenge[] {
-  const bountiesDir = join(BOUNTYBENCH_PATH, "bounties");
+  // The actual BountyBench repo layout uses a bountytasks/ submodule:
+  //   bountytasks/<codebase>/bounties/bounty_<n>/bounty_metadata.json
+  // We also support the legacy flat layout:
+  //   bounties/<codebase>__<n>/bounty.json
 
-  if (!existsSync(bountiesDir)) {
-    // Try alternate location: repo root might be the bounties dir
-    const altDir = BOUNTYBENCH_PATH;
-    const items = existsSync(altDir) ? readdirSync(altDir) : [];
-    const hasBountyDirs = items.some(
-      (d) => d.includes("__") && existsSync(join(altDir, d)),
+  const bountytasksDir = join(BOUNTYBENCH_PATH, "bountytasks");
+  const legacyBountiesDir = join(BOUNTYBENCH_PATH, "bounties");
+
+  // Determine which layout we're dealing with
+  type LayoutKind = "bountytasks" | "legacy-flat" | "root-flat";
+  let layout: LayoutKind | null = null;
+  let searchRoots: string[] = [];
+
+  if (existsSync(bountytasksDir) && statSync(bountytasksDir).isDirectory()) {
+    // bountytasks/<codebase>/bounties/bounty_<n>/ structure
+    const codebases = readdirSync(bountytasksDir).filter((d) => {
+      const full = join(bountytasksDir, d);
+      return statSync(full).isDirectory() && !d.startsWith(".");
+    });
+    // Verify at least one codebase has a bounties/ subdirectory
+    const hasBounties = codebases.some((cb) =>
+      existsSync(join(bountytasksDir, cb, "bounties")),
     );
-    if (!hasBountyDirs) {
-      console.error(`BountyBench bounties not found at ${bountiesDir}`);
-      console.error(`Clone the repo: git clone https://github.com/bountybench/bountybench ${BOUNTYBENCH_PATH}`);
-      console.error(`Or set BOUNTYBENCH_PATH or use --benchmark-path <dir>`);
-      process.exit(1);
+    if (hasBounties) {
+      layout = "bountytasks";
+      searchRoots = codebases.map((cb) => cb);
     }
   }
 
-  const searchDir = existsSync(bountiesDir) ? bountiesDir : BOUNTYBENCH_PATH;
-  const dirs = readdirSync(searchDir)
-    .filter((d) => {
-      const full = join(searchDir, d);
-      return statSync(full).isDirectory() && d.includes("__");
-    })
-    .sort();
+  if (!layout && existsSync(legacyBountiesDir)) {
+    const items = readdirSync(legacyBountiesDir);
+    if (items.some((d) => d.includes("__"))) {
+      layout = "legacy-flat";
+    }
+  }
+
+  if (!layout) {
+    // Try root as flat bounties dir
+    const items = existsSync(BOUNTYBENCH_PATH) ? readdirSync(BOUNTYBENCH_PATH) : [];
+    if (items.some((d) => d.includes("__"))) {
+      layout = "root-flat";
+    }
+  }
+
+  if (!layout) {
+    const foundDirs = existsSync(BOUNTYBENCH_PATH)
+      ? readdirSync(BOUNTYBENCH_PATH).filter((d) => {
+          try { return statSync(join(BOUNTYBENCH_PATH, d)).isDirectory(); } catch { return false; }
+        }).join(", ")
+      : "(path does not exist)";
+    console.error(`BountyBench bounties not found at ${BOUNTYBENCH_PATH}`);
+    console.error(`Directories found: ${foundDirs}`);
+    console.error(`Expected: bountytasks/<codebase>/bounties/bounty_<n>/ with bounty_metadata.json files`);
+    console.error(`Clone the repo: git clone --recurse-submodules https://github.com/bountybench/bountybench ${BOUNTYBENCH_PATH}`);
+    console.error(`Or set BOUNTYBENCH_PATH or use --benchmark-path <dir>`);
+    process.exit(1);
+  }
 
   const challenges: BountyBenchChallenge[] = [];
   const skippedBounties: string[] = [];
 
-  for (const dir of dirs) {
-    const bountyDir = join(searchDir, dir);
-    const metadata = loadBountyMetadata(bountyDir);
+  if (layout === "bountytasks") {
+    // Iterate: bountytasks/<codebase>/bounties/bounty_<n>/
+    const codebases = readdirSync(bountytasksDir).filter((d) => {
+      const full = join(bountytasksDir, d);
+      return statSync(full).isDirectory() && !d.startsWith(".");
+    }).sort();
 
-    if (!metadata) {
-      skippedBounties.push(dir);
-      continue;
+    for (const codebase of codebases) {
+      const codebaseDir = join(bountytasksDir, codebase);
+      const bountiesSubdir = join(codebaseDir, "bounties");
+      if (!existsSync(bountiesSubdir) || !statSync(bountiesSubdir).isDirectory()) continue;
+
+      const bountyDirs = readdirSync(bountiesSubdir).filter((d) => {
+        const full = join(bountiesSubdir, d);
+        return statSync(full).isDirectory() && d.startsWith("bounty_");
+      }).sort();
+
+      for (const bountyDirName of bountyDirs) {
+        const bountyDir = join(bountiesSubdir, bountyDirName);
+        const metadata = loadBountyMetadata(bountyDir);
+
+        if (!metadata) {
+          skippedBounties.push(`${codebase}/${bountyDirName}`);
+          continue;
+        }
+
+        // Extract bounty index from dir name (bounty_0 -> 0)
+        const bountyIdx = bountyDirName.replace("bounty_", "");
+        const taskTypes = inferTaskTypes(bountyDir, metadata);
+        // Codebase source is at bountytasks/<codebase>/codebase/ or the codebase dir itself
+        const codebasePath = findCodebasePath(codebaseDir);
+        const description = loadDescription(bountyDir, metadata);
+        const bountyUsd = parseFloat(
+          metadata.disclosure_bounty ?? metadata.bounty_value ?? metadata.bounty ?? metadata.reward ?? "0",
+        );
+        const cwe = metadata.CWE ?? metadata.cwe ?? metadata.cwe_id;
+        const severity = metadata.severity ?? metadata.risk;
+        const evaluationCriteria = metadata.evaluation ?? metadata.eval_criteria ?? metadata.success_criteria;
+
+        // Docker setup may be at the codebase level or bounty level
+        const codebaseCompose = join(codebaseDir, "docker-compose.yml");
+        const bountyCompose = join(bountyDir, "docker-compose.yml");
+        const hasDocker =
+          existsSync(bountyCompose) ||
+          existsSync(codebaseCompose) ||
+          existsSync(join(codebaseDir, "Dockerfile")) ||
+          existsSync(join(bountyDir, "Dockerfile"));
+        const composePath = existsSync(bountyCompose) ? bountyCompose : codebaseCompose;
+
+        for (const taskType of taskTypes) {
+          if (taskTypeFilter && taskType !== taskTypeFilter) continue;
+
+          const id = `${codebase}__${bountyIdx}__${taskType}`;
+          challenges.push({
+            id,
+            codebase,
+            name: metadata.name ?? metadata.title ?? `${codebase}/${bountyDirName}`,
+            taskType,
+            bountyUsd,
+            description,
+            cwe,
+            severity,
+            path: bountyDir,
+            codebasePath,
+            hasDocker,
+            composePath: hasDocker ? composePath : undefined,
+            evaluationCriteria: typeof evaluationCriteria === "string"
+              ? evaluationCriteria
+              : undefined,
+          });
+        }
+      }
     }
+  } else {
+    // Legacy flat layout: bounties/<codebase>__<n>/ or root-level <codebase>__<n>/
+    const searchDir = layout === "legacy-flat" ? legacyBountiesDir : BOUNTYBENCH_PATH;
+    const dirs = readdirSync(searchDir)
+      .filter((d) => {
+        const full = join(searchDir, d);
+        return statSync(full).isDirectory() && d.includes("__");
+      })
+      .sort();
 
-    const codebase = dir.split("__")[0];
-    const taskTypes = inferTaskTypes(bountyDir, metadata);
-    const codebasePath = findCodebasePath(bountyDir);
-    const description = loadDescription(bountyDir, metadata);
-    const bountyUsd = parseFloat(metadata.bounty_value ?? metadata.bounty ?? metadata.reward ?? "0");
-    const cwe = metadata.cwe ?? metadata.cwe_id;
-    const severity = metadata.severity ?? metadata.risk;
-    const evaluationCriteria = metadata.evaluation ?? metadata.eval_criteria ?? metadata.success_criteria;
+    for (const dir of dirs) {
+      const bountyDir = join(searchDir, dir);
+      const metadata = loadBountyMetadata(bountyDir);
 
-    const composePath = join(bountyDir, "docker-compose.yml");
-    const hasDocker = existsSync(composePath) || existsSync(join(bountyDir, "Dockerfile"));
+      if (!metadata) {
+        skippedBounties.push(dir);
+        continue;
+      }
 
-    // Create one challenge entry per task type so we can filter/score independently
-    for (const taskType of taskTypes) {
-      // If filtering by task type, skip non-matching
-      if (taskTypeFilter && taskType !== taskTypeFilter) continue;
+      const codebase = dir.split("__")[0];
+      const taskTypes = inferTaskTypes(bountyDir, metadata);
+      const codebasePath = findCodebasePath(bountyDir);
+      const description = loadDescription(bountyDir, metadata);
+      const bountyUsd = parseFloat(
+        metadata.disclosure_bounty ?? metadata.bounty_value ?? metadata.bounty ?? metadata.reward ?? "0",
+      );
+      const cwe = metadata.CWE ?? metadata.cwe ?? metadata.cwe_id;
+      const severity = metadata.severity ?? metadata.risk;
+      const evaluationCriteria = metadata.evaluation ?? metadata.eval_criteria ?? metadata.success_criteria;
 
-      const id = `${dir}__${taskType}`;
-      challenges.push({
-        id,
-        codebase,
-        name: metadata.name ?? metadata.title ?? dir,
-        taskType,
-        bountyUsd,
-        description,
-        cwe,
-        severity,
-        path: bountyDir,
-        codebasePath,
-        hasDocker,
-        composePath: hasDocker ? composePath : undefined,
-        evaluationCriteria: typeof evaluationCriteria === "string"
-          ? evaluationCriteria
-          : undefined,
-      });
+      const composePath = join(bountyDir, "docker-compose.yml");
+      const hasDocker = existsSync(composePath) || existsSync(join(bountyDir, "Dockerfile"));
+
+      for (const taskType of taskTypes) {
+        if (taskTypeFilter && taskType !== taskTypeFilter) continue;
+
+        const id = `${dir}__${taskType}`;
+        challenges.push({
+          id,
+          codebase,
+          name: metadata.name ?? metadata.title ?? dir,
+          taskType,
+          bountyUsd,
+          description,
+          cwe,
+          severity,
+          path: bountyDir,
+          codebasePath,
+          hasDocker,
+          composePath: hasDocker ? composePath : undefined,
+          evaluationCriteria: typeof evaluationCriteria === "string"
+            ? evaluationCriteria
+            : undefined,
+        });
+      }
     }
   }
 
@@ -417,8 +539,18 @@ function startChallengeDocker(challenge: BountyBenchChallenge): boolean {
       });
     } catch {}
 
-    // Start docker environment
-    if (existsSync(join(challenge.path, "docker-compose.yml"))) {
+    // Start docker environment — compose file may be at the bounty dir or the
+    // parent codebase dir (bountytasks layout puts it at the codebase level)
+    const composeDir = challenge.composePath
+      ? dirname(challenge.composePath)
+      : challenge.path;
+    if (challenge.composePath && existsSync(challenge.composePath)) {
+      execSync("docker compose up -d --wait --wait-timeout 120", {
+        cwd: composeDir,
+        stdio: "pipe",
+        timeout: 180_000,
+      });
+    } else if (existsSync(join(challenge.path, "docker-compose.yml"))) {
       execSync("docker compose up -d --wait --wait-timeout 120", {
         cwd: challenge.path,
         stdio: "pipe",

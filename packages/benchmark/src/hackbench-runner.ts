@@ -80,7 +80,7 @@ function ensureRepo(repo: string, ref: string | undefined): string {
     .replace(/[^\w.-]+/g, "_");
   const dest = join(tmpdir(), "pwnkit-hackbench-cache", slug);
 
-  if (existsSync(dest) && existsSync(join(dest, "challenges")) || existsSync(join(dest, "docker-compose.yml"))) {
+  if (existsSync(dest) && (existsSync(join(dest, "web_exploitation")) || existsSync(join(dest, "challenges")) || existsSync(join(dest, "docker-compose.yml")))) {
     if (!jsonOutput) console.log(`  using cached HackBench repo at ${dest}`);
     return dest;
   }
@@ -154,11 +154,12 @@ function chooseBetterResult(a: HackBenchResult, b: HackBenchResult): HackBenchRe
 
 // ── Load Challenges ──
 //
-// HackBench challenge layout (expected):
-//   challenges/
-//     challenge-name/
-//       docker-compose.yml
-//       challenge.json (or README with flag/description)
+// HackBench challenge layout (actual repo structure):
+//   web_exploitation/
+//     EV-01/ .. EV-16/
+//       docker-compose.yaml
+//       challenge.json          -- name, description, difficulty, category, url, flag
+//       application/            -- challenge source code
 //       ...
 //
 // We discover challenges by scanning for directories that contain a
@@ -168,6 +169,7 @@ function chooseBetterResult(a: HackBenchResult, b: HackBenchResult): HackBenchRe
 function loadChallenges(): HackBenchChallenge[] {
   // Try multiple possible directory structures
   const candidateRoots = [
+    join(HACKBENCH_PATH, "web_exploitation"),
     join(HACKBENCH_PATH, "challenges"),
     join(HACKBENCH_PATH, "benchmarks"),
     HACKBENCH_PATH,
@@ -202,7 +204,12 @@ function loadChallenges(): HackBenchChallenge[] {
     if (existsSync(join(HACKBENCH_PATH, "docker-compose.yml"))) {
       challengeRoot = HACKBENCH_PATH;
     } else {
+      const foundDirs = existsSync(HACKBENCH_PATH)
+        ? readdirSync(HACKBENCH_PATH).filter((d) => statSync(join(HACKBENCH_PATH, d)).isDirectory()).join(", ")
+        : "(path does not exist)";
       console.error(`HackBench challenges not found at ${HACKBENCH_PATH}`);
+      console.error(`Directories found: ${foundDirs}`);
+      console.error(`Expected: web_exploitation/ with EV-XX subdirectories containing docker-compose.yaml`);
       console.error(`Clone the repo: git clone https://github.com/ElectrovoltSec/HackBench ${HACKBENCH_PATH}`);
       process.exit(1);
     }

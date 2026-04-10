@@ -152,12 +152,13 @@ function loadChallenges(): CybenchChallenge[] {
     .filter(Boolean);
 
   const challenges: CybenchChallenge[] = [];
+  const skippedTasks: string[] = [];
 
   for (const rel of taskRelPaths) {
     const path = join(CYBENCH_PATH, rel);
     const metadataPath = join(path, "metadata", "metadata.json");
     if (!existsSync(metadataPath)) {
-      // Likely a missing git submodule — skip silently
+      skippedTasks.push(rel);
       continue;
     }
 
@@ -165,6 +166,7 @@ function loadChallenges(): CybenchChallenge[] {
     try {
       metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
     } catch {
+      skippedTasks.push(rel);
       continue;
     }
 
@@ -190,6 +192,17 @@ function loadChallenges(): CybenchChallenge[] {
       path,
       composePath: hasDockerCompose ? composePath : undefined,
     });
+  }
+
+  if (skippedTasks.length > 0 && !jsonOutput) {
+    console.warn(`\x1b[33m  [warn] ${skippedTasks.length}/${taskRelPaths.length} tasks skipped (missing metadata — likely missing git submodules)\x1b[0m`);
+    console.warn(`\x1b[33m         Clone with --recurse-submodules to get all 40 tasks.\x1b[0m`);
+    if (skippedTasks.length <= 15) {
+      for (const t of skippedTasks) {
+        console.warn(`\x1b[33m           - ${t}\x1b[0m`);
+      }
+    }
+    console.warn("");
   }
 
   return challenges;
@@ -366,7 +379,7 @@ async function main() {
 
   if (!jsonOutput) {
     console.log("\x1b[36m\x1b[1m  pwnkit x Cybench benchmark\x1b[0m");
-    console.log(`  challenges: ${challenges.length}/40  retries: ${retries}`);
+    console.log(`  challenges: ${challenges.length}  retries: ${retries}`);
     console.log("");
   }
 

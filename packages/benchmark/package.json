@@ -20,6 +20,7 @@
     "cybench": "tsx src/cybench-runner.ts",
     "cybench:dry": "tsx src/cybench-runner.ts --dry-run",
     "cybench:quick": "tsx src/cybench-runner.ts --limit 5",
+    "cybench:10": "tsx src/cybench-runner.ts --limit 10",
     "harmbench": "tsx src/harmbench-runner.ts",
     "harmbench:quick": "tsx src/harmbench-runner.ts --limit 20",
     "harmbench:json": "tsx src/harmbench-runner.ts --json",

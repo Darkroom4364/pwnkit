@@ -74,8 +74,10 @@
   "cybench": {
     "counts": {
       "solved": 8,
-      "tested": 10
-    }
+      "tested": 10,
+      "target": 40
+    },
+    "note": "8/10 from historical 10-challenge subset. Full 40-challenge run is now the CI default."
   },
   "llmRegression": {
     "counts": {

@@ -8,13 +8,25 @@ import type {
   ScanRecord,
 } from "./types";
 
+/** Read the per-session control token injected by the dashboard server. */
+function getControlToken(): string | null {
+  const meta = document.querySelector('meta[name="pwnkit-control-token"]');
+  return meta?.getAttribute("content") ?? null;
+}
+
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init?.headers as Record<string, string> ?? {}),
+  };
+  // Attach the control token to all requests — the server only enforces it
+  // on /api/control/ endpoints, but sending it unconditionally is simpler.
+  const token = getControlToken();
+  if (token) headers["X-Pwnkit-Control-Token"] = token;
+
   const response = await fetch(path, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
 
   if (!response.ok) {

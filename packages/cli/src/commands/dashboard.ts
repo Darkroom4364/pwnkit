@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
@@ -168,14 +169,23 @@ function text(res: ServerResponse, status: number, body: string, contentType = "
   res.end(body);
 }
 
-function sendFile(res: ServerResponse, filePath: string): void {
+function sendFile(res: ServerResponse, filePath: string, controlToken?: string): void {
   const ext = extname(filePath);
   const contentType = CONTENT_TYPES[ext] ?? "application/octet-stream";
   res.writeHead(200, {
     "Content-Type": contentType,
     "Cache-Control": ext === ".html" ? "no-store" : "public, max-age=300",
   });
-  res.end(readFileSync(filePath));
+  let content: string | Buffer = readFileSync(filePath);
+  // Inject the per-session control token into HTML pages so the dashboard
+  // frontend can attach it to control API requests.
+  if (controlToken && ext === ".html") {
+    content = content.toString().replace(
+      "</head>",
+      `<meta name="pwnkit-control-token" content="${controlToken}"></head>`,
+    );
+  }
+  res.end(content);
 }
 
 function readJson(req: IncomingMessage): Promise<unknown> {
@@ -997,6 +1007,7 @@ async function handleApiRequest(
   res: ServerResponse,
   pathname: string,
   dbPath: string | undefined,
+  controlToken: string,
 ): Promise<boolean> {
   const { pwnkitDB } = await import("@pwnkit/db");
   const controlPath = parseControlPath(pathname);
@@ -1004,6 +1015,15 @@ async function handleApiRequest(
   if (controlPath) {
     if (req.method !== "POST") {
       json(res, 405, { error: "Method not allowed" });
+      return true;
+    }
+
+    // Require a per-session token on all state-changing control endpoints.
+    // The token is injected into the dashboard HTML at serve time and sent
+    // back as a header, preventing CSRF and cross-origin abuse.
+    const provided = req.headers["x-pwnkit-control-token"];
+    if (provided !== controlToken) {
+      json(res, 403, { error: "Invalid or missing control token" });
       return true;
     }
 
@@ -1432,13 +1452,14 @@ export function registerDashboardCommand(program: Command): void {
       }
 
       const assetDir = resolveDashboardAssetDir();
+      const controlToken = randomUUID();
 
       const server = createServer(async (req, res) => {
         const requestUrl = new URL(req.url ?? "/", `http://${host}:${port}`);
 
         try {
           if (requestUrl.pathname.startsWith("/api/")) {
-            const handled = await handleApiRequest(req, res, requestUrl.pathname, opts.dbPath);
+            const handled = await handleApiRequest(req, res, requestUrl.pathname, opts.dbPath, controlToken);
             if (!handled) json(res, 404, { error: "Not found" });
             return;
           }
@@ -1454,7 +1475,8 @@ export function registerDashboardCommand(program: Command): void {
             return;
           }
 
-          sendFile(res, join(assetDir, "index.html"));
+          // Inject the control token into HTML so the dashboard JS can read it.
+          sendFile(res, join(assetDir, "index.html"), controlToken);
         } catch (err) {
           json(res, 500, { error: err instanceof Error ? err.message : String(err) });
         }

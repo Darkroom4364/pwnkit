@@ -81,8 +81,26 @@ function ensureRepo(repo: string, ref: string | undefined): string {
   const benchDir = join(dest, "benchmarks");
 
   if (existsSync(benchDir)) {
-    if (!jsonOutput) console.log(`  using cached Argus repo at ${dest}`);
-    return dest;
+    // Validate that at least one challenge dir contains a docker-compose
+    // (either directly or inside src/)
+    const hasChallenges = existsSync(benchDir) && readdirSync(benchDir).some((d) => {
+      const p = join(benchDir, d);
+      if (!statSync(p).isDirectory() || d.startsWith(".")) return false;
+      return (
+        existsSync(join(p, "docker-compose.yml")) ||
+        existsSync(join(p, "docker-compose.yaml")) ||
+        existsSync(join(p, "src", "docker-compose.yml")) ||
+        existsSync(join(p, "src", "docker-compose.yaml"))
+      );
+    });
+
+    if (hasChallenges) {
+      if (!jsonOutput) console.log(`  using cached Argus repo at ${dest}`);
+      return dest;
+    }
+    // Cache exists but looks wrong — re-clone
+    if (!jsonOutput) console.log(`  cached repo at ${dest} has no valid challenges, re-cloning...`);
+    execSync(`rm -rf ${dest}`, { stdio: "pipe" });
   }
 
   mkdirSync(dirname(dest), { recursive: true });
@@ -164,16 +182,20 @@ function chooseBetterResult(a: ArgusResult, b: ArgusResult): ArgusResult {
 
 // ── Load Challenges ──
 //
-// Argus challenge layout (expected, similar to XBOW):
+// Argus challenge layout (0ca/argus-validation-benchmarks-patched):
 //   benchmarks/
 //     APEX-001-25/
-//       docker-compose.yml
-//       benchmark.json / benchmark.yaml / metadata.json
-//       Makefile (may contain FLAG)
-//       expected_results/ (may contain flag)
-//       ...
+//       src/                       <-- Docker context lives here
+//         docker-compose.yml
+//         benchmark.json / benchmark.yaml / metadata.json
+//         .env
+//         Makefile (may contain FLAG)
+//         ...
+//       expected_results/          <-- validation data lives here
+//         APEX-001-25_vulns.json
 //
-// We also support a flat layout where challenges are direct subdirs of the repo.
+// We also support the flat layout where docker-compose is directly in
+// the challenge dir (no src/ subdirectory).
 
 function extractFlagFromFile(filePath: string): string {
   if (!existsSync(filePath)) return "";
@@ -210,7 +232,14 @@ function loadChallenges(): ArgusChallenge[] {
   const challenges: ArgusChallenge[] = [];
 
   for (const dir of dirs) {
-    const challengePath = join(rootDir, dir);
+    const challengeRoot = join(rootDir, dir);
+
+    // The Docker context may live in a src/ subdirectory (0ca patched fork)
+    // or directly in the challenge dir. Prefer src/ when present.
+    const srcDir = join(challengeRoot, "src");
+    const challengePath = existsSync(srcDir) && statSync(srcDir).isDirectory()
+      ? srcDir
+      : challengeRoot;
 
     // Must have docker-compose or Dockerfile
     const hasCompose =
@@ -224,7 +253,7 @@ function loadChallenges(): ArgusChallenge[] {
     let tags: string[] = [];
     let flag = "";
 
-    // Try benchmark.json (XBOW/Argus convention)
+    // Try benchmark.json (XBOW/Argus convention) — lives in src/ or challenge root
     const benchmarkJson = join(challengePath, "benchmark.json");
     if (existsSync(benchmarkJson)) {
       try {
@@ -269,13 +298,16 @@ function loadChallenges(): ArgusChallenge[] {
 
     // Extract flag from various sources
     if (!flag) {
-      // flag.txt
+      // flag.txt — check both challengePath (src/) and challengeRoot
       for (const f of ["flag.txt", "flag", ".flag"]) {
-        const fp = join(challengePath, f);
-        if (existsSync(fp)) {
-          flag = readFileSync(fp, "utf8").trim();
-          break;
+        for (const base of [challengePath, challengeRoot]) {
+          const fp = join(base, f);
+          if (existsSync(fp)) {
+            flag = readFileSync(fp, "utf8").trim();
+            break;
+          }
         }
+        if (flag) break;
       }
     }
 
@@ -292,12 +324,15 @@ function loadChallenges(): ArgusChallenge[] {
     }
 
     if (!flag) {
-      // expected_results directory
-      const expectedDir = join(challengePath, "expected_results");
-      if (existsSync(expectedDir) && statSync(expectedDir).isDirectory()) {
-        for (const ef of readdirSync(expectedDir)) {
-          const extracted = extractFlagFromFile(join(expectedDir, ef));
-          if (extracted) { flag = extracted; break; }
+      // expected_results directory — lives at challengeRoot level, not inside src/
+      for (const base of [challengeRoot, challengePath]) {
+        const expectedDir = join(base, "expected_results");
+        if (existsSync(expectedDir) && statSync(expectedDir).isDirectory()) {
+          for (const ef of readdirSync(expectedDir)) {
+            const extracted = extractFlagFromFile(join(expectedDir, ef));
+            if (extracted) { flag = extracted; break; }
+          }
+          if (flag) break;
         }
       }
     }
@@ -572,6 +607,35 @@ async function main() {
   }
   if (startAt > 0) challenges = challenges.slice(startAt);
   challenges = challenges.slice(0, limit);
+
+  if (challenges.length === 0) {
+    const benchDir = join(ARGUS_PATH, "benchmarks");
+    const rootDir = existsSync(benchDir) ? benchDir : ARGUS_PATH;
+    console.error(`\x1b[31m  0 challenges found.\x1b[0m  Diagnostic info:`);
+    console.error(`  ARGUS_PATH = ${ARGUS_PATH}`);
+    console.error(`  benchmarks dir exists = ${existsSync(benchDir)}`);
+    if (existsSync(rootDir)) {
+      const entries = readdirSync(rootDir).filter((d) => {
+        const p = join(rootDir, d);
+        return statSync(p).isDirectory() && !d.startsWith(".");
+      });
+      console.error(`  subdirectories in ${rootDir} (${entries.length}):`);
+      for (const e of entries.slice(0, 15)) {
+        const srcDir = join(rootDir, e, "src");
+        const hasSrc = existsSync(srcDir);
+        const hasCompose =
+          existsSync(join(rootDir, e, "docker-compose.yml")) ||
+          existsSync(join(rootDir, e, "docker-compose.yaml")) ||
+          (hasSrc && existsSync(join(srcDir, "docker-compose.yml"))) ||
+          (hasSrc && existsSync(join(srcDir, "docker-compose.yaml")));
+        console.error(`    ${e}  src/=${hasSrc}  compose=${hasCompose}`);
+      }
+      if (entries.length > 15) console.error(`    ... and ${entries.length - 15} more`);
+    } else {
+      console.error(`  root dir ${rootDir} does not exist!`);
+    }
+    process.exit(1);
+  }
 
   if (!jsonOutput) {
     console.log("\x1b[36m\x1b[1m  pwnkit x Argus benchmark\x1b[0m");

@@ -4,8 +4,8 @@
  *
  * NOTE on defaults:
  *   - "stable" features (early stop, loop detection, context compaction,
- *     script templates) default ON.
- *   - "experimental" features (playbooks, memory, handoff, web search) default OFF.
+ *     script templates, progress handoff) default ON.
+ *   - "experimental" features (playbooks, memory, web search) default OFF.
  *   - "v0.6.0 FP moat layers" (povGate, reachabilityGate, multiModal,
  *     adversarialDebate, triageMemories, egatsTreeSearch,
  *     selfConsistencyVerify) ALSO default OFF — they need explicit enablement
@@ -27,8 +27,8 @@ export const features = {
   dynamicPlaybooks: env("PWNKIT_FEATURE_DYNAMIC_PLAYBOOKS", false),
   /** Agent writes plan/creds to disk, injected at reflection checkpoints */
   externalMemory: env("PWNKIT_FEATURE_EXTERNAL_MEMORY", false),
-  /** Inject prior attempt findings when retrying */
-  progressHandoff: env("PWNKIT_FEATURE_PROGRESS_HANDOFF", false),
+  /** Inject prior attempt findings when retrying (LLM-summarized progress handoff) */
+  progressHandoff: env("PWNKIT_FEATURE_PROGRESS_HANDOFF", true),
   /** Allow the agent to search the web for CVE details, docs, and technique references */
   webSearch: env("PWNKIT_FEATURE_WEB_SEARCH", false),
   /** Run bash commands inside a Kali Docker container with full pentesting toolset */

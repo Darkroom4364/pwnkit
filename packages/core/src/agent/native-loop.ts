@@ -71,6 +71,10 @@ export interface NativeAgentState {
   earlyStopNoProgress: boolean;
   /** Brief description of tools/approaches used before the early stop (for retry context). */
   attemptSummary: string;
+  /** LLM-generated structured progress summary for retry handoff. */
+  progressSummary: string;
+  /** Path to exported progress JSON (set when progressHandoff writes to disk). */
+  progressPath?: string;
   /** Approximate USD cost based on token usage and model pricing. */
   estimatedCostUsd: number;
   /**
@@ -159,6 +163,7 @@ export async function runNativeAgentLoop(
     totalUsage: { inputTokens: 0, outputTokens: 0 },
     earlyStopNoProgress: false,
     attemptSummary: "",
+    progressSummary: "",
     estimatedCostUsd: 0,
     costCeilingExceeded: false,
   };
@@ -436,10 +441,38 @@ export async function runNativeAgentLoop(
       state.earlyStopNoProgress = true;
       state.attemptSummary = `Used tools: ${[...toolsUsedSet].join(", ")}. Ran ${state.turnCount} turns without calling save_finding.`;
       state.summary = `Early stop at turn ${state.turnCount}/${config.maxTurns}: no findings — retry recommended.`;
+
+      // Generate LLM-based structured progress summary for the retry
+      if (features.progressHandoff) {
+        try {
+          state.progressSummary = await generateProgressSummary(state.messages, runtime);
+          // Optionally export to disk for cross-session handoff
+          const progressDir = `/tmp/pwnkit-progress-${config.scanId}`;
+          try {
+            fs.mkdirSync(progressDir, { recursive: true });
+            const progressFile = `${progressDir}/progress.json`;
+            fs.writeFileSync(progressFile, JSON.stringify({
+              scanId: config.scanId,
+              target: config.target,
+              turnCount: state.turnCount,
+              maxTurns: config.maxTurns,
+              toolsUsed: [...toolsUsedSet],
+              progressSummary: state.progressSummary,
+              timestamp: Date.now(),
+            }, null, 2));
+            state.progressPath = progressFile;
+          } catch { /* non-fatal — disk export is best-effort */ }
+        } catch {
+          // LLM summary failed — fall back to the shallow attemptSummary
+          state.progressSummary = "";
+        }
+      }
+
       onEvent?.("early_stop_no_progress", {
         turn: state.turnCount,
         maxTurns: config.maxTurns,
         toolsUsed: [...toolsUsedSet],
+        hasProgressSummary: state.progressSummary.length > 0,
       });
       break;
     }
@@ -745,6 +778,73 @@ async function compactMessagesWithLLM(
   }
 
   return compacted;
+}
+
+// ── Progress Summary Generation ──
+// When early-stop triggers, ask the LLM to produce a structured summary of what
+// was tried and discovered so the retry attempt can skip dead ends. Similar to
+// BoxPwnr's --generate-progress / --resume-from pattern.
+
+async function generateProgressSummary(
+  messages: NativeMessage[],
+  runtime: NativeRuntime,
+): Promise<string> {
+  // Serialize all messages into a conversation transcript for the summarizer
+  const conversationText = messages
+    .map((m) => {
+      const prefix = m.role === "assistant" ? "[Assistant]" : "[Tool Output]";
+      return `${prefix}\n${serializeMessageToText(m)}`;
+    })
+    .join("\n\n")
+    .slice(0, 60_000); // Cap input to avoid token limits on the summary call
+
+  const summaryResult = await runtime.executeNative(
+    "You are a concise technical summarizer for a security penetration testing session.",
+    [
+      {
+        role: "user",
+        content: [{
+          type: "text",
+          text: `A penetration testing agent ran out of its turn budget without finding any vulnerabilities. Summarize its progress into a structured handoff document so a DIFFERENT agent can continue without repeating the same work.
+
+Your summary MUST include these sections (use exactly these headings). If a section has no items, write "None found." under it.
+
+### Endpoints/URLs Discovered
+List every URL, path, and API endpoint the agent interacted with, along with HTTP status codes and notable response characteristics.
+
+### Vulnerabilities Tested & Results
+For each vulnerability class tested (SQLi, XSS, SSTI, IDOR, path traversal, command injection, etc.), list:
+- What specific payloads/techniques were tried
+- What the result was (blocked, reflected, error, no effect)
+- Any partial progress or promising leads
+
+### Credentials/Tokens/Cookies Found
+Any authentication material discovered (usernames, passwords, tokens, session cookies, API keys, JWTs).
+
+### Failed Approaches & Why
+What strategies were tried and definitively ruled out? Why did they fail? (e.g., "WAF blocks all <script> tags", "CSRF tokens rotate per-request")
+
+### Remaining Untried Approaches
+Based on what was discovered, what attack vectors have NOT been attempted yet? What looks most promising?
+
+CONVERSATION:
+${conversationText}`,
+        }],
+      },
+    ],
+    [], // no tools for summary
+  );
+
+  const textBlocks = summaryResult.content.filter(
+    (b): b is NativeContentBlock & { type: "text" } => b.type === "text",
+  );
+  const summary = textBlocks.map((b) => b.text).join("\n");
+
+  if (!summary || summary.length < 50) {
+    throw new Error("Progress summary too short or empty");
+  }
+
+  return summary;
 }
 
 // ── Loop / Oscillation Detection ──

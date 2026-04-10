@@ -1444,10 +1444,17 @@ async function runNativeAttack(
       timestamp: Date.now(),
     });
 
-    // Build structured progress handoff from the first attempt's conversation
-    const progressSection = features.progressHandoff
-      ? formatProgressHandoff(extractProgressFromAttempt(state.messages))
-      : "";
+    // Build structured progress handoff: prefer LLM-generated summary from
+    // the agent loop (richer context, captures reasoning), fall back to regex
+    // extraction if the LLM summary wasn't generated.
+    let progressSection = "";
+    if (features.progressHandoff) {
+      if (state.progressSummary) {
+        progressSection = `## Previous Attempt — Structured Progress\n\n${state.progressSummary}`;
+      } else {
+        progressSection = formatProgressHandoff(extractProgressFromAttempt(state.messages));
+      }
+    }
 
     const retrySystemPrompt = systemPrompt + `\n\n## RETRY — Previous Attempt Failed\n\nA previous attack attempt used ${state.turnCount} turns and found NOTHING.\n${state.attemptSummary}\n${progressSection}\nYou MUST try a COMPLETELY DIFFERENT approach:\n- Different entry points and endpoints\n- Different vulnerability classes (if SQLi failed, try SSTI/command injection/SSRF/path traversal)\n- Different tools and techniques (if curl failed, try Python scripts; if GET failed, try POST)\n- Different encoding and bypass techniques\n- Look for indirect/second-order vulnerabilities\n\nDo NOT repeat the same strategies. Be creative and aggressive.`;
 

@@ -418,6 +418,57 @@ describe("runNativeAgentLoop", () => {
     expect(state.turnCount).toBe(10);
     expect(state.summary).toContain("Early stop");
     expect(state.attemptSummary).toContain("http_request");
+    // progressSummary may be empty if the LLM summary call fails (mock returns tool_use, not text)
+    expect(typeof state.progressSummary).toBe("string");
+  });
+
+  it("generates LLM progress summary on early stop when progressHandoff is enabled", async () => {
+    let turnNum = 0;
+    let callCount = 0;
+    const runtime: NativeRuntime = {
+      type: "api" as const,
+      async executeNative() {
+        callCount++;
+        turnNum++;
+        // After the main loop ends (early stop at turn 10), the progress
+        // summary generation will call executeNative once more. Detect that
+        // by checking if we're past the halfway mark.
+        if (turnNum > 10) {
+          return {
+            content: [{ type: "text", text: "### Endpoints/URLs Discovered\n- https://example.com/api\n- https://example.com/login\n\n### Vulnerabilities Tested & Results\n- SQLi on /login: blocked by WAF\n- XSS on /search: reflected but sanitized\n\n### Credentials/Tokens/Cookies Found\nNone found.\n\n### Failed Approaches & Why\n- SQL injection blocked by parameterized queries\n\n### Remaining Untried Approaches\n- SSTI via template engine\n- SSRF via URL parameters" }],
+            stopReason: "end_turn",
+            durationMs: 100,
+          };
+        }
+        return {
+          content: [{ type: "tool_use", id: `tc${turnNum}`, name: "http_request", input: { url: "https://example.com" } }],
+          stopReason: "tool_use",
+          durationMs: 50,
+        };
+      },
+      async isAvailable() { return true; },
+    };
+
+    const state = await runNativeAgentLoop({
+      config: {
+        role: "attack",
+        systemPrompt: "test",
+        tools: [],
+        maxTurns: 20,
+        target: "https://example.com",
+        scanId: "test-progress-summary",
+        retryCount: 0,
+      },
+      runtime,
+      db: null,
+    });
+
+    expect(state.earlyStopNoProgress).toBe(true);
+    expect(state.progressSummary).toContain("Endpoints/URLs Discovered");
+    expect(state.progressSummary).toContain("example.com");
+    expect(state.progressSummary).toContain("Remaining Untried Approaches");
+    // Should have written a progress JSON file
+    expect(state.progressPath).toContain("progress.json");
   });
 
   it("does NOT early stop when save_finding is called before halfway", async () => {

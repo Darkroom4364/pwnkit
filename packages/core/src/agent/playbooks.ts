@@ -102,8 +102,10 @@ If basic payloads are blocked, try these bypasses IN ORDER:
 
 ### Step 5: JSFuck for Letter/Digit Filters (XBEN-010 vector)
 When the target's input filter strips letters or digits (alphanumerics) but still allows \`[]()!+\` through, payloads need to be encoded in JSFuck — a JavaScript-only-using-six-characters technique where every JS expression can be expressed using only \`[]()!+\`.
+- If the app, source, or response text shows an exact-output validator pattern like \`expected X\`, \`instead of X\`, or \`must alert X\`, optimize for that exact string immediately rather than generic execution.
 - Call \`payload_lookup\` with \`name="jsfuck_xss"\` when the challenge or checker expects the exact text \`XSS\`.
 - Call \`payload_lookup\` with \`name="jsfuck_alert"\` when any alert execution proof is enough.
+- If you get a near miss where execution happened but the dialog text was wrong, switch payload class on the next attempt instead of retrying the same primitive.
 - Do not try to hand-encode JSFuck under turn pressure; use the payload helper and focus on the escape context around it.
 
 ### Step 6: Confirm and Save

@@ -24,6 +24,7 @@ describe("PLAYBOOKS — XBEN-010 JSFuck XSS hint", () => {
     expect(xss).toContain("JSFuck");
     expect(xss).toContain("payload_lookup");
     expect(xss).toContain("jsfuck_xss");
+    expect(xss).toContain("exact-output validator");
     expect(xss).toContain("XBEN-010");
   });
 

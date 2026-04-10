@@ -112,10 +112,17 @@ describe("ToolExecutor", () => {
     });
 
     expect(result.success).toBe(true);
-    const output = result.output as { name: string; payload: string };
+    const output = result.output as {
+      name: string;
+      payload: string;
+      emits: string;
+      bestFor: string;
+    };
     expect(output.name).toBe("jsfuck_xss");
     expect(output.payload).toContain("[]");
     expect(output.payload.length).toBeGreaterThan(3000);
+    expect(output.emits).toBe("XSS");
+    expect(output.bestFor).toContain("Exact-output");
   });
 
   it("query_findings returns in-memory findings", async () => {

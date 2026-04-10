@@ -269,7 +269,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
   payload_lookup: {
     name: "payload_lookup",
     description:
-      "Return a reusable payload or payload template for tricky exploit classes that are hard to synthesize in-context, such as JSFuck XSS encodings. Use this instead of trying to hand-build long encoded payloads under turn pressure.",
+      "Return a reusable payload or payload template for tricky exploit classes that are hard to synthesize in-context, such as JSFuck XSS encodings. Use this instead of trying to hand-build long encoded payloads under turn pressure. If the target validates an exact dialog/output string, choose the payload whose emitted value matches that exact expected string rather than a generic execution proof.",
     parameters: {
       name: {
         type: "string",
@@ -1751,6 +1751,9 @@ export class ToolExecutor {
           name,
           payload: JSFUCK_ALERT_PAYLOAD,
           description: "JSFuck-encoded alert(1) using only []()!+",
+          emits: "1",
+          bestFor: "Generic JavaScript execution proof when any alert is sufficient",
+          avoidWhen: "The target checks for an exact required dialog/output string such as XSS",
         },
       };
     }
@@ -1761,6 +1764,9 @@ export class ToolExecutor {
           name,
           payload: JSFUCK_XSS_PAYLOAD,
           description: "JSFuck-encoded alert('XSS') using only []()!+",
+          emits: "XSS",
+          bestFor: "Exact-output validators that require the dialog or script result to equal XSS",
+          avoidWhen: "Only generic JS execution proof is needed and payload length matters more than exact output",
         },
       };
     }

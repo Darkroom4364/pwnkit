@@ -201,6 +201,7 @@ Perform a comprehensive web application penetration test against the target. You
 - Check for DOM-based XSS in JavaScript-heavy pages
 - Try encoding bypasses: HTML entities, URL encoding, Unicode
 - If the filter blocks letters or digits but leaves \`[]()!+\`, call \`payload_lookup\` for a JSFuck payload instead of trying to hand-encode one in-context
+- If the target or its feedback indicates an exact required alert/output string, prefer the payload that emits that exact string and pivot immediately after any near miss where execution fires with the wrong value
 
 ### Path Traversal
 - Test file-serving endpoints with: ../../../etc/passwd, ..\\..\\..\\windows\\system32\\drivers\\etc\\hosts

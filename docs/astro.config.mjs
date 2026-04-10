@@ -106,6 +106,10 @@ export default defineConfig({
           ],
         },
         {
+          label: "Cloud",
+          slug: "cloud",
+        },
+        {
           label: "API Keys",
           slug: "api-keys",
         },

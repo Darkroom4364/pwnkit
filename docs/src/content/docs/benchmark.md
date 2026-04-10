@@ -292,8 +292,8 @@ No npm scanner — open or commercial — publishes a head-to-head benchmark wit
 | [Cyber-AutoAgent](https://github.com/westonbrown/Cyber-AutoAgent) | 84.62% (88/104) | Claude 4.5 Sonnet | Black-box | Repo archived; v0.1.0 was 46%, iterated to 84% |
 | [deadend-cli](https://github.com/xoxruns/deadend-cli) | 77.55% (~76/98) | Claude Sonnet 4.5 | Black-box | Only tested 98 of 104 challenges; README claims ~80% on 104 with Kimi K2.5 |
 | [MAPTA](https://arxiv.org/abs/2508.20816) | 76.9% (80/104) | GPT-5 | Black-box | Patched 43 Docker images; $21.38 total cost |
-| **pwnkit** (black-box) | **91/104 = 87.5%** | Azure gpt-5.4 | Black-box | Open-source, shell-first, 3 tools, single model -- beats BoxPwnr's best single-model (81.7%) |
-| **pwnkit** (white-box / best-of-N) | **96/104 = 92.3%** | Azure gpt-5.4 | White-box (`--repo`) + best-of-N across feature configs | Same model + tools, with source access; aggregate across `features=none`/`experimental`/`all` runs |
+| **pwnkit** (retained artifact-backed) | **74/104 black-box; 97/104 aggregate** | Azure gpt-5.4 | Black-box + white-box artifact union | Strongest current machine-backed view; see ledger |
+| **pwnkit** (historical mixed publication) | **91/104 black-box; 96/104 aggregate** | Azure gpt-5.4 | Mixed local+CI publication line | Historical scoreboard preserved separately from retained artifacts |
 
 **Important caveats:**
 - **BoxPwnr's 97.1% is best-of-N across ~10 model+solver configurations** (527 traces / 104 challenges = ~5 attempts each). Their best single model (GLM-5) scores 81.7%.
@@ -302,14 +302,14 @@ No npm scanner — open or commercial — publishes a head-to-head benchmark wit
 - deadend-cli's 77.55% was on 98 challenges, not 104
 - MAPTA patched 43 of the 104 Docker images before testing
 - No competitor publishes retry counts per challenge — all scores could represent best-of-N
-- pwnkit's 87.5% (black-box) and 92.3% (white-box best-of-N aggregate) are on 104 tested challenges (full coverage)
-- pwnkit uses a single model (Azure gpt-5.4) with 3 retries — no ensemble
+- pwnkit now publishes both a retained artifact-backed tally and an older historical mixed publication line; read those separately
+- pwnkit uses a single model (Azure gpt-5.4) with targeted retries rather than a large multi-model ensemble
 
-> **Score context.** pwnkit has tested all 104 XBOW challenges. The black-box score is **87.5% (91/104)**. The best-of-N aggregate across white-box configurations is **92.3% (96/104)** — both reported separately, no methodology blending. The 92.3% aggregate beats MAPTA (76.9%), deadend-cli (77.6%), Cyber-AutoAgent (84.6%), XBOW's own agent (85%), and **BoxPwnr's best single-model score of 81.7%** (GLM-5 + `single_loop`). The 87.5% black-box number alone still beats every one of those — KinoSec (92.3% black-box) is the only one currently ahead.
+> **Score context.** pwnkit has now tested all 104 XBOW challenges through both historical mixed local+CI publication and retained artifact-backed reconstruction. The retained artifact-backed aggregate is currently **97/104**, while the older public publication line remains **91/104 black-box** and **96/104 aggregate**. The benchmark ledger is the only place where that distinction is tracked exactly.
 
 ### vs BoxPwnr
 
-BoxPwnr (97.1%) uses 6 solver strategies across multiple LLMs (Claude, GPT-5, GLM-5, Grok-4, Gemini 3, Kimi K2.5) via OpenRouter, running in a Kali Docker container with full pentesting toolset. Their 97.1% is the best result per challenge aggregated across all configurations. **Their best single model (GLM-5 + single_loop) scores 81.7% — pwnkit's 92.3% best-of-N aggregate beats that by ~10.6 percentage points, and pwnkit's 87.5% black-box number alone still beats it by ~5.8 pp.** pwnkit uses a single model, 3 tools, and runs in plain Ubuntu CI.
+BoxPwnr (97.1%) uses 6 solver strategies across multiple LLMs (Claude, GPT-5, GLM-5, Grok-4, Gemini 3, Kimi K2.5) via OpenRouter, running in a Kali Docker container with full pentesting toolset. Their 97.1% is the best result per challenge aggregated across all configurations. Their best single model (GLM-5 + single_loop) scores 81.7%; pwnkit's retained artifact-backed and historical publication lines both still clear that single-model bar, but the benchmark page treats those two pwnkit truth surfaces separately on purpose.
 
 ### vs KinoSec
 

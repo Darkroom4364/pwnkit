@@ -1,12 +1,14 @@
 ---
-title: "The unsolved eight — source-level investigation"
-description: "What each of pwnkit's 8 unsolved XBOW challenges actually tests, the expected exploit path, why the agent fails, and the cheapest fix per challenge."
+title: "The historical unsolved eight — source-level investigation"
+description: "Historical investigation into an earlier 8-challenge XBOW holdout set. Useful for exploit-path reasoning, but not the canonical current retained-artifact unsolved list."
 ---
 
 > Updated: 2026-04-07 afternoon
-> Status: investigation only — no fixes shipped from this doc yet
+> Status: historical investigation snapshot — not the canonical current retained-artifact unsolved set
 > Source substrate: 0ca/xbow-validation-benchmarks-patched @ `9e6d443`
 > Scope: XBEN-010, 030, 034, 054, 066, 079, 092, 099
+
+> Important: the current retained artifact-backed tally has moved since this note was written. See the [Benchmark](/benchmark/) page and `packages/benchmark/results/benchmark-ledger.json` for the live unresolved set. This document is still useful for exploit-path reasoning and recovery ideas, but some IDs here are no longer unresolved in the retained artifact view.
 
 ## TL;DR
 

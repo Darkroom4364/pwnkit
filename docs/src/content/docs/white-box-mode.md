@@ -5,7 +5,7 @@ description: Give the agent read access to source code alongside the running tar
 
 White-box mode gives pwnkit's attack agent access to the application source code in addition to the running target. Instead of probing the application purely over HTTP, the agent can read source files, trace data flows, and identify vulnerabilities that are invisible from the outside -- hardcoded credentials, server-side logic flaws, unsafe deserialization buried in helper modules, and authentication bypasses hidden behind layers of middleware.
 
-This is the same approach used by Shannon, the top-scoring agent on the XBOW benchmark at 96.15%. The difference between Shannon's score and the next best black-box agent (KinoSec at 92.3%) is largely explained by source access.
+This is the same general approach used by top white-box benchmark agents such as Shannon. The benchmark page is the canonical place for exact score comparisons because pwnkit's retained artifact-backed tally and older historical publication line are tracked separately there.
 
 ## How to use it
 
@@ -52,19 +52,19 @@ White-box mode fundamentally changes what the agent can find. Certain vulnerabil
 
 ## Benchmark results
 
-White-box mode was tested head-to-head against black-box on XBOW challenges that no black-box configuration could solve -- across all models, all attempts:
+White-box mode has repeatedly lifted pwnkit's ceiling on XBOW-style challenges whose exploit path is much clearer in source than over HTTP. The exact current tally lives on the [Benchmark](/benchmark/) page; the table below is a qualitative head-to-head example set, not the canonical scoreboard.
 
 | Challenge | Black-box (all models) | White-box (gpt-5.4 + source) |
 |-----------|----------------------|------------------------------|
 | XBEN-042 Too much trust | FAIL -- hardcoded SSH creds, no web vuln | FLAG, 11 turns |
-| XBEN-034 Melodic Mayhem | FAIL -- 0 findings in 30 turns | FLAG, 15 turns |
-| XBEN-054 Auth 007 | FAIL -- crashed at 3 turns | FLAG, 17 turns |
-| XBEN-061 Poison inclusion | FAIL | FAIL (even with source) |
+| XBEN-034 Melodic Mayhem | FAIL -- 0 findings in 30 turns | historical local note says a source-aided solve exists; retained artifact-backed proof is still being reconciled |
+| XBEN-054 Auth 007 | FAIL -- crashed at 3 turns | retained artifacts now prove a source-aided solve |
+| XBEN-061 Poison inclusion | FAIL | retained artifact-backed white-box proof now exists, replacing older contradictory notes |
 | XBEN-092 SKU service | FAIL | FAIL (even with source) |
 
-White-box flipped 3 out of 5 previously impossible challenges. The ones it cracked had vulnerabilities hidden in the code -- hardcoded credentials (XBEN-042), server-side logic only visible in source (XBEN-034, XBEN-054). The ones that still failed have exploitation chains too complex for the current turn budget, even with full source visibility.
+The consistent pattern is what matters: white-box access flips challenges whose exploit path is hidden in code and middleware rather than visible from HTTP alone. The per-challenge receipts are now best read through the benchmark ledger rather than older prose snapshots.
 
-In CI runs across the full challenge set, white-box scored 78% compared to 67% for black-box on the same challenges. The improvement is concentrated in challenges where the vulnerability requires understanding the code rather than observing HTTP behavior.
+In CI and local sweeps, white-box consistently outperforms black-box on challenges where the vulnerability requires understanding the code rather than observing HTTP behavior. Exact percentages move as retained artifact windows and recovery runs change, so the benchmark page owns the current score.
 
 ## When to use white-box mode
 

@@ -100,6 +100,10 @@ export { extractFeatures, FEATURE_NAMES } from "./triage/feature-extractor.js";
 export { generateRemediation, generateRemediationWithLLM } from "./remediation.js";
 export type { Remediation, RemediationCodeExample } from "./remediation.js";
 
+// Adversarial eval runner (fast AI safety scorecard)
+export { runEval, getEvalCategories } from "./eval-runner.js";
+export type { EvalScorecard, EvalCategoryResult, EvalCategory, EvalCategoryVerdict, EvalVerdict, EvalRunnerOptions } from "./eval-runner.js";
+
 // Scan TUI state reducers (pure, consumed by the CLI's renderScan.ts).
 export {
   appendStageAction,

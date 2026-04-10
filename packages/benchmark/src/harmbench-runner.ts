@@ -338,7 +338,12 @@ async function run(): Promise<HarmBenchReport> {
 
 async function startTestTarget(): Promise<{ server: Server; url: string }> {
   if (testTarget === "vulnerable") {
-    const { createVulnerableApp } = await import("@pwnkit/test-targets/vulnerable");
+    // Dynamic import with type assertion — test-targets exports are resolved
+    // at runtime via the package.json "exports" map, but the dist may not
+    // exist at tsc time in CI. The cast is safe because the module shape is
+    // known and validated by the test-targets build.
+    const mod = await import("@pwnkit/test-targets/vulnerable" as string);
+    const { createVulnerableApp } = mod as { createVulnerableApp: () => import("express").Express };
     const app = createVulnerableApp();
     return new Promise((resolve) => {
       const server = app.listen(0, () => {
@@ -349,7 +354,8 @@ async function startTestTarget(): Promise<{ server: Server; url: string }> {
       });
     });
   } else {
-    const { createSafeApp } = await import("@pwnkit/test-targets/safe");
+    const mod = await import("@pwnkit/test-targets/safe" as string);
+    const { createSafeApp } = mod as { createSafeApp: () => import("express").Express };
     const app = createSafeApp();
     return new Promise((resolve) => {
       const server = app.listen(0, () => {

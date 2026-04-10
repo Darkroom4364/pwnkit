@@ -155,85 +155,67 @@ function parseTarget(target: string): { level: string; category: string; vm: str
   return { level, category, vm };
 }
 
-/**
- * Collect all docker-compose.yml paths referenced in games.json for the
- * "down" command (mirrors AutoPenBench's restart_docker_compose_service).
- */
-function getAllComposePaths(tasks: AutoPenBenchTask[]): string[] {
-  const seen = new Set<string>();
-  const paths: string[] = [];
-  for (const t of tasks) {
-    const { level, category } = parseTarget(t.target);
-    const key = `${level}/${category}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      const p = join(MACHINES_DIR, level, category, "docker-compose.yml");
-      if (existsSync(p)) paths.push(p);
-    }
-  }
-  return paths;
-}
-
 const BASE_COMPOSE = join(MACHINES_DIR, "docker-compose.yml");
 
-function dockerDown(allTasks: AutoPenBenchTask[]): void {
-  const composes = getAllComposePaths(allTasks);
-  const composeArgs = composes.flatMap((p) => ["-f", p]);
-  try {
-    execSync(
-      `docker compose -f ${BASE_COMPOSE} ${composeArgs.join(" ")} down --remove-orphans`,
-      { stdio: "pipe", timeout: 60_000, cwd: AUTOPENBENCH_PATH },
-    );
-  } catch {
-    // Ignore — containers may not be running
-  }
-}
-
-function startContainers(task: AutoPenBenchTask, allTasks: AutoPenBenchTask[]): boolean {
+/**
+ * Build the `-f base.yml -f category.yml` compose flags for a single task.
+ *
+ * The old implementation merged ALL category compose files into every
+ * `docker compose` invocation, which meant Docker Compose had to resolve
+ * every service/image across every category. If any unrelated image was
+ * missing (common — the per-service build is fault-tolerant) the merged
+ * config would fail, causing "Docker container startup failed" for ALL 32
+ * tasks even though the individual task's image was fine.
+ *
+ * The fix: only pass the two compose files relevant to the current task,
+ * matching what the official AutoPenBench driver does.
+ */
+function composeFlags(task: AutoPenBenchTask): string {
   const { level, category } = parseTarget(task.target);
   const taskCompose = join(MACHINES_DIR, level, category, "docker-compose.yml");
-  const composes = getAllComposePaths(allTasks);
-  const composeArgs = composes.flatMap((p) => ["-f", p]);
+  return `-f ${BASE_COMPOSE} -f ${taskCompose}`;
+}
+
+function startContainers(task: AutoPenBenchTask): boolean {
+  const flags = composeFlags(task);
 
   // Ensure the kali tmp_script volume directory exists (setup.sh creates it
   // upstream, but we skip that script).
   const tmpScriptDir = join(MACHINES_DIR, "kali", "tmp_script");
   mkdirSync(tmpScriptDir, { recursive: true });
 
-  const run = (cmd: string, timeoutMs: number): void => {
+  const run = (cmd: string, timeoutMs: number): string => {
     try {
-      execSync(cmd, { stdio: "pipe", timeout: timeoutMs, cwd: AUTOPENBENCH_PATH });
+      const out = execSync(cmd, { stdio: "pipe", timeout: timeoutMs, cwd: AUTOPENBENCH_PATH });
+      return out?.toString() ?? "";
     } catch (err) {
-      const stderr = (err as any)?.stderr?.toString?.()?.slice(0, 500) ?? "";
+      const stderr = (err as any)?.stderr?.toString?.()?.slice(0, 800) ?? "";
+      const stdout = (err as any)?.stdout?.toString?.()?.slice(0, 400) ?? "";
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`    docker error: ${msg}`);
       if (stderr) console.error(`    stderr: ${stderr}`);
+      if (stdout) console.error(`    stdout: ${stdout}`);
       throw err;
     }
   };
 
   try {
-    // Tear down everything first
+    // Tear down containers from this task's compose pair.
+    // Only reference the two compose files for the current task — tearing
+    // down unrelated services is unnecessary and error-prone.
     try {
-      run(
-        `docker compose -f ${BASE_COMPOSE} ${composeArgs.join(" ")} down --remove-orphans`,
-        60_000,
-      );
+      run(`docker compose ${flags} down --remove-orphans`, 60_000);
     } catch {
       // Ignore — containers may not be running
     }
 
-    // Start Kali master
-    run(
-      `docker compose -f ${BASE_COMPOSE} ${composeArgs.join(" ")} up -d kali_master`,
-      120_000,
-    );
+    // Start Kali master. Using the two-file compose pair means Docker
+    // Compose only needs to resolve services defined in those two files,
+    // not the entire benchmark suite.
+    run(`docker compose ${flags} up -d kali_master`, 120_000);
 
     // Start the target VM
-    run(
-      `docker compose -f ${BASE_COMPOSE} -f ${taskCompose} up -d ${task.target}`,
-      120_000,
-    );
+    run(`docker compose ${flags} up -d ${task.target}`, 120_000);
 
     // Handle companion services (databases, second VMs)
     const companions: Record<string, string[]> = {
@@ -242,10 +224,7 @@ function startContainers(task: AutoPenBenchTask, allTasks: AutoPenBenchTask[]): 
       "in-vitro_network_security_vm5": ["in-vitro_network_security_vm5b"],
     };
     for (const companion of companions[task.target] ?? []) {
-      run(
-        `docker compose -f ${BASE_COMPOSE} -f ${taskCompose} up -d ${companion}`,
-        60_000,
-      );
+      run(`docker compose ${flags} up -d ${companion}`, 60_000);
     }
 
     // Some real-world CVE targets need extra startup time
@@ -269,12 +248,22 @@ function startContainers(task: AutoPenBenchTask, allTasks: AutoPenBenchTask[]): 
     console.error(`    Kali SSH at ${KALI_IP} not reachable after 30s`);
     return false;
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`    startContainers failed for ${task.target}: ${msg}`);
     return false;
   }
 }
 
-function stopContainers(allTasks: AutoPenBenchTask[]): void {
-  dockerDown(allTasks);
+function stopContainers(task: AutoPenBenchTask): void {
+  const flags = composeFlags(task);
+  try {
+    execSync(
+      `docker compose ${flags} down --remove-orphans`,
+      { stdio: "pipe", timeout: 60_000, cwd: AUTOPENBENCH_PATH },
+    );
+  } catch {
+    // Ignore — best-effort cleanup
+  }
 }
 
 // ── System Prompt for Pentest Agent ──
@@ -348,12 +337,12 @@ function checkFlag(
 
 // ── Run Single Task ──
 
-async function runTask(task: AutoPenBenchTask, allTasks: AutoPenBenchTask[]): Promise<TaskResult> {
+async function runTask(task: AutoPenBenchTask): Promise<TaskResult> {
   const start = Date.now();
   const scanId = randomUUID();
 
   // Start Docker containers
-  if (!startContainers(task, allTasks)) {
+  if (!startContainers(task)) {
     return {
       target: task.target,
       level: task.level,
@@ -425,7 +414,7 @@ async function runTask(task: AutoPenBenchTask, allTasks: AutoPenBenchTask[]): Pr
       error: err instanceof Error ? err.message : String(err),
     };
   } finally {
-    stopContainers(allTasks);
+    stopContainers(task);
   }
 }
 
@@ -479,7 +468,7 @@ async function main() {
       );
     }
 
-    let result = await runTask(task, tasks);
+    let result = await runTask(task);
     // Retry on failure (mirrors xbow-runner --retries semantics): only retry
     // when the task did NOT capture the flag. `retries` is the total number
     // of attempts, so 3 = initial + 2 retries.
@@ -489,7 +478,7 @@ async function main() {
       if (!jsonOutput) {
         console.log(`    retry ${attempt}/${retries}`);
       }
-      result = await runTask(task, tasks);
+      result = await runTask(task);
     }
     results.push(result);
 

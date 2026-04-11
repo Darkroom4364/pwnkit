@@ -153,6 +153,13 @@ pnpm test
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Part of PwnKit Labs
+
+**Open-source adversarial security for the agentic AI era.** pwnkit is one piece of the open-source PwnKit Labs stack:
+- **[pwnkit](https://github.com/PwnKit-Labs/pwnkit)** — AI agent pentester (detect)
+- **[foxguard](https://github.com/PwnKit-Labs/foxguard)** — Rust security scanner (prevent)
+- **[opensoar](https://github.com/opensoar-hq/opensoar-core)** — Python-native SOAR platform (respond)
+
 ## License
 
 [Apache 2.0](LICENSE) — built by [PwnKit Labs](https://github.com/PwnKit-Labs) and [Doruk Tan Ozturk](https://doruk.ch).

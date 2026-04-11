@@ -40,6 +40,18 @@ RUN apt-get update -qq && \
         git \
         jq \
         ca-certificates \
+        gdb \
+        gdb-multiarch \
+        radare2 \
+        binwalk \
+        foremost \
+        libimage-exiftool-perl \
+        ltrace \
+        strace \
+        file \
+        binutils \
+        python3-ropgadget \
+        pwndbg \
     && pip3 install --no-cache-dir --break-system-packages \
         requests \
         pwntools \

@@ -38,6 +38,18 @@ const PENTEST_PACKAGES = [
   "proxychains4",
   "python3",
   "python3-pip",
+  "gdb",
+  "gdb-multiarch",
+  "radare2",
+  "binwalk",
+  "foremost",
+  "libimage-exiftool-perl",
+  "ltrace",
+  "strace",
+  "file",
+  "binutils",
+  "python3-ropgadget",
+  "pwndbg",
 ];
 
 export interface DockerExecResult {

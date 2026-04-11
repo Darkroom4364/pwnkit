@@ -9,6 +9,7 @@
  *
  * Prerequisites:
  * - PORTSWIGGER_USERNAME + PORTSWIGGER_PASSWORD env vars (free account)
+ * - OR PORTSWIGGER_COOKIE env var (paste Cookie header from an authenticated browser session)
  *
  * Usage:
  *   tsx src/portswigger-runner.ts                              # run all labs in manifest
@@ -36,6 +37,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // ── Environment ──
 const PS_USERNAME = process.env.PORTSWIGGER_USERNAME;
 const PS_PASSWORD = process.env.PORTSWIGGER_PASSWORD;
+
+const PS_COOKIE = process.env.PORTSWIGGER_COOKIE; // fallback: raw cookie string from browser
 
 const PS_BASE = "https://portswigger.net";
 const PS_ACADEMY = "https://portswigger.net/web-security";
@@ -175,9 +178,25 @@ const jar = new CookieJar();
  * 3. Store session cookies for subsequent requests
  */
 async function authenticate(): Promise<void> {
+  // Fallback: if PORTSWIGGER_COOKIE is set, skip the login flow entirely.
+  // Useful when PortSwigger adds CAPTCHA/JS challenges that block fetch-based login.
+  // Extract cookies from your browser's DevTools: copy the Cookie header value from
+  // any authenticated request to portswigger.net.
+  if (PS_COOKIE) {
+    for (const pair of PS_COOKIE.split(";")) {
+      const eqIdx = pair.indexOf("=");
+      if (eqIdx > 0) {
+        jar["cookies"].set(pair.slice(0, eqIdx).trim(), pair.slice(eqIdx + 1).trim());
+      }
+    }
+    if (!jsonOutput) console.log("  using PORTSWIGGER_COOKIE (manual cookie fallback)");
+    return;
+  }
+
   if (!PS_USERNAME || !PS_PASSWORD) {
     throw new Error(
       "PORTSWIGGER_USERNAME and PORTSWIGGER_PASSWORD env vars are required.\n" +
+      "Set PORTSWIGGER_COOKIE as an alternative (paste the Cookie header from an authenticated browser session).\n" +
       "Create a free account at https://portswigger.net/users/register"
     );
   }
@@ -194,15 +213,23 @@ async function authenticate(): Promise<void> {
 
   const loginPageHtml = await loginPageResp.text();
 
-  // Extract CSRF token — PortSwigger uses a hidden input named "RequestVerificationToken"
-  // (with fallback to "csrf" / "TokenCSRF" for resilience)
+  // Extract CSRF token — PortSwigger uses a hidden input named "RequestVerificationToken".
+  // The value attribute is unquoted in their HTML (value=ABC123 not value="ABC123"),
+  // so we match both quoted and unquoted forms.
   const csrfMatch = loginPageHtml.match(
-    /name=["'](?:RequestVerificationToken|csrf|TokenCSRF|_csrf_token)["']\s+value=["']([^"']+)["']/i
+    /name=["']RequestVerificationToken["']\s+value=["']?([^\s"'>]+)["']?/i
   ) ?? loginPageHtml.match(
-    /value=["']([^"']+)["']\s+name=["'](?:RequestVerificationToken|csrf|TokenCSRF|_csrf_token)["']/i
+    /value=["']?([^\s"'>]+)["']?\s+name=["']RequestVerificationToken["']/i
   );
 
   const csrfToken = csrfMatch?.[1] ?? "";
+
+  if (!csrfToken) {
+    throw new Error(
+      "PortSwigger login failed: could not extract RequestVerificationToken from login page. " +
+      "The page structure may have changed."
+    );
+  }
 
   // Step 2: POST the login form
   const formBody = new URLSearchParams({
@@ -210,7 +237,6 @@ async function authenticate(): Promise<void> {
     EmailAddress: PS_USERNAME,
     Password: PS_PASSWORD,
     RememberMe: "false",
-    ajaxRequest: "true",
   });
 
   const loginResp = await fetch(PS_LOGIN_URL, {
@@ -220,6 +246,7 @@ async function authenticate(): Promise<void> {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       "Content-Type": "application/x-www-form-urlencoded",
       Cookie: jar.toString(),
+      Origin: PS_BASE,
       Referer: PS_LOGIN_URL,
     },
     body: formBody.toString(),
@@ -234,10 +261,11 @@ async function authenticate(): Promise<void> {
     }
   }
 
-  // Follow the redirect to grab any additional session cookies
-  const location = loginResp.headers.get("location");
-  if (location) {
-    const followUrl = location.startsWith("http") ? location : `${PS_BASE}${location}`;
+  // Follow redirect chain to grab all session cookies (PortSwigger may 302 multiple times)
+  let nextLocation = loginResp.headers.get("location");
+  let hops = 0;
+  while (nextLocation && hops < 5) {
+    const followUrl = nextLocation.startsWith("http") ? nextLocation : `${PS_BASE}${nextLocation}`;
     const followResp = await fetch(followUrl, {
       redirect: "manual",
       headers: {
@@ -246,6 +274,8 @@ async function authenticate(): Promise<void> {
       },
     });
     jar.addFromResponse(followResp);
+    nextLocation = followResp.headers.get("location");
+    hops++;
   }
 
   // Validate that the auth cookie is present

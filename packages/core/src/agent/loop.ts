@@ -330,21 +330,101 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentState> 
 
 // ── Parse tool calls from assistant response ──
 
-const TOOL_CALL_RE = /^TOOL_CALL:\s*(\w+)\s+(\{[\s\S]*?\})\s*$/gm;
+/**
+ * Extract a complete JSON object from `text` starting at `startIndex` (which
+ * must point to the opening `{`).  Uses brace/bracket counting and respects
+ * JSON string literals so that nested objects, arrays, and escaped characters
+ * are handled correctly.
+ *
+ * Returns the substring containing the full JSON object, or `null` if the
+ * braces never balance.
+ */
+function extractJsonObject(text: string, startIndex: number): string | null {
+  if (text[startIndex] !== "{") return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = startIndex; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (ch === "\\" && inString) {
+      escape = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (ch === "{" || ch === "[") {
+      depth++;
+    } else if (ch === "}" || ch === "]") {
+      depth--;
+      if (depth === 0) {
+        return text.slice(startIndex, i + 1);
+      }
+    }
+  }
+
+  return null; // unbalanced braces
+}
+
+const TOOL_CALL_LINE_RE = /^TOOL_CALL:\s*(\w+)\s*/gm;
 
 export function parseToolCalls(text: string): ToolCall[] {
   const calls: ToolCall[] = [];
   let match: RegExpExecArray | null;
-  const re = new RegExp(TOOL_CALL_RE.source, "gm");
+  const re = new RegExp(TOOL_CALL_LINE_RE.source, TOOL_CALL_LINE_RE.flags);
 
   while ((match = re.exec(text)) !== null) {
-    try {
-      const args = JSON.parse(match[2]);
-      calls.push({ name: match[1], arguments: args });
-    } catch {
-      // Skip malformed JSON
+    const toolName = match[1];
+    const afterMatch = match.index + match[0].length;
+
+    // No arguments — tool name only (e.g. bare `TOOL_CALL: done`)
+    if (afterMatch >= text.length || text[afterMatch] === "\n") {
+      calls.push({ name: toolName, arguments: {} });
+      continue;
     }
+
+    // Find the opening brace (may have leading whitespace)
+    const braceIndex = text.indexOf("{", afterMatch);
+    if (braceIndex === -1 || braceIndex - afterMatch > 2) {
+      // No JSON object follows — treat as no-arg call
+      calls.push({ name: toolName, arguments: {} });
+      continue;
+    }
+
+    const jsonStr = extractJsonObject(text, braceIndex);
+    if (jsonStr === null) {
+      console.warn(
+        `[pwnkit] TOOL_CALL "${toolName}": failed to extract JSON (unbalanced braces) — skipping`,
+      );
+      continue;
+    }
+
+    try {
+      const args = JSON.parse(jsonStr);
+      calls.push({ name: toolName, arguments: args });
+    } catch (err) {
+      console.warn(
+        `[pwnkit] TOOL_CALL "${toolName}": malformed JSON — ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    // Advance the regex past the extracted JSON so we don't re-match inside it
+    re.lastIndex = braceIndex + jsonStr.length;
   }
+
   return calls;
 }
 

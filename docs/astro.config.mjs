@@ -92,6 +92,7 @@ export default defineConfig({
           label: "Research",
           items: [
             { label: "Overview", slug: "research" },
+            { label: "2026-04-11 Ablation (The Moat That Wasn't)", slug: "research/2026-04-11-ablation" },
             { label: "Triage Dataset", slug: "research/triage-dataset" },
             { label: "Feature Extractor", slug: "research/feature-extractor" },
             { label: "Shell-First Rationale", slug: "research/shell-first" },

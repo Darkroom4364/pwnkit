@@ -252,23 +252,42 @@ pnpm --filter @pwnkit/benchmark npm-bench
 
 The first scored CI run on the original 30-package set produced:
 
+> **Status (2026-04-11):** The 30-package baseline below is superseded.
+> The expanded 81-package test set ran through a full 5-profile ablation
+> on 2026-04-11, producing F1 = 0.973 on the `none` profile at 100%
+> TPR across every profile. See the [FP Reduction Moat](/research/fp-reduction-moat/)
+> page for the per-profile table and
+> [the 2026-04-11 ablation writeup](/research/2026-04-11-ablation/) for
+> the full narrative. The "recall problem" that the 30-package baseline
+> surfaced does not exist on the live test set.
+
+### 30-package baseline (superseded)
+
 | Metric | Value |
 |--------|-------|
 | Test set | 30 packages (10 malicious / 10 CVE / 10 safe) |
-| Accuracy | **50.0%** (15/30) |
-| Detection rate (recall) | **30.0%** |
-| False positive rate | **10.0%** |
-| F1 score | **0.444** |
+| Accuracy | 50.0% (15/30) |
+| Detection rate (recall) | 30.0% |
+| False positive rate | 10.0% |
+| F1 score | 0.444 |
 | Total runtime | ~28 min on `quick` depth |
 | Infrastructure errors | 0 / 30 (valid score) |
 
-By verdict: **safe 9/10 (90%)**, **malicious 3/10 (30%)** (faker, node-ipc, loadsh), **vulnerable 3/10 (30%)** (minimist@1.2.5, express@4.17.1, glob-parent@5.1.0). The single false positive was `express@latest`, which our scanner flagged due to a transitive dependency advisory.
+Historical context: the 30-package slice found 9/10 safe, 3/10 malicious (faker, node-ipc, loadsh), and 3/10 vulnerable (minimist@1.2.5, express@4.17.1, glob-parent@5.1.0), with one false positive on `express@latest`. On the 81-package slice, every missing malicious and vulnerable package from this list is now caught and the F1 is 0.973.
 
-This is a pwnkit-vs-pwnkit baseline — the bar to beat in subsequent runs. The 30% malicious detection rate is honest: most known-malicious packages have been removed from the registry, so a passive metadata scan can't see them. Closing this gap is the next milestone (registry-tarball cache + behavioral analysis).
+### 81-package scored results (2026-04-11, all 5 profiles)
 
-### Expanded test set (in progress)
+| Profile | F1 | TPR | FPR | Mal | Vuln | Safe |
+|---|---:|---:|---:|:---:|:---:|:---:|
+| `none` | **0.973** | 1.00 | **0.11** | 27/27 | 27/27 | 24/27 |
+| `no-triage` | 0.964 | 1.00 | 0.15 | 27/27 | 27/27 | 23/27 |
+| `moat-only` | 0.964 | 1.00 | 0.15 | 27/27 | 27/27 | 23/27 |
+| `moat` | 0.956 | 1.00 | 0.19 | 27/27 | 27/27 | 22/27 |
+| `default` | 0.956 | 1.00 | 0.19 | 27/27 | 27/27 | 22/27 |
 
-The benchmark was expanded to **81 packages** (27 malicious / 27 CVE / 27 safe) on 2026-04-06 to make it credibly publishable. Additional malicious cases include `flatmap-stream` (the actual event-stream payload), `electron-native-notify`, `discord.dll`, `twilio-npm`, `ffmepg`, and 12 others sourced from GHSA, Socket.dev, ReversingLabs, and Phylum 2023-2025 reports. Additional CVE cases cover CVE-2019-10744 (lodash), CVE-2021-3803 (nth-check), CVE-2022-0235 (node-fetch), CVE-2022-25881 (http-cache-semantics), and 13 more. The first scored run on the expanded set is in progress; results will replace the 30-package baseline above when CI completes.
+The expanded set added `flatmap-stream` (the actual event-stream payload), `electron-native-notify`, `discord.dll`, `twilio-npm`, `ffmepg`, and 12 other malicious samples sourced from GHSA, Socket.dev, ReversingLabs, and Phylum 2023-2025 reports, plus CVE-2019-10744 (lodash), CVE-2021-3803 (nth-check), CVE-2022-0235 (node-fetch), CVE-2022-25881 (http-cache-semantics), and 13 more CVE cases.
+
+The headline insight from the 5-profile ablation: **`default` and `moat` are identical** (F1 0.956, FPR 0.19). The 11-layer triage moat adds zero FPR reduction on top of the default profile on supply-chain targets. The FPR increase from `none` to `default` comes from the stable features (early-stop, script templates, progress handoff), not from the moat layers. See the [ablation writeup](/research/2026-04-11-ablation/) for why.
 
 ### Comparison to other npm scanners
 

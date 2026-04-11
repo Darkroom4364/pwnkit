@@ -122,10 +122,16 @@ order.
 You can also ask the CLI to emit a final machine-readable `PWNKIT_RESULT=...`
 line with `PWNKIT_EMIT_RESULT_LINE=1` for wrappers and orchestration layers.
 
-## False-positive reduction moat
+## Triage pipeline
 
-pwnkit ships a full triage pipeline with 11 independent layers. See
-[Finding Triage](/triage/) for the full reference.
+pwnkit ships a multi-layer triage pipeline that sits between the attack
+agent and the verify stage. See [Finding Triage](/triage/) for the
+layer-by-layer reference and the [FP Reduction Moat](/research/fp-reduction-moat/)
+page for the 2026-04-11 ablation that measured which layers actually
+move the needle on XBOW and npm-bench (short version: the effect is
+real but mode-dependent — the moat strictly dominates the no-triage
+baseline on XBOW black-box, costs 2 flags at limit=50 white-box, and
+is a no-op on npm-bench).
 
 - Holding-it-wrong filter
 - 45-feature extractor
@@ -137,7 +143,11 @@ pwnkit ships a full triage pipeline with 11 independent layers. See
 - Self-consistency voting
 - Assistant memories (Semgrep-style)
 - Adversarial debate (prosecutor vs defender vs judge)
-- EGATS (Evidence-Gated Attack Tree Search)
+- EGATS (Evidence-Gated Attack Tree Search) — *opt-in only*, see
+  [#116](https://github.com/PwnKit-Labs/pwnkit/issues/116): the single-feature
+  ablation on 2026-04-11 showed this layer regresses on hard challenges
+  and costs ~10× the next-worst layer per flag, so it's excluded from
+  the `moat` profile by default.
 
 ## Agent loop enhancements
 
@@ -176,5 +186,7 @@ pwnkit is one leg of an open-source three-part security stack:
 
 With `PWNKIT_FEATURE_MULTIMODAL=1`, pwnkit automatically cross-validates
 every finding against foxguard's pattern scanner — the same neural +
-symbolic agreement pattern Endor Labs uses to reach ~95% FP elimination,
-except fully open source.
+symbolic agreement architecture Endor Labs uses in their AI SAST, except
+fully open source. For what this actually does in pwnkit (rather than
+in Endor Labs' closed system on a different domain), see the measured
+ablation on the [FP Reduction Moat](/research/fp-reduction-moat/) page.

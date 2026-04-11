@@ -52,7 +52,7 @@ Academic 3-role system: coordinator, sandbox executor, and validator. The coordi
 
 ### Reachability gate matches Endor Labs' "Code API" moat (open-source)
 
-Endor Labs' disclosed ~95% false-positive elimination depends on a proprietary "Code API" reachability signal — they check whether a flagged sink is actually callable from an application entry point before they spend LLM tokens on it. pwnkit implements the same idea as a zero-dependency grep/pattern-based first pass in `packages/core/src/triage/reachability.ts`. This is the only open-source reachability gate for LLM pentest findings we are aware of.
+Endor Labs' disclosed ~95% false-positive elimination depends on a proprietary "Code API" reachability signal — they check whether a flagged sink is actually callable from an application entry point before they spend LLM tokens on it. pwnkit implements the same idea as a zero-dependency grep/pattern-based first pass in `packages/core/src/triage/reachability.ts`. This is the only open-source reachability gate for LLM pentest findings we are aware of. The [2026-04-11 single-feature ablation](/research/2026-04-11-ablation/) found reachability to be the best-performing moat layer on the stubborn-14 slice at $1.61 per flag (+3 flags vs default).
 
 ### foxguard × pwnkit cross-validation (unique)
 

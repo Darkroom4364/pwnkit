@@ -1,18 +1,23 @@
 ---
 title: Finding Triage
-description: The eleven-layer false-positive reduction pipeline that sits between pwnkit's research and verify agents.
+description: The multi-layer triage pipeline that sits between pwnkit's research and verify agents — and what the 2026-04-11 ablation actually measured it doing.
 ---
 
 Autonomous pentesters are only as valuable as their false-positive rate.
-pwnkit ships a full triage pipeline between the research agent and the
-blind verify agent. Every finding walks through a stack of independent
+pwnkit ships a triage pipeline between the research agent and the blind
+verify agent. Every finding walks through a stack of independent
 filters, each of which can kill, downgrade, or boost it. Most filters are
 deterministic, zero-cost, and run before any LLM verification token is
 spent.
 
-The overall effect is the same neural-plus-symbolic agreement strategy
-Endor Labs uses to reach ~95% FP elimination — except it's open source and
-runs on your laptop.
+> **Status (2026-04-11):** The effect of this pipeline has now been
+> measured end-to-end. See the [FP Reduction Moat](/research/fp-reduction-moat/)
+> page for the numbers and [the 2026-04-11 ablation writeup](/research/2026-04-11-ablation/)
+> for the narrative. Short version: the stack strictly dominates the
+> no-triage baseline on XBOW black-box, is a Pareto tradeoff on XBOW
+> white-box (costs 2 flags at limit=50 for 63% fewer findings), and is
+> a no-op on npm-bench. Layer 11 (EGATS) is the one broken layer and
+> is opt-in only — see [pwnkit#116](https://github.com/PwnKit-Labs/pwnkit/issues/116).
 
 ## Pipeline overview
 

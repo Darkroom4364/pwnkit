@@ -1,4 +1,12 @@
-import type { ScanConfig, ScanReport, Finding } from "@pwnkit/shared";
+import type {
+  ScanConfig,
+  ScanReport,
+  Finding,
+  LayerVerdict,
+  LayerVerdictKind,
+  Severity,
+  TriageLayerName,
+} from "@pwnkit/shared";
 import { loadTemplates } from "@pwnkit/templates";
 import { createRuntime } from "./runtime/index.js";
 import { LlmApiRuntime } from "./runtime/llm-api.js";
@@ -50,6 +58,40 @@ export interface AgenticScanOptions {
   challengeHint?: string;
   /** Resume from a previous scan (uses persisted sessions) */
   resumeScanId?: string;
+}
+
+/**
+ * Append a triage-layer verdict to a finding's `layerVerdicts` log. The
+ * array is created lazily so existing call sites that don't construct
+ * findings via the scanner (tests, importers) keep working.
+ *
+ * Each entry is the per-layer telemetry that #112 was designed to surface
+ * and that the dynamic-routing model in #113 trains on. Append-only,
+ * ordered by execution.
+ */
+function pushLayerVerdict(
+  finding: Finding,
+  entry: {
+    layer: TriageLayerName;
+    verdict: LayerVerdictKind;
+    confidence?: number;
+    reason: string;
+    startedAt: number;
+    costUsd?: number;
+    changedSeverity?: { from: Severity; to: Severity };
+  },
+): void {
+  if (!finding.layerVerdicts) finding.layerVerdicts = [];
+  const verdict: LayerVerdict = {
+    layer: entry.layer,
+    verdict: entry.verdict,
+    reason: entry.reason,
+    durationMs: Date.now() - entry.startedAt,
+    costUsd: entry.costUsd ?? 0,
+  };
+  if (entry.confidence !== undefined) verdict.confidence = entry.confidence;
+  if (entry.changedSeverity) verdict.changedSeverity = entry.changedSeverity;
+  finding.layerVerdicts.push(verdict);
 }
 
 function assertApiRuntimeSelection(
@@ -662,10 +704,32 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
       // Both default ON to preserve existing v0.6.0 behavior; setting
       // PWNKIT_FEATURE_HOLDING_IT_WRONG=0 / PWNKIT_FEATURE_EVIDENCE_GATE=0
       // turns the gates off so we can A/B test what they actually cost.
+      const hiwStartedAt = Date.now();
       const hiw = isHoldingItWrong(finding);
       const featureVector = extractFeatures(finding);
       const evidenceCompleteness =
         evidenceCompletenessIdx >= 0 ? featureVector[evidenceCompletenessIdx] ?? 0 : 0;
+
+      // Layer telemetry: holding-it-wrong always runs (just may not enforce).
+      // pwnkit#112 — feeds the dynamic routing model in #113.
+      if (hiw.isHoldingItWrong && features.holdingItWrong) {
+        pushLayerVerdict(finding, {
+          layer: "holding_it_wrong",
+          verdict: "reject",
+          reason: hiw.reason ?? "matched holding-it-wrong blocklist",
+          startedAt: hiwStartedAt,
+          changedSeverity: { from: finding.severity, to: "info" },
+        });
+      } else {
+        pushLayerVerdict(finding, {
+          layer: "holding_it_wrong",
+          verdict: hiw.isHoldingItWrong ? "skip" : "pass",
+          reason: hiw.isHoldingItWrong
+            ? `would have rejected (${hiw.reason}) but PWNKIT_FEATURE_HOLDING_IT_WRONG=0`
+            : "no holding-it-wrong pattern matched",
+          startedAt: hiwStartedAt,
+        });
+      }
 
       // Log the feature vector for future training
       db.logEvent?.({
@@ -700,7 +764,16 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
         continue;
       }
 
-      if (evidenceCompleteness <= 0.5 && features.evidenceGate) {
+      const evidenceGateStartedAt = Date.now();
+      const evidenceGateRejects = evidenceCompleteness <= 0.5;
+      if (evidenceGateRejects && features.evidenceGate) {
+        pushLayerVerdict(finding, {
+          layer: "evidence_gate",
+          verdict: "reject",
+          confidence: 1 - evidenceCompleteness,
+          reason: `evidence_completeness=${evidenceCompleteness.toFixed(2)} <= 0.5`,
+          startedAt: evidenceGateStartedAt,
+        });
         finding.triageStatus = "suppressed";
         finding.triageNote = `rejected: evidence_completeness=${evidenceCompleteness.toFixed(2)} <= 0.5`;
         db.updateFindingStatus?.(finding.id, "false-positive");
@@ -713,6 +786,15 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
         });
         continue;
       }
+      pushLayerVerdict(finding, {
+        layer: "evidence_gate",
+        verdict: evidenceGateRejects ? "skip" : "pass",
+        confidence: evidenceCompleteness,
+        reason: evidenceGateRejects
+          ? `would have rejected (completeness=${evidenceCompleteness.toFixed(2)}) but PWNKIT_FEATURE_EVIDENCE_GATE=0`
+          : `evidence_completeness=${evidenceCompleteness.toFixed(2)} > 0.5`,
+        startedAt: evidenceGateStartedAt,
+      });
 
       // ── Reachability gate ("Endor Labs moat") ──
       // Opt-in via PWNKIT_FEATURE_REACHABILITY_GATE. Only runs in white-box
@@ -721,6 +803,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
       // point (HTTP handler, CLI main, route file). Dead code and test-only
       // paths are suppressed before we spend any LLM tokens on verify.
       if (features.reachabilityGate && config.repoPath) {
+        const reachStartedAt = Date.now();
         try {
           const reach = await checkReachability(finding, config.repoPath);
           db.logEvent?.({
@@ -739,6 +822,13 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
             timestamp: Date.now(),
           });
           if (!reach.reachable && reach.confidence >= 0.7) {
+            pushLayerVerdict(finding, {
+              layer: "reachability",
+              verdict: "reject",
+              confidence: reach.confidence,
+              reason: `unreachable: ${reach.reason}`,
+              startedAt: reachStartedAt,
+            });
             finding.triageStatus = "suppressed";
             finding.triageNote = `unreachable: ${reach.reason}`;
             db.updateFindingStatus?.(finding.id, "false-positive");
@@ -751,9 +841,24 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
             });
             continue;
           }
+          pushLayerVerdict(finding, {
+            layer: "reachability",
+            verdict: "pass",
+            confidence: reach.confidence,
+            reason: reach.reachable
+              ? `reachable from ${reach.entryPoints.length} entry point(s): ${reach.reason}`
+              : `low-confidence unreachable verdict (${reach.confidence.toFixed(2)} < 0.7), kept`,
+            startedAt: reachStartedAt,
+          });
         } catch (err) {
           // Reachability check errors must not drop findings silently —
           // let the rest of the pipeline continue.
+          pushLayerVerdict(finding, {
+            layer: "reachability",
+            verdict: "error",
+            reason: `reachability check threw: ${(err as Error).message}`,
+            startedAt: reachStartedAt,
+          });
           db.logEvent?.({
             scanId,
             stage: "verify",
@@ -766,6 +871,15 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
             timestamp: Date.now(),
           });
         }
+      } else {
+        pushLayerVerdict(finding, {
+          layer: "reachability",
+          verdict: "skip",
+          reason: features.reachabilityGate
+            ? "no repoPath available (black-box mode)"
+            : "PWNKIT_FEATURE_REACHABILITY_GATE=0",
+          startedAt: Date.now(),
+        });
       }
 
       // ── Multi-modal agreement (foxguard cross-validation) ──
@@ -775,6 +889,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
       // almost certainly real; if foxguard disagrees and the evidence is
       // thin, we auto-reject. This is the "opensoar-hq trinity" validation.
       if (features.multiModalAgreement && config.repoPath) {
+        const mmStartedAt = Date.now();
         try {
           const mm = await checkMultiModalAgreement(finding, config.repoPath);
           db.logEvent?.({
@@ -799,10 +914,25 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
           });
 
           if (fused.decision === "auto_accept") {
+            pushLayerVerdict(finding, {
+              layer: "multi_modal",
+              verdict: "pass",
+              confidence: fused.confidence,
+              reason: `auto_accept: ${fused.reasoning}`,
+              startedAt: mmStartedAt,
+            });
             finding.confidence = Math.max(finding.confidence ?? 0, fused.confidence);
             finding.triageStatus = "accepted";
             finding.triageNote = `multi_modal_accept: ${fused.reasoning}`;
           } else if (fused.decision === "auto_reject") {
+            pushLayerVerdict(finding, {
+              layer: "multi_modal",
+              verdict: "reject",
+              confidence: fused.confidence,
+              reason: `auto_reject: ${fused.reasoning}`,
+              startedAt: mmStartedAt,
+              changedSeverity: { from: finding.severity, to: "info" },
+            });
             finding.severity = "info";
             finding.triageStatus = "suppressed";
             finding.triageNote = `multi_modal_reject: ${fused.reasoning}`;
@@ -816,10 +946,31 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
             });
             continue;
           } else if (fused.decision === "verify_priority") {
+            pushLayerVerdict(finding, {
+              layer: "multi_modal",
+              verdict: "pass",
+              confidence: mm.confidence,
+              reason: `verify_priority: ${mm.reasoning}`,
+              startedAt: mmStartedAt,
+            });
             finding.confidence = Math.max(finding.confidence ?? 0, mm.confidence);
             finding.triageNote = `multi_modal_agree: ${mm.reasoning}`;
+          } else {
+            pushLayerVerdict(finding, {
+              layer: "multi_modal",
+              verdict: "pass",
+              confidence: mm.confidence,
+              reason: `verify (${fused.decision}): ${fused.reasoning}`,
+              startedAt: mmStartedAt,
+            });
           }
         } catch (err) {
+          pushLayerVerdict(finding, {
+            layer: "multi_modal",
+            verdict: "error",
+            reason: `multi-modal threw: ${(err as Error).message}`,
+            startedAt: mmStartedAt,
+          });
           db.logEvent?.({
             scanId,
             stage: "verify",
@@ -832,6 +983,15 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
             timestamp: Date.now(),
           });
         }
+      } else {
+        pushLayerVerdict(finding, {
+          layer: "multi_modal",
+          verdict: "skip",
+          reason: features.multiModalAgreement
+            ? "no repoPath available (black-box mode)"
+            : "PWNKIT_FEATURE_MULTIMODAL=0",
+          startedAt: Date.now(),
+        });
       }
 
       // ── Per-class verification oracle ──
@@ -840,6 +1000,7 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
       // confidence and mark the finding accepted. If it fails and we have an
       // oracle for the category, downgrade severity to low and annotate.
       // Categories without oracles fall through to the LLM-verify stage.
+      const oracleStartedAt = Date.now();
       try {
         const oracle = await verifyOracleByCategory(finding, config.target);
         db.logEvent?.({
@@ -859,6 +1020,13 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
         });
 
         if (oracle.verified) {
+          pushLayerVerdict(finding, {
+            layer: "oracle",
+            verdict: "pass",
+            confidence: oracle.confidence,
+            reason: `verified: ${oracle.evidence}`,
+            startedAt: oracleStartedAt,
+          });
           finding.confidence = 1.0;
           finding.triageStatus = "accepted";
           finding.triageNote = `oracle_verified: ${oracle.evidence}`;
@@ -869,10 +1037,32 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
           // An oracle exists for this category but the exploit didn't
           // reproduce. Downgrade severity and annotate so downstream agents
           // don't over-promote the finding.
+          const fromSev = finding.severity;
           finding.severity = "low";
           finding.triageNote = `oracle_failed: ${oracle.reason}`;
+          pushLayerVerdict(finding, {
+            layer: "oracle",
+            verdict: "downgrade",
+            confidence: oracle.confidence,
+            reason: `failed to reproduce: ${oracle.reason}`,
+            startedAt: oracleStartedAt,
+            changedSeverity: { from: fromSev, to: "low" },
+          });
+        } else {
+          pushLayerVerdict(finding, {
+            layer: "oracle",
+            verdict: "skip",
+            reason: `no oracle for category=${finding.category}`,
+            startedAt: oracleStartedAt,
+          });
         }
       } catch (err) {
+        pushLayerVerdict(finding, {
+          layer: "oracle",
+          verdict: "error",
+          reason: `oracle threw: ${(err as Error).message}`,
+          startedAt: oracleStartedAt,
+        });
         // Never let oracle errors kill the scan — log and move on.
         db.logEvent?.({
           scanId,
@@ -898,8 +1088,8 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
         && nativeApiRuntime
         && finding.triageStatus !== "accepted"
       ) {
+        const povStart = Date.now();
         try {
-          const povStart = Date.now();
           const pov = await generatePov(finding, config.target, nativeApiRuntime, 5);
           db.logEvent?.({
             scanId,
@@ -919,6 +1109,13 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
             timestamp: Date.now(),
           });
           if (pov.hasPov) {
+            pushLayerVerdict(finding, {
+              layer: "pov_gate",
+              verdict: "pass",
+              confidence: pov.confidence,
+              reason: `pov_verified(${pov.artifactType}): ${pov.reason}`,
+              startedAt: povStart,
+            });
             // Boost confidence and attach the working PoC as evidence.
             finding.confidence = Math.max(finding.confidence ?? 0, pov.confidence);
             finding.triageStatus = "accepted";
@@ -931,18 +1128,40 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
               `## PoV Artifact (${pov.artifactType})\n${pov.povArtifact ?? ""}\n\n` +
               `## Execution Evidence\n${pov.executionEvidence}`;
           } else if (pov.turnsUsed >= 5 || pov.reason.startsWith("max turns")) {
+            const fromSev = finding.severity;
             // Hard gate: no working PoC in budget → downgrade to info.
             finding.severity = "info";
             finding.triageNote =
               (finding.triageNote ? `${finding.triageNote}; ` : "") + "no_pov";
+            pushLayerVerdict(finding, {
+              layer: "pov_gate",
+              verdict: "downgrade",
+              confidence: pov.confidence,
+              reason: `no_pov in ${pov.turnsUsed} turns: ${pov.reason}`,
+              startedAt: povStart,
+              changedSeverity: { from: fromSev, to: "info" },
+            });
           } else {
             // Agent gave up / runtime error / judge failed — annotate but don't
             // downgrade (the verify agent gets a second shot).
             finding.triageNote =
               (finding.triageNote ? `${finding.triageNote}; ` : "") +
               `pov_failed: ${pov.reason}`;
+            pushLayerVerdict(finding, {
+              layer: "pov_gate",
+              verdict: "pass",
+              confidence: pov.confidence,
+              reason: `inconclusive: ${pov.reason}`,
+              startedAt: povStart,
+            });
           }
         } catch (err) {
+          pushLayerVerdict(finding, {
+            layer: "pov_gate",
+            verdict: "error",
+            reason: `pov gate threw: ${(err as Error).message}`,
+            startedAt: povStart,
+          });
           db.logEvent?.({
             scanId,
             stage: "verify",
@@ -952,6 +1171,17 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
             timestamp: Date.now(),
           });
         }
+      } else {
+        pushLayerVerdict(finding, {
+          layer: "pov_gate",
+          verdict: "skip",
+          reason: !features.povGate
+            ? "PWNKIT_FEATURE_POV_GATE=0"
+            : !nativeApiRuntime
+              ? "no native runtime available"
+              : "already accepted by upstream layer",
+          startedAt: Date.now(),
+        });
       }
 
       db.saveFinding?.(scanId, finding);
@@ -1922,8 +2152,19 @@ function dbFindingToFinding(dbf: {
   evidenceRequest: string;
   evidenceResponse: string;
   evidenceAnalysis: string | null;
+  layerVerdicts?: string | null;
   timestamp: number;
 }): Finding {
+  let layerVerdicts: LayerVerdict[] | undefined;
+  if (dbf.layerVerdicts) {
+    try {
+      const parsed = JSON.parse(dbf.layerVerdicts) as unknown;
+      if (Array.isArray(parsed)) layerVerdicts = parsed as LayerVerdict[];
+    } catch {
+      // Corrupt or legacy row — drop the field rather than crashing the
+      // hydration. The triage stage will repopulate on the next scan.
+    }
+  }
   return {
     id: dbf.id,
     templateId: dbf.templateId,
@@ -1940,6 +2181,7 @@ function dbFindingToFinding(dbf: {
       response: dbf.evidenceResponse,
       analysis: dbf.evidenceAnalysis ?? undefined,
     },
+    ...(layerVerdicts ? { layerVerdicts } : {}),
     timestamp: dbf.timestamp,
   };
 }

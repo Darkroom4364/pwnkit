@@ -312,6 +312,7 @@ describe("toTrainingFormat", () => {
     source: "npm-bench:event-stream:malicious",
     label_source: "package_verdict",
     features: new Array(45).fill(0).map((_, i) => i),
+    layer_verdicts: [],
   };
 
   it("emits valid JSON on a single line", () => {

@@ -171,6 +171,53 @@ export interface FindingRemediation {
   references: string[];
 }
 
+/**
+ * Per-layer triage telemetry. Each entry records what happened when one
+ * triage layer (holding-it-wrong, evidence_gate, oracle, …) evaluated a
+ * finding: did it pass, reject, downgrade, or skip; what was its confidence;
+ * what reason did it give; how long did it take; what did it cost.
+ *
+ * The array is append-only and ordered by execution. A downstream router
+ * model trains on it: given the layerVerdicts a finding accumulates, can a
+ * cheaper subset of layers reach the same final verdict?
+ *
+ * See pwnkit#112 for the design and pwnkit#113 for the dynamic-routing
+ * model that consumes this telemetry.
+ */
+export type TriageLayerName =
+  | "holding_it_wrong"
+  | "evidence_gate"
+  | "reachability"
+  | "multi_modal"
+  | "oracle"
+  | "pov_gate"
+  | "structured_verify"
+  | "consensus"
+  | "memories"
+  | "debate";
+
+export type LayerVerdictKind =
+  | "pass"      // layer ran and approved the finding
+  | "reject"    // layer ran and rejected (suppressed) the finding
+  | "downgrade" // layer ran and downgraded severity but kept the finding
+  | "skip"      // layer was disabled or didn't run for this finding
+  | "error";    // layer threw, finding kept (conservative default)
+
+export interface LayerVerdict {
+  layer: TriageLayerName;
+  verdict: LayerVerdictKind;
+  /** 0.0–1.0 confidence in the verdict, where applicable. */
+  confidence?: number;
+  /** Short human-readable reason. Stable across runs for the same input. */
+  reason: string;
+  /** Wall-clock duration of this layer, in milliseconds. */
+  durationMs: number;
+  /** USD cost of this layer (LLM tokens etc). 0 for regex/grep layers. */
+  costUsd: number;
+  /** Severity transition if the layer changed it. */
+  changedSeverity?: { from: Severity; to: Severity };
+}
+
 export interface Finding {
   id: string;
   templateId: string;
@@ -183,6 +230,11 @@ export interface Finding {
   fingerprint?: string;
   triageStatus?: FindingTriageStatus;
   triageNote?: string;
+  /**
+   * Append-only list of triage layer verdicts, ordered by execution.
+   * Empty until the triage stage runs. See {@link LayerVerdict} for details.
+   */
+  layerVerdicts?: LayerVerdict[];
   workflowStatus?: FindingWorkflowStatus;
   workflowAssignee?: string | null;
   confidence?: number; // 0.0–1.0 agent-assessed confidence

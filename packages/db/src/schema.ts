@@ -101,6 +101,13 @@ export const findings = sqliteTable(
     evidenceRequest: text("evidenceRequest").notNull(),
     evidenceResponse: text("evidenceResponse").notNull(),
     evidenceAnalysis: text("evidenceAnalysis"),
+    /**
+     * JSON-stringified LayerVerdict[] (see @pwnkit/shared types). NULL until
+     * the triage stage runs. Stored as text rather than a join table because
+     * the array is read-and-write together at finding-save time and we never
+     * query individual verdict rows. See pwnkit#112.
+     */
+    layerVerdicts: text("layerVerdicts"),
     timestamp: integer("timestamp").notNull(),
   },
   (table) => [

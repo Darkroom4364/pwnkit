@@ -33,7 +33,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { extractFeatures, FEATURE_NAMES } from "@pwnkit/core";
-import type { Finding } from "@pwnkit/shared";
+import type { Finding, LayerVerdict } from "@pwnkit/shared";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -74,6 +74,16 @@ export interface TriageSample {
    * extractFeatures() needs (typically: legacy XBOW dumps without evidence).
    */
   features: number[];
+  /**
+   * Per-layer triage telemetry, ordered by execution. Empty for findings
+   * collected from sources that predate pwnkit#112's instrumentation
+   * (legacy XBOW/npm-bench JSONs, blind_verify rows from older scans).
+   *
+   * This is the supervision signal for the dynamic-routing model in
+   * pwnkit#113: given the layer outcomes a finding accumulates, can a
+   * cheaper subset of layers reach the same final verdict?
+   */
+  layer_verdicts: LayerVerdict[];
 }
 
 /**
@@ -82,6 +92,27 @@ export interface TriageSample {
  * without an HTTP request/response, etc.) by defaulting missing fields
  * and falling back to a 45-zero vector if extraction throws.
  */
+/**
+ * Pull layerVerdicts off a raw finding row, normalizing the cases where it's
+ * absent (legacy data), already an array, or a JSON-stringified blob (some
+ * SQLite hydration paths leave it as text). Always returns an array — empty
+ * when no verdicts are present so the JSONL schema stays consistent.
+ */
+export function safeExtractLayerVerdicts(raw: any): LayerVerdict[] {
+  const v = raw?.layerVerdicts ?? raw?.layer_verdicts;
+  if (!v) return [];
+  if (Array.isArray(v)) return v as LayerVerdict[];
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v) as unknown;
+      if (Array.isArray(parsed)) return parsed as LayerVerdict[];
+    } catch {
+      /* corrupt — drop */
+    }
+  }
+  return [];
+}
+
 export function safeExtractFeatures(raw: any): number[] {
   try {
     const finding: Finding = {
@@ -161,6 +192,7 @@ export function collectFromXbowResults(resultsPath: string): TriageSample[] {
         source: challengeId,
         label_source: "flag_extraction",
         features: safeExtractFeatures(finding),
+        layer_verdicts: safeExtractLayerVerdicts(finding),
       });
     }
   }
@@ -215,6 +247,7 @@ export function collectFromNpmBench(resultsPath: string): TriageSample[] {
         source: `npm-bench:${pkg}:${verdict}`,
         label_source: "package_verdict",
         features: safeExtractFeatures(finding),
+        layer_verdicts: safeExtractLayerVerdicts(finding),
       });
     }
   }
@@ -239,12 +272,14 @@ function collectFromDb(dbPath: string): TriageSample[] {
   const samples: TriageSample[] = [];
 
   try {
-    // Get all scans with their findings
+    // Get all scans with their findings. layerVerdicts is a JSON-stringified
+    // array (pwnkit#112) — may be NULL on rows that predate the migration.
     const scans = db.prepare(`
       SELECT s.id as scan_id, s.target, s.mode,
              f.id as finding_id, f.title, f.description, f.severity,
              f.category, f.status, f.confidence,
-             f.evidence_request, f.evidence_response, f.evidence_analysis
+             f.evidence_request, f.evidence_response, f.evidence_analysis,
+             f.layerVerdicts as layer_verdicts
       FROM scans s
       JOIN findings f ON f.scan_id = s.id
       ORDER BY s.id
@@ -285,6 +320,7 @@ function collectFromDb(dbPath: string): TriageSample[] {
             analysis: row.evidence_analysis,
           },
         }),
+        layer_verdicts: safeExtractLayerVerdicts(row),
       });
     }
   } catch (err) {
@@ -333,6 +369,7 @@ export function toTrainingFormat(sample: TriageSample): string {
   return JSON.stringify({
     text: input,
     features: sample.features,
+    layer_verdicts: sample.layer_verdicts,
     label: sample.label === "true_positive" ? 1 : 0,
     label_text: sample.label,
     source: sample.source,

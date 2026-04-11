@@ -277,6 +277,10 @@ export class pwnkitDB {
     if (!colNames.has("workflowUpdatedAt")) {
       this.sqlite.exec("ALTER TABLE findings ADD COLUMN workflowUpdatedAt TEXT");
     }
+    // pwnkit#112 — per-layer triage telemetry. JSON-stringified LayerVerdict[].
+    if (!colNames.has("layerVerdicts")) {
+      this.sqlite.exec("ALTER TABLE findings ADD COLUMN layerVerdicts TEXT");
+    }
     this.sqlite.exec("UPDATE findings SET fingerprint = id WHERE fingerprint IS NULL OR fingerprint = ''");
     this.sqlite.exec("UPDATE findings SET triageStatus = 'new' WHERE triageStatus IS NULL OR triageStatus = ''");
     this.sqlite.exec(`
@@ -1016,6 +1020,10 @@ export class pwnkitDB {
       },
     );
     const inheritedWorkflowAssignee = workflowFinding.workflowAssignee ?? inheritedTriage?.workflowAssignee ?? null;
+    const layerVerdictsJson =
+      finding.layerVerdicts && finding.layerVerdicts.length > 0
+        ? JSON.stringify(finding.layerVerdicts)
+        : null;
     this.db
       .insert(schema.findings)
       .values({
@@ -1040,6 +1048,7 @@ export class pwnkitDB {
         evidenceRequest: finding.evidence.request,
         evidenceResponse: finding.evidence.response,
         evidenceAnalysis: finding.evidence.analysis ?? null,
+        layerVerdicts: layerVerdictsJson,
         timestamp: finding.timestamp,
       })
       .onConflictDoUpdate({
@@ -1064,6 +1073,7 @@ export class pwnkitDB {
           evidenceRequest: finding.evidence.request,
           evidenceResponse: finding.evidence.response,
           evidenceAnalysis: finding.evidence.analysis ?? null,
+          layerVerdicts: layerVerdictsJson,
           timestamp: finding.timestamp,
         },
       })

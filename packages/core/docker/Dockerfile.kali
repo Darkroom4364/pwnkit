@@ -51,11 +51,11 @@ RUN apt-get update -qq && \
         file \
         binutils \
         python3-ropgadget \
-        pwndbg \
     && pip3 install --no-cache-dir --break-system-packages \
         requests \
         pwntools \
         beautifulsoup4 \
+        pwndbg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 

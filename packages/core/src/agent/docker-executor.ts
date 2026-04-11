@@ -49,8 +49,10 @@ const PENTEST_PACKAGES = [
   "file",
   "binutils",
   "python3-ropgadget",
-  "pwndbg",
 ];
+
+/** Extra Python packages to pip-install after apt bootstrap. */
+const PENTEST_PIP_PACKAGES = ["requests", "pwntools", "beautifulsoup4", "pwndbg"];
 
 export interface DockerExecResult {
   stdout: string;
@@ -145,8 +147,10 @@ export class DockerExecutor {
     // The GHCR image is pre-baked with the standard toolchain.
     // Keep the legacy Kali bootstrap path for raw-image fallback.
     if (this.shouldBootstrapTools()) {
-      const installCmd = `apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ${PENTEST_PACKAGES.join(" ")}`;
-      this.dockerExecSync(installCmd, 600_000); // 10 min for install
+      const aptCmd = `apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ${PENTEST_PACKAGES.join(" ")}`;
+      this.dockerExecSync(aptCmd, 600_000); // 10 min for install
+      const pipCmd = `pip3 install --no-cache-dir --break-system-packages ${PENTEST_PIP_PACKAGES.join(" ")}`;
+      this.dockerExecSync(pipCmd, 300_000); // 5 min for pip
     }
 
     this.ready = true;

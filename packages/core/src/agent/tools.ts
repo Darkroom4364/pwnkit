@@ -602,6 +602,32 @@ export class ToolExecutor {
   }
 
   /**
+   * Return a copy of process.env with sensitive keys (LLM API keys, cloud
+   * tokens) stripped out so they are never leaked to child processes.
+   */
+  private static readonly SENSITIVE_ENV_PATTERNS = [
+    "OPENROUTER_API",
+    "ANTHROPIC_API",
+    "OPENAI_API",
+    "AZURE_OPENAI_API",
+    "PWNKIT_CLOUD_TOKEN",
+    "GEMINI_API",
+  ];
+
+  private sanitizedEnv(): Record<string, string | undefined> {
+    const env: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      const isSensitive = ToolExecutor.SENSITIVE_ENV_PATTERNS.some((pat) =>
+        key.toUpperCase().includes(pat),
+      );
+      if (!isSensitive) {
+        env[key] = value;
+      }
+    }
+    return env;
+  }
+
+  /**
    * Build environment variables for auth credentials, making them available
    * to shell commands (curl, python3, etc.) via $AUTH_HEADER / $AUTH_VALUE.
    */
@@ -1048,7 +1074,7 @@ export class ToolExecutor {
         maxBuffer: 1024 * 1024, // 1MB
         encoding: "utf-8",
         shell: "/bin/bash",
-        env: { ...process.env, TARGET: this.ctx.target, ...this.buildAuthEnvVars() },
+        env: { ...this.sanitizedEnv(), TARGET: this.ctx.target, ...this.buildAuthEnvVars() },
         stdio: ["pipe", "pipe", "pipe"],
       });
 

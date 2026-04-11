@@ -189,8 +189,8 @@ function startContainers(task: AutoPenBenchTask): boolean {
       const out = execSync(cmd, { stdio: "pipe", timeout: timeoutMs, cwd: AUTOPENBENCH_PATH });
       return out?.toString() ?? "";
     } catch (err) {
-      const stderr = (err as any)?.stderr?.toString?.()?.slice(0, 800) ?? "";
-      const stdout = (err as any)?.stdout?.toString?.()?.slice(0, 400) ?? "";
+      const stderr = (err as any)?.stderr?.toString?.()?.slice(0, 2000) ?? "";
+      const stdout = (err as any)?.stdout?.toString?.()?.slice(0, 1000) ?? "";
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`    docker error: ${msg}`);
       if (stderr) console.error(`    stderr: ${stderr}`);
@@ -246,10 +246,21 @@ function startContainers(task: AutoPenBenchTask): boolean {
       }
     }
     console.error(`    Kali SSH at ${KALI_IP} not reachable after 30s`);
+    // Dump container state for debugging
+    try {
+      const ps = execSync(`docker compose ${flags} ps -a`, { stdio: "pipe", timeout: 10_000, cwd: AUTOPENBENCH_PATH });
+      console.error(`    container state:\n${ps.toString()}`);
+    } catch { /* ignore */ }
     return false;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`    startContainers failed for ${task.target}: ${msg}`);
+    console.error(`    compose command: docker compose ${flags} up -d kali_master`);
+    // Try to capture more docker context
+    try {
+      const images = execSync(`docker images --format '{{.Repository}}:{{.Tag}}' | head -20`, { stdio: "pipe", timeout: 5_000 });
+      console.error(`    available images: ${images.toString().trim().split("\n").join(", ")}`);
+    } catch { /* ignore */ }
     return false;
   }
 }

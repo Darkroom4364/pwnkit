@@ -116,6 +116,30 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentState> 
     });
   }
 
+  // ── Cleanup safety net ──
+  const cleanupOnce = (() => {
+    let cleaned = false;
+    return async () => {
+      if (cleaned) return;
+      cleaned = true;
+      await executor.cleanup();
+    };
+  })();
+
+  const onSignal = async () => {
+    await cleanupOnce();
+    process.exit(1);
+  };
+  const onExit = () => {
+    void executor.cleanup();
+  };
+
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+  process.on("exit", onExit);
+
+  try {
+
   // ── Main loop ──
 
   while (!state.done && state.turnCount < config.maxTurns) {
@@ -292,6 +316,13 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentState> 
       },
       timestamp: Date.now(),
     });
+  }
+
+  } finally {
+    await cleanupOnce();
+    process.removeListener("SIGINT", onSignal);
+    process.removeListener("SIGTERM", onSignal);
+    process.removeListener("exit", onExit);
   }
 
   return state;

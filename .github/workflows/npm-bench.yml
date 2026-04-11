@@ -37,7 +37,7 @@ on:
 
 jobs:
   npm-bench:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     # Job ceiling has to exceed the per-step ceiling. The 81-package set
     # observed ~30s-2min per package in run #24025320432, so the worst-case
     # serial runtime is north of 90 minutes once retries kick in.

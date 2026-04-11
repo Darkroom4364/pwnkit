@@ -266,7 +266,20 @@ async function main() {
 
   if (categoryFilter) {
     const catLower = categoryFilter.toLowerCase();
-    challenges = challenges.filter((c) => c.category.toLowerCase() === catLower);
+    // Short aliases so `--category web` matches "Web Exploitation", etc.
+    const CATEGORY_ALIASES: Record<string, string> = {
+      web: "web exploitation",
+      crypto: "cryptography",
+      forensics: "forensics",
+      pwn: "binary exploitation",
+      binary: "binary exploitation",
+      re: "reverse engineering",
+      reverse: "reverse engineering",
+      general: "general skills",
+      misc: "general skills",
+    };
+    const resolved = CATEGORY_ALIASES[catLower] ?? catLower;
+    challenges = challenges.filter((c) => c.category.toLowerCase() === resolved);
   }
   if (difficultyFilter) {
     const difLower = difficultyFilter.toLowerCase();

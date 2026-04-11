@@ -61,12 +61,15 @@ export function buildAuthHeaders(auth?: AuthConfig): Record<string, string> {
   }
 }
 
+/** Placeholder replaced at runtime by native-loop with the per-scan path. */
+export const EXTERNAL_MEMORY_PATH_PLACEHOLDER = "{{EXTERNAL_MEMORY_PATH}}";
+
 const EXTERNAL_MEMORY_INSTRUCTION = `
 
 ## Working Memory
 
-Save important discoveries (credentials, endpoints, tokens, attack plans) to /tmp/pwnkit-state.json using bash. This file persists across reflection checkpoints and will be reminded to you. Example:
-\`echo '{"creds":["admin:pass"],"endpoints":["/api/users"],"plan":"try IDOR on /api/users/2"}' > /tmp/pwnkit-state.json\`
+Save important discoveries (credentials, endpoints, tokens, attack plans) to ${EXTERNAL_MEMORY_PATH_PLACEHOLDER} using bash. This file persists across reflection checkpoints and will be reminded to you. Example:
+\`echo '{"creds":["admin:pass"],"endpoints":["/api/users"],"plan":"try IDOR on /api/users/2"}' > ${EXTERNAL_MEMORY_PATH_PLACEHOLDER}\`
 Update it whenever you discover something new.`;
 
 export function discoveryPrompt(target: string, auth?: AuthConfig): string {

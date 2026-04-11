@@ -52,7 +52,7 @@ const PENTEST_PACKAGES = [
 ];
 
 /** Extra Python packages to pip-install after apt bootstrap. */
-const PENTEST_PIP_PACKAGES = ["requests", "pwntools", "beautifulsoup4", "pwndbg"];
+const PENTEST_PIP_PACKAGES = ["requests", "pwntools", "beautifulsoup4"];
 
 export interface DockerExecResult {
   stdout: string;

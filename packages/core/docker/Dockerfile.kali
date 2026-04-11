@@ -55,7 +55,6 @@ RUN apt-get update -qq && \
         requests \
         pwntools \
         beautifulsoup4 \
-        pwndbg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 

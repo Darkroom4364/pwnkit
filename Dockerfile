@@ -54,15 +54,21 @@ ENV NODE_ENV=production \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PATH=/usr/local/bin:/usr/bin:/bin
 
-# Base system + Node 20 + pentest tooling
+# Base system + pentest tooling (Node copied from builder below)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl wget gnupg jq git unzip xz-utils \
         python3 python3-requests python3-bs4 \
         sqlmap nmap nikto gobuster hydra john ffuf wfuzz \
         whatweb wafw00f dirb \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# Copy Node.js 20 from the builder stage instead of curl-pipe-bash from nodesource.
+# This eliminates a supply-chain risk (arbitrary remote script execution) and also
+# removes a network dependency during the runtime stage build.
+COPY --from=builder /usr/local/bin/node /usr/local/bin/node
+COPY --from=builder /usr/local/bin/npx /usr/local/bin/npx
+COPY --from=builder /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 
 # Optional: SecLists wordlists (large)
 RUN if [ "$INSTALL_SECLISTS" = "1" ]; then \

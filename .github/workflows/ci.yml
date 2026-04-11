@@ -14,7 +14,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
@@ -28,7 +28,7 @@ jobs:
         working-directory: dist
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: build
     steps:
       - uses: actions/checkout@v6
@@ -52,7 +52,7 @@ jobs:
 
   install-smoke-node:
     name: install-smoke (node ${{ matrix.node }})
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: build
     strategy:
       fail-fast: false
@@ -78,7 +78,7 @@ jobs:
 
   install-smoke-bun:
     name: install-smoke (bun)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: build
     steps:
       - uses: actions/checkout@v6
@@ -103,7 +103,7 @@ jobs:
 
   install-smoke-docker:
     name: install-smoke (docker)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: build
     steps:
       - uses: actions/checkout@v6
@@ -125,7 +125,7 @@ jobs:
 
   ecosystem-audit-smoke:
     name: ecosystem-audit-smoke (${{ matrix.ecosystem }})
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: build
     strategy:
       fail-fast: false

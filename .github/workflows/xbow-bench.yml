@@ -57,7 +57,7 @@ on:
 
 jobs:
   xbow:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 360
 
     env:

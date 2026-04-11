@@ -62,13 +62,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         whatweb wafw00f dirb \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Node.js 20 from the builder stage instead of curl-pipe-bash from nodesource.
-# This eliminates a supply-chain risk (arbitrary remote script execution) and also
-# removes a network dependency during the runtime stage build.
+# Copy the entire Node.js installation from the builder stage instead of
+# curl-pipe-bash from nodesource. This eliminates a supply-chain risk
+# (arbitrary remote script execution) and removes a network dependency.
 COPY --from=builder /usr/local/bin/node /usr/local/bin/node
-COPY --from=builder /usr/local/bin/npx /usr/local/bin/npx
-COPY --from=builder /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=builder /usr/local/include/node /usr/local/include/node
 COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 # Optional: SecLists wordlists (large)
 RUN if [ "$INSTALL_SECLISTS" = "1" ]; then \

@@ -16,11 +16,18 @@ export interface PtySession {
   outputBuffer: string;
   cwd: string;
   createdAt: number;
+  lastActivityAt: number;
   alive: boolean;
 }
 
 export class PtySessionManager {
   private sessions = new Map<string, PtySession>();
+
+  /** Maximum number of concurrent alive sessions. */
+  static readonly MAX_CONCURRENT_SESSIONS = 10;
+
+  /** Idle timeout in milliseconds (10 minutes). Sessions with no I/O are reaped. */
+  static readonly IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 
   /**
    * Create a new interactive session backed by a shell process.
@@ -30,6 +37,19 @@ export class PtySessionManager {
     for (const s of this.sessions.values()) {
       if (s.name === name && s.alive) {
         throw new Error(`Session "${name}" already exists and is alive. Close it first or use a different name.`);
+      }
+    }
+
+    // Enforce maximum concurrent session limit
+    const aliveCount = Array.from(this.sessions.values()).filter((s) => s.alive).length;
+    if (aliveCount >= PtySessionManager.MAX_CONCURRENT_SESSIONS) {
+      // Reap idle sessions first before rejecting
+      this.reapIdleSessions();
+      const aliveAfterReap = Array.from(this.sessions.values()).filter((s) => s.alive).length;
+      if (aliveAfterReap >= PtySessionManager.MAX_CONCURRENT_SESSIONS) {
+        throw new Error(
+          `Maximum concurrent session limit (${PtySessionManager.MAX_CONCURRENT_SESSIONS}) reached. Close existing sessions first.`,
+        );
       }
     }
 
@@ -49,12 +69,14 @@ export class PtySessionManager {
       outputBuffer: "",
       cwd,
       createdAt: Date.now(),
+      lastActivityAt: Date.now(),
       alive: true,
     };
 
     // Accumulate stdout
     proc.stdout?.on("data", (chunk: Buffer) => {
       session.outputBuffer += chunk.toString("utf-8");
+      session.lastActivityAt = Date.now();
       // Cap buffer at 100KB to prevent unbounded growth
       if (session.outputBuffer.length > 100_000) {
         session.outputBuffer = session.outputBuffer.slice(-50_000);
@@ -64,6 +86,7 @@ export class PtySessionManager {
     // Accumulate stderr into same buffer
     proc.stderr?.on("data", (chunk: Buffer) => {
       session.outputBuffer += chunk.toString("utf-8");
+      session.lastActivityAt = Date.now();
       if (session.outputBuffer.length > 100_000) {
         session.outputBuffer = session.outputBuffer.slice(-50_000);
       }
@@ -94,6 +117,7 @@ export class PtySessionManager {
     }
     const data = input.endsWith("\n") ? input : input + "\n";
     session.process.stdin.write(data);
+    session.lastActivityAt = Date.now();
   }
 
   /**
@@ -175,6 +199,22 @@ export class PtySessionManager {
       }
     }
     this.sessions.clear();
+  }
+
+  /**
+   * Reap sessions that have been idle longer than IDLE_TIMEOUT_MS.
+   */
+  reapIdleSessions(): void {
+    const now = Date.now();
+    for (const [id, session] of this.sessions) {
+      if (session.alive && now - session.lastActivityAt > PtySessionManager.IDLE_TIMEOUT_MS) {
+        try {
+          this.close(id);
+        } catch {
+          // Best-effort
+        }
+      }
+    }
   }
 
   /**

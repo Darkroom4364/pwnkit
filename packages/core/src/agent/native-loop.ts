@@ -196,6 +196,34 @@ export async function runNativeAgentLoop(
     });
   }
 
+  // ── Cleanup safety net ──
+  // Register signal handlers so resources are freed even on abnormal termination.
+  // SIGINT/SIGTERM allow async cleanup; process 'exit' is synchronous-only.
+  const cleanupOnce = (() => {
+    let cleaned = false;
+    return async () => {
+      if (cleaned) return;
+      cleaned = true;
+      await executor.cleanup();
+    };
+  })();
+
+  const onSignal = async () => {
+    await cleanupOnce();
+    process.exit(1);
+  };
+  const onExit = () => {
+    // process 'exit' callbacks must be synchronous — fire-and-forget cleanup
+    // (the async cleanup may not fully complete, but it kills child processes)
+    void executor.cleanup();
+  };
+
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+  process.on("exit", onExit);
+
+  try {
+
   // ── Main loop ──
 
   while (!state.done && state.turnCount < config.maxTurns) {
@@ -580,6 +608,16 @@ export async function runNativeAgentLoop(
       },
       timestamp: Date.now(),
     });
+  }
+
+  } finally {
+    // Clean up browser and PTY resources regardless of how the loop exits
+    await cleanupOnce();
+
+    // Remove signal handlers to avoid leaking listeners across calls
+    process.removeListener("SIGINT", onSignal);
+    process.removeListener("SIGTERM", onSignal);
+    process.removeListener("exit", onExit);
   }
 
   return state;

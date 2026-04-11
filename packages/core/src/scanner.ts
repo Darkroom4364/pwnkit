@@ -16,8 +16,11 @@ async function getDB(dbPath?: string) {
     try {
       const { pwnkitDB } = await import("@pwnkit/db");
       _db = new pwnkitDB(dbPath);
-    } catch {
-      // DB unavailable (native module issue) — continue without persistence
+    } catch (err) {
+      console.error('Warning: database unavailable — scan results will not be persisted');
+      if (err instanceof Error) {
+        console.error(`  Cause: ${err.message}`);
+      }
       _db = null;
     }
   }
@@ -75,123 +78,128 @@ export async function scan(
   // Default runtime for non-auto mode (and stages that don't need per-stage selection)
   const runtime = getRuntimeForStage("attack");
 
-  // Stage 1: Discovery
-  emit({ type: "stage:start", stage: "discovery", message: "Probing target..." });
-  const discovery = await runDiscovery(ctx);
-  emit({
-    type: "stage:end",
-    stage: "discovery",
-    message: discovery.success
-      ? `Target identified as ${ctx.target.type} (${discovery.durationMs}ms)`
-      : `Discovery failed: ${discovery.error}`,
-    data: discovery,
-  });
-  if (!discovery.success && discovery.error) {
-    ctx.warnings.push({
-      stage: "discovery",
-      message: `Initial target validation failed: ${discovery.error}`,
-    });
-  }
-
-  // Stage 1.5: Source Analysis (when --repo is provided with a process runtime)
-  const templates = loadTemplates(config.depth);
-  const sourceRuntime = isAuto ? getRuntimeForStage("source-analysis") : runtime;
-  if (config.repoPath && sourceRuntime.type !== "api") {
-    emit({
-      type: "stage:start",
-      stage: "source-analysis",
-      message: `Analyzing source code in ${config.repoPath}${isAuto ? ` (runtime: ${sourceRuntime.type})` : ""}...`,
-    });
-    const sourceResult = await runSourceAnalysis(ctx, templates, sourceRuntime, config.repoPath);
+  try {
+    // Stage 1: Discovery
+    emit({ type: "stage:start", stage: "discovery", message: "Probing target..." });
+    const discovery = await runDiscovery(ctx);
     emit({
       type: "stage:end",
-      stage: "source-analysis",
-      message: sourceResult.data.findings.length > 0
-        ? `Found ${sourceResult.data.findings.length} source-level issues across ${sourceResult.data.templatesAnalyzed} categories (${sourceResult.durationMs}ms)`
-        : `No source-level issues found across ${sourceResult.data.templatesAnalyzed} categories (${sourceResult.durationMs}ms)`,
-      data: sourceResult,
+      stage: "discovery",
+      message: discovery.success
+        ? `Target identified as ${ctx.target.type} (${discovery.durationMs}ms)`
+        : `Discovery failed: ${discovery.error}`,
+      data: discovery,
     });
-  }
+    if (!discovery.success && discovery.error) {
+      ctx.warnings.push({
+        stage: "discovery",
+        message: `Initial target validation failed: ${discovery.error}`,
+      });
+    }
 
-  // Stage 2: Attack
-  const attackRuntime = isAuto ? getRuntimeForStage("attack") : runtime;
-  emit({
-    type: "stage:start",
-    stage: "attack",
-    message: `Running ${templates.length} templates${isAuto ? ` (runtime: ${attackRuntime.type})` : ""}...`,
-  });
+    // Stage 1.5: Source Analysis (when --repo is provided with a process runtime)
+    const templates = loadTemplates(config.depth);
+    const sourceRuntime = isAuto ? getRuntimeForStage("source-analysis") : runtime;
+    if (config.repoPath && sourceRuntime.type !== "api") {
+      emit({
+        type: "stage:start",
+        stage: "source-analysis",
+        message: `Analyzing source code in ${config.repoPath}${isAuto ? ` (runtime: ${sourceRuntime.type})` : ""}...`,
+      });
+      const sourceResult = await runSourceAnalysis(ctx, templates, sourceRuntime, config.repoPath);
+      emit({
+        type: "stage:end",
+        stage: "source-analysis",
+        message: sourceResult.data.findings.length > 0
+          ? `Found ${sourceResult.data.findings.length} source-level issues across ${sourceResult.data.templatesAnalyzed} categories (${sourceResult.durationMs}ms)`
+          : `No source-level issues found across ${sourceResult.data.templatesAnalyzed} categories (${sourceResult.durationMs}ms)`,
+        data: sourceResult,
+      });
+    }
 
-  const attackResult = await runAttacks(ctx, templates, attackRuntime);
-  emit({
-    type: "stage:end",
-    stage: "attack",
-    message: `Executed ${attackResult.data.payloadsRun} payloads across ${attackResult.data.templatesRun} templates (${attackResult.durationMs}ms)`,
-    data: attackResult,
-  });
-  if (
-    attackResult.data.payloadsRun > 0 &&
-    attackResult.data.results.length > 0 &&
-    attackResult.data.results.every((result) => result.outcome === "error")
-  ) {
-    const firstError = attackResult.data.results.find((result) => result.error)?.error;
-    ctx.warnings.push({
-      stage: "attack",
-      message: firstError
-        ? `All attack probes failed: ${firstError}`
-        : "All attack probes failed before the target could be validated.",
-    });
-  }
-
-  // Stage 3: Verify
-  emit({ type: "stage:start", stage: "verify", message: "Verifying findings..." });
-  const verifyResult = await runVerification(ctx, db);
-  emit({
-    type: "stage:end",
-    stage: "verify",
-    message: `${verifyResult.data.confirmed} confirmed, ${verifyResult.data.findings.length} total findings (${verifyResult.durationMs}ms)`,
-    data: verifyResult,
-  });
-
-  // Persist findings to DB after verification (if DB available)
-  if (db) {
-    db.transaction(() => {
-      db.upsertTarget(ctx.target);
-      for (const finding of verifyResult.data.findings) {
-        db.saveFinding(scanId, finding);
-      }
-      for (const result of ctx.attacks) {
-        db.saveAttackResult(scanId, result);
-      }
-    });
-  }
-
-  // Emit individual findings
-  for (const finding of verifyResult.data.findings) {
+    // Stage 2: Attack
+    const attackRuntime = isAuto ? getRuntimeForStage("attack") : runtime;
     emit({
-      type: "finding",
-      message: `[${finding.severity.toUpperCase()}] ${finding.title}`,
-      data: finding,
+      type: "stage:start",
+      stage: "attack",
+      message: `Running ${templates.length} templates${isAuto ? ` (runtime: ${attackRuntime.type})` : ""}...`,
     });
+
+    const attackResult = await runAttacks(ctx, templates, attackRuntime);
+    emit({
+      type: "stage:end",
+      stage: "attack",
+      message: `Executed ${attackResult.data.payloadsRun} payloads across ${attackResult.data.templatesRun} templates (${attackResult.durationMs}ms)`,
+      data: attackResult,
+    });
+    if (
+      attackResult.data.payloadsRun > 0 &&
+      attackResult.data.results.length > 0 &&
+      attackResult.data.results.every((result) => result.outcome === "error")
+    ) {
+      const firstError = attackResult.data.results.find((result) => result.error)?.error;
+      ctx.warnings.push({
+        stage: "attack",
+        message: firstError
+          ? `All attack probes failed: ${firstError}`
+          : "All attack probes failed before the target could be validated.",
+      });
+    }
+
+    // Stage 3: Verify
+    emit({ type: "stage:start", stage: "verify", message: "Verifying findings..." });
+    const verifyResult = await runVerification(ctx, db);
+    emit({
+      type: "stage:end",
+      stage: "verify",
+      message: `${verifyResult.data.confirmed} confirmed, ${verifyResult.data.findings.length} total findings (${verifyResult.durationMs}ms)`,
+      data: verifyResult,
+    });
+
+    // Persist findings to DB after verification (if DB available)
+    if (db) {
+      db.transaction(() => {
+        db.upsertTarget(ctx.target);
+        for (const finding of verifyResult.data.findings) {
+          db.saveFinding(scanId, finding);
+        }
+        for (const result of ctx.attacks) {
+          db.saveAttackResult(scanId, result);
+        }
+      });
+    }
+
+    // Emit individual findings
+    for (const finding of verifyResult.data.findings) {
+      emit({
+        type: "finding",
+        message: `[${finding.severity.toUpperCase()}] ${finding.title}`,
+        data: finding,
+      });
+    }
+
+    // Stage 4: Report
+    emit({ type: "stage:start", stage: "report", message: "Generating report..." });
+    finalize(ctx);
+    const reportResult = await generateReport(ctx);
+    emit({
+      type: "stage:end",
+      stage: "report",
+      message: `Report generated (${reportResult.durationMs}ms)`,
+      data: reportResult,
+    });
+
+    // Mark scan complete in DB (if available)
+    if (db) {
+      db.completeScan(scanId, reportResult.data.summary as unknown as Record<string, unknown>);
+    }
+
+    return reportResult.data;
+  } finally {
+    if (db) {
+      db.close();
+      // Reset the singleton so subsequent scans open a fresh connection
+      _db = null;
+    }
   }
-
-  // Stage 4: Report
-  emit({ type: "stage:start", stage: "report", message: "Generating report..." });
-  finalize(ctx);
-  const reportResult = await generateReport(ctx);
-  emit({
-    type: "stage:end",
-    stage: "report",
-    message: `Report generated (${reportResult.durationMs}ms)`,
-    data: reportResult,
-  });
-
-  // Mark scan complete in DB (if available)
-  if (db) {
-    db.completeScan(scanId, reportResult.data.summary as unknown as Record<string, unknown>);
-    db.close();
-    // Reset the singleton so subsequent scans open a fresh connection
-    _db = null;
-  }
-
-  return reportResult.data;
 }

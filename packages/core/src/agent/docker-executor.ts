@@ -73,6 +73,7 @@ export class DockerExecutor {
   private constructor() {
     this.containerName = `${CONTAINER_PREFIX}-${randomUUID().slice(0, 8)}`;
     this.image = process.env.PWNKIT_DOCKER_IMAGE || PREBUILT_IMAGE;
+    this.registerExitHandlers();
   }
 
   /** Singleton — one container per process. */
@@ -81,6 +82,37 @@ export class DockerExecutor {
       DockerExecutor.instance = new DockerExecutor();
     }
     return DockerExecutor.instance;
+  }
+
+  /**
+   * Register process exit handlers to ensure the container is cleaned up
+   * when the process exits, preventing orphaned containers.
+   */
+  private registerExitHandlers(): void {
+    const cleanup = () => {
+      if (this.containerId) {
+        try {
+          execSync(`docker rm -f ${this.containerId}`, {
+            timeout: 10_000,
+            stdio: "pipe",
+          });
+        } catch {
+          // Best-effort cleanup on exit
+        }
+        this.containerId = null;
+        this.ready = false;
+      }
+    };
+
+    process.on("exit", cleanup);
+    process.on("SIGTERM", () => {
+      cleanup();
+      process.exit(143);
+    });
+    process.on("SIGINT", () => {
+      cleanup();
+      process.exit(130);
+    });
   }
 
   /** Reset the singleton (for testing). */
@@ -116,16 +148,19 @@ export class DockerExecutor {
 
     // Start the container with:
     //  - shared /tmp/pwnkit-shared volume for file exchange
-    //  - host networking so it can reach targets
+    //  - bridge networking (default) for isolation; override with PWNKIT_DOCKER_NETWORK=host if needed
+    //  - --rm so the container is auto-removed when stopped
     //  - long-running sleep to keep it alive
+    const networkMode = process.env.PWNKIT_DOCKER_NETWORK || "bridge";
     const runCmd = [
       "docker",
       "run",
       "-d",
+      "--rm",
       "--name",
       this.containerName,
       "--network",
-      "host",
+      networkMode,
       "-v",
       "/tmp/pwnkit-shared:/shared",
       "-e",

@@ -61,3 +61,32 @@ jobs:
             org.opencontainers.image.licenses=Apache-2.0
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke-test published image
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/pwnkit-labs/pwnkit-kali:${{ steps.tag.outputs.value }}"
+          docker pull "$IMAGE"
+          # Exec every new tool (and representative old ones) as the non-root
+          # pentester user. Any failure fails the job so broken tool additions
+          # can't silently ship.
+          docker run --rm --entrypoint bash "$IMAGE" -c '
+            set -e
+            echo "=== whoami ===" && whoami
+            echo "=== nmap ==="        && nmap --version | head -1
+            echo "=== sqlmap ==="      && sqlmap --version
+            echo "=== gdb ==="         && gdb --version | head -1
+            echo "=== gdb-multiarch ===" && gdb-multiarch --version | head -1
+            echo "=== radare2 ==="     && r2 -v | head -1
+            echo "=== binwalk ==="     && binwalk --help 2>&1 | head -1
+            echo "=== foremost ==="    && foremost -V 2>&1 | head -1 || true
+            echo "=== exiftool ==="    && exiftool -ver
+            echo "=== ltrace ==="      && ltrace -V | head -1
+            echo "=== strace ==="      && strace -V | head -1
+            echo "=== file ==="        && file --version | head -1
+            echo "=== objdump ==="     && objdump --version | head -1
+            echo "=== ROPgadget ==="   && ROPgadget --help 2>&1 | head -1
+            echo "=== python pwntools ===" && python3 -c "from pwn import context; print(\"pwntools ok\")"
+            echo "=== python requests ===" && python3 -c "import requests, bs4; print(\"py deps ok\")"
+            echo "ALL_TOOLS_OK"
+          '

@@ -13,14 +13,18 @@ import { ToolExecutor, getToolsForRole } from "./tools.js";
 import { features } from "./features.js";
 import { detectPlaybooks, buildPlaybookInjection } from "./playbooks.js";
 import { estimateCost } from "./cost.js";
+import { EXTERNAL_MEMORY_PATH_PLACEHOLDER } from "./prompts.js";
 import type { pwnkitDB } from "@pwnkit/db";
 import type { Finding, AttackResult, TargetInfo } from "@pwnkit/shared";
 
 // ── External Memory ──
-// The agent can persist working state (creds, endpoints, attack plans) to this
-// file via bash. At reflection checkpoints the contents are injected back into
-// the conversation so the agent doesn't lose track of discoveries.
-const EXTERNAL_MEMORY_PATH = "/tmp/pwnkit-state.json";
+// The agent can persist working state (creds, endpoints, attack plans) to a
+// per-scan file via bash. At reflection checkpoints the contents are injected
+// back into the conversation so the agent doesn't lose track of discoveries.
+// Each scan gets its own isolated file to prevent cross-scan data leaks.
+function externalMemoryPath(scanId: string): string {
+  return `/tmp/pwnkit-state-${scanId}.json`;
+}
 const EXTERNAL_MEMORY_MAX_CHARS = 2000;
 
 // ── Native Agent Loop Config ──
@@ -101,6 +105,18 @@ export async function runNativeAgentLoop(
 ): Promise<NativeAgentState> {
   const { config, runtime, db, onTurn, onEvent } = opts;
 
+  // Per-scan isolated memory file path
+  const memoryPath = externalMemoryPath(config.scanId || randomUUID());
+
+  // Replace the placeholder in the system prompt so the agent writes to the
+  // correct per-scan file instead of a global singleton.
+  if (config.systemPrompt) {
+    config.systemPrompt = config.systemPrompt.replaceAll(
+      EXTERNAL_MEMORY_PATH_PLACEHOLDER,
+      memoryPath,
+    );
+  }
+
   const toolCtx: ToolContext = {
     target: config.target,
     scanId: config.scanId,
@@ -147,7 +163,7 @@ export async function runNativeAgentLoop(
 
     // Clean up external memory file at the start of a new scan (not between retries)
     if (features.externalMemory && (config.retryCount ?? 0) === 0) {
-      try { fs.unlinkSync(EXTERNAL_MEMORY_PATH); } catch { /* file may not exist */ }
+      try { fs.unlinkSync(memoryPath); } catch { /* file may not exist */ }
     }
   }
 
@@ -343,7 +359,7 @@ export async function runNativeAgentLoop(
           content: [
             {
               type: "text",
-              text: buildContinuePrompt(config, state.turnCount),
+              text: buildContinuePrompt(config, state.turnCount, memoryPath),
             },
           ],
         });
@@ -613,6 +629,11 @@ export async function runNativeAgentLoop(
   } finally {
     // Clean up browser and PTY resources regardless of how the loop exits
     await cleanupOnce();
+
+    // Clean up per-scan external memory file to avoid leaking state on disk
+    if (features.externalMemory) {
+      try { fs.unlinkSync(memoryPath); } catch { /* file may not exist */ }
+    }
 
     // Remove signal handlers to avoid leaking listeners across calls
     process.removeListener("SIGINT", onSignal);
@@ -968,10 +989,12 @@ const LOOP_WARNING =
  * to append to the reflection checkpoint prompt, or an empty string if the
  * file doesn't exist or the feature is off.
  */
-function readExternalMemory(): string {
+function readExternalMemory(filePath: string): string {
   try {
-    const raw = fs.readFileSync(EXTERNAL_MEMORY_PATH, "utf-8");
+    const raw = fs.readFileSync(filePath, "utf-8");
     if (!raw.trim()) return "";
+    // Restrict permissions on agent-written file (owner read/write only)
+    try { fs.chmodSync(filePath, 0o600); } catch { /* best-effort */ }
     const capped = raw.length > EXTERNAL_MEMORY_MAX_CHARS
       ? raw.slice(0, EXTERNAL_MEMORY_MAX_CHARS) + "\n...(truncated)"
       : raw;
@@ -991,13 +1014,13 @@ function buildInitialPrompt(config: NativeAgentConfig): string {
   ].join("\n");
 }
 
-function buildContinuePrompt(config: NativeAgentConfig, turnCount: number): string {
+function buildContinuePrompt(config: NativeAgentConfig, turnCount: number, memPath: string): string {
   const pct = turnCount / config.maxTurns;
   const remaining = config.maxTurns - turnCount;
 
   // Read external memory at reflection checkpoints (30%/50%/70%/85%)
   const memorySuffix = (pct >= 0.3 && features.externalMemory)
-    ? readExternalMemory()
+    ? readExternalMemory(memPath)
     : "";
 
   // Multi-checkpoint budget awareness (inspired by Cyber-AutoAgent)

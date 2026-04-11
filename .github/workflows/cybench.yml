@@ -34,7 +34,7 @@ on:
 jobs:
   cybench:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 540
 
     env:
       CYBENCH_PATH: /tmp/cybench
@@ -159,7 +159,7 @@ jobs:
           fi
           echo "Running Cybench benchmark... (start=$START, limit=$LIMIT, only=$ONLY, retries=$RETRIES, fresh=$FRESH)"
           pnpm --filter @pwnkit/benchmark cybench --save-findings --limit "$LIMIT" --retries "$RETRIES" $START_FLAG $ONLY_FLAG $FRESH_FLAG
-        timeout-minutes: 330
+        timeout-minutes: 510
 
       - name: Upload results artifact
         if: always()

@@ -38,6 +38,11 @@ import type { RuntimeMode } from "@pwnkit/shared";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CYBENCH_PATH = process.env.CYBENCH_PATH ?? "/tmp/cybench";
 
+// Hard wall-clock ceiling per challenge attempt (including Docker start/stop,
+// retries are separate attempts). Prevents a single hung challenge from
+// consuming the entire CI budget.
+const PER_CHALLENGE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+
 // ── CLI Args ──
 const args = process.argv.slice(2);
 const limit = args.includes("--limit") ? parseInt(args[args.indexOf("--limit") + 1]) : Infinity;
@@ -108,6 +113,30 @@ function chooseBetterResult(a: CybenchResult, b: CybenchResult): CybenchResult {
 }
 
 // ── Load Challenges ──
+/** Race a promise against a wall-clock timeout. */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Per-challenge timeout (${ms / 1000}s) exceeded: ${label}`)), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
+/** Prune stopped containers, dangling images, and unused networks/volumes. */
+function dockerCleanup(): void {
+  try {
+    execSync("docker container prune -f", { stdio: "pipe", timeout: 30_000 });
+  } catch {}
+  try {
+    execSync("docker volume prune -f", { stdio: "pipe", timeout: 30_000 });
+  } catch {}
+  try {
+    execSync("docker network prune -f", { stdio: "pipe", timeout: 30_000 });
+  } catch {}
+}
+
 function slugify(s: string): string {
   return s
     .toLowerCase()
@@ -352,13 +381,37 @@ async function runChallengeOnce(challenge: CybenchChallenge): Promise<CybenchRes
   }
 }
 
+async function runChallengeWithTimeout(challenge: CybenchChallenge): Promise<CybenchResult> {
+  try {
+    return await withTimeout(
+      runChallengeOnce(challenge),
+      PER_CHALLENGE_TIMEOUT_MS,
+      challenge.id,
+    );
+  } catch (err) {
+    // On timeout, force-stop Docker resources for this challenge
+    stopChallenge(challenge);
+    return {
+      id: challenge.id,
+      name: challenge.name,
+      category: challenge.category,
+      difficulty: challenge.difficulty,
+      passed: false,
+      flagFound: false,
+      findingsCount: 0,
+      durationMs: PER_CHALLENGE_TIMEOUT_MS,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 async function runChallenge(challenge: CybenchChallenge): Promise<CybenchResult> {
-  let result = await runChallengeOnce(challenge);
+  let result = await runChallengeWithTimeout(challenge);
   for (let attempt = 2; attempt <= retries && !result.flagFound && !result.error; attempt++) {
     if (!jsonOutput) {
       process.stdout.write(`  ... retry ${attempt}/${retries}\n`);
     }
-    const next = await runChallengeOnce(challenge);
+    const next = await runChallengeWithTimeout(challenge);
     result = chooseBetterResult(result, next);
     if (result.flagFound) break;
   }
@@ -428,6 +481,10 @@ async function main() {
       const time = `${(result.durationMs / 1000).toFixed(0)}s`;
       console.log(`  ${icon} ${challenge.name.slice(0, 50).padEnd(50)} ${result.findingsCount} findings  ${time}${result.error ? `  err: ${result.error.slice(0, 40)}` : ""}`);
     }
+
+    // Reclaim Docker resources between challenges to prevent disk/memory
+    // exhaustion on long runs (especially full-40).
+    dockerCleanup();
   }
 
   const passed = results.filter((r) => r.passed).length;

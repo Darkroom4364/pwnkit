@@ -1059,10 +1059,52 @@ export class ToolExecutor {
     }
   }
 
+  // ── Bash scope enforcement (defense-in-depth) ──
+
+  private static readonly DANGEROUS_COMMANDS: readonly RegExp[] = [
+    /\brm\s+(-\w*)?r\w*\s+(-\w*\s+)*\/\s*$/,    // rm -rf /
+    /\brm\s+(-\w*)?r\w*\s+(-\w*\s+)*\/\s*$/,     // rm variants targeting root
+    /\bmkfs\b/,                                    // format filesystem
+    /\bdd\s+if=/,                                  // raw disk write
+    /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/,   // fork bomb
+    /\bchmod\s+(-\w*\s+)*777\s+\//,               // chmod -R 777 /
+    /\bshutdown\b/,                                // shutdown
+    /\breboot\b/,                                  // reboot
+    /\bkill\s+(-\d+\s+)?1\b/,                     // kill init/PID 1
+    /\binit\s+0\b/,                                // init 0 (halt)
+    /\bhalt\b/,                                    // halt
+    /\bsystemctl\s+(poweroff|halt|reboot)\b/,      // systemctl poweroff/halt/reboot
+    />\s*\/dev\/[sh]da/,                           // write to raw disk device
+    /\bformat\s+[cC]:/,                            // Windows format (just in case)
+  ];
+
+  private isCommandBlocked(command: string): string | null {
+    if (process.env.PWNKIT_UNSAFE_BASH === "1") {
+      return null;
+    }
+    for (const pattern of ToolExecutor.DANGEROUS_COMMANDS) {
+      if (pattern.test(command)) {
+        return `Blocked: command matches dangerous pattern (${pattern}). Set PWNKIT_UNSAFE_BASH=1 to override.`;
+      }
+    }
+    return null;
+  }
+
   private async shellExec(args: Record<string, unknown>): Promise<ToolResult> {
     const command = (args.command as string)?.trim();
     if (!command) {
       return { success: false, output: null, error: "Command is required" };
+    }
+
+    // Scope enforcement: block obviously destructive commands
+    const blocked = this.isCommandBlocked(command);
+    if (blocked) {
+      return { success: false, output: null, error: blocked };
+    }
+
+    // Warn when running in native mode (no Docker isolation)
+    if (!process.env.PWNKIT_FEATURE_DOCKER_EXECUTOR || process.env.PWNKIT_FEATURE_DOCKER_EXECUTOR !== "1") {
+      console.error("Warning: bash tool running in native mode without Docker isolation");
     }
 
     const timeoutSec = Math.min((args.timeout as number) ?? 30, 120);

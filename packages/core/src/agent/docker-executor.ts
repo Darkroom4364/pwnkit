@@ -116,16 +116,19 @@ export class DockerExecutor {
 
     // Start the container with:
     //  - shared /tmp/pwnkit-shared volume for file exchange
-    //  - host networking so it can reach targets
+    //  - configurable network (defaults to bridge for isolation)
+    //  - --rm for automatic cleanup on exit
     //  - long-running sleep to keep it alive
+    const network = process.env.PWNKIT_DOCKER_NETWORK || "bridge";
     const runCmd = [
       "docker",
       "run",
       "-d",
+      "--rm",
       "--name",
       this.containerName,
       "--network",
-      "host",
+      network,
       "-v",
       "/tmp/pwnkit-shared:/shared",
       "-e",
@@ -143,6 +146,20 @@ export class DockerExecutor {
     }).trim();
 
     this.containerId = id;
+
+    // Register exit handlers to stop the container on process termination
+    const cleanup = () => {
+      if (this.containerId) {
+        try {
+          execSync(`docker rm -f ${this.containerId}`, { timeout: 15_000, stdio: "pipe" });
+        } catch {
+          // best-effort
+        }
+      }
+    };
+    process.once("SIGTERM", cleanup);
+    process.once("SIGINT", cleanup);
+    process.once("exit", cleanup);
 
     // The GHCR image is pre-baked with the standard toolchain.
     // Keep the legacy Kali bootstrap path for raw-image fallback.

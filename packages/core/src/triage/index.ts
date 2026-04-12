@@ -38,6 +38,8 @@ export type {
   FusedDecision,
 } from "./multi-modal.js";
 export { MemoryStore, scoreMemory, inferPackage } from "./memories.js";
+export { routeFinding } from "./learned-router.js";
+export type { RouterResult, RouterDecision } from "./learned-router.js";
 export type {
   TriageMemory,
   MemoryScope,

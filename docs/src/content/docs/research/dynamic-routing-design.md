@@ -110,6 +110,42 @@ Three candidates, in order of preference:
 
 **Recommendation:** Ship Option A first. It's the simplest thing that could clear the bar. If XGBoost-on-features beats every static profile on every slice, that's a complete paper in itself and we don't need a neural model. If it doesn't, we know exactly how much headroom Option B needs to justify its cost.
 
+### Phase 3 results (2026-04-12): Option A trained and evaluated
+
+XGBoost (100 trees, depth 5, focal-loss-style `scale_pos_weight`) trained on `triage-dataset-v2.jsonl` (1514 rows). Model at `packages/benchmark/results/triage-router-v1.json`.
+
+**Aggregate 5-fold CV:** F1=0.944, precision=0.969, recall=0.920, AUC=0.886.
+
+**Leave-one-slice-out (the generalization test):**
+
+| Held-out | F1 | TP recall | FP recall |
+|---|---:|---:|---:|
+| npm-bench | **0.664** | 50% | 84% |
+| xbow-bb | 0.859 | 78% | 33% |
+| xbow-wb | 0.900 | 93% | 12% |
+
+**Cross-slice generalization is poor.** A model trained on xbow catches only 50% of npm-bench TPs. Adding slice-type indicators (+3 features) improved npm-bench to 0.705 — marginal.
+
+**Per-slice classifiers (Path B) are the clear winner:**
+
+| Slice | Within-slice F1 |
+|---|---:|
+| npm-bench | **0.930** ± 0.025 |
+| xbow-wb | **0.914** ± 0.023 |
+| xbow-bb | 0.721 ± 0.363 (n=115) |
+
+**Feature importance is completely different per slice:**
+- npm-bench: `text_description_length` (50%) — longer descriptions predict TP
+- xbow-bb: `cross_response_request_length_ratio` (53%) — bigger response ratio predicts TP
+- xbow-wb: `req_path_traversal` (12%), `req_param_count` (12%), `resp_error_message` (7%) — actual exploit indicators
+
+**Decision:** Per-slice classifiers (Path B) are the deployment target. The scanner knows its mode + target-type at scan start — dispatch to the right classifier. Each runs sub-millisecond on CPU. The augmented single-model approach (Path A) does not clear the bar for npm-bench generalization.
+
+**Deployment options (ordered by shipping speed):**
+1. **Hand-coded thresholds** from the model's learned splits — ships today in TypeScript, zero deps
+2. **JS XGBoost loader** — npm package that reads the JSON model, moderate accuracy
+3. **ONNX runtime** — export to ONNX, load via `onnxruntime-node`, highest accuracy, adds native dep
+
 ## Training objective
 
 For the multi-label routing head (one binary classifier per layer):

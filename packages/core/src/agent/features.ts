@@ -131,6 +131,19 @@ export const features = {
   evidenceGate: env("PWNKIT_FEATURE_EVIDENCE_GATE", true),
 
   /**
+   * Learned per-finding triage router (`packages/core/src/triage/learned-router.ts`).
+   * When enabled, findings are scored by hand-coded rules derived from the
+   * XGBoost model trained on triage-dataset-v2.jsonl (1514 rows). High-confidence
+   * findings auto-accept (skipping expensive layers); low-confidence findings
+   * auto-reject; the middle band gets routed to a subset of layers based on
+   * the scan's slice type (xbow-wb, xbow-bb, npm).
+   *
+   * Default OFF until the router is validated via A/B testing on xbow-bench
+   * and npm-bench. See pwnkit#113 for the design doc.
+   */
+  learnedRouter: env("PWNKIT_FEATURE_LEARNED_ROUTER", false),
+
+  /**
    * Opt-in cloud-sink webhook integration (`packages/core/src/cloud-sink.ts`).
    * When enabled AND the user has set PWNKIT_CLOUD_SINK + PWNKIT_CLOUD_SCAN_ID,
    * every finding and the final scan report are POSTed to the configured

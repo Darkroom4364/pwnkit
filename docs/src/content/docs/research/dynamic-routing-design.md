@@ -100,11 +100,11 @@ Three candidates, in order of preference:
 
 - **Pros:** Matches VulnBERT's architecture — handcrafted features linearly projected, fused with a neural text embedding via cross-attention, classification head on top. The winning numbers on kernel commits are 92.2% recall / 1.2% FPR with this exact shape. We have the feature half shipped; CodeBERT is off-the-shelf at `microsoft/codebert-base`.
 - **Cons:** Inference cost is higher (CodeBERT forward pass is ~10ms on CPU, ~1ms on GPU — not sub-millisecond). Training needs a GPU for any reasonable turnaround. The model weights are ~125M parameters, too big to ship in the npm package; we'd need a separate model distribution mechanism (HuggingFace Hub at inference time, or a local cache directory).
-- **When it wins:** If Option A plateaus below the "beat every static profile" bar, and if we're willing to pay the inference cost for a measurable accuracy gain. This is the option Guanni Qu's VulnBERT research is most directly aligned with, and the co-authored paper direction.
+- **When it wins:** If Option A plateaus below the "beat every static profile" bar, and if we're willing to pay the inference cost for a measurable accuracy gain. This is the option most directly aligned with VulnBERT's published architecture (Guanni Qu, Pebblebed Research Residency).
 
 ### Option C: Knowledge distillation from a larger LLM
 
-- **Pros:** Could clear the "bigger LLMs are the future" argument Guanni raised on 2026-04-10. Fine-tune GPT-5.4-mini on the routing labels, distill into a small student model for inference.
+- **Pros:** Could leverage larger text encoders for richer embeddings. Fine-tune GPT-5.4-mini on the routing labels, distill into a small student model for inference.
 - **Cons:** Highest training cost, most complex pipeline, slowest iteration.
 - **When it wins:** If Options A and B both plateau and we're ready to commit a sprint to a real ML pipeline.
 
@@ -146,8 +146,8 @@ And a recall metric: **per-category recall breakdown**. No category should lose 
 2. **Phase 2: training data v2.** Re-run the 21-profile ablation matrix against a commit that has [pwnkit#112](https://github.com/PwnKit-Labs/pwnkit/issues/112)'s `layerVerdicts` populated across the board. This produces `triage-dataset-v2.jsonl` with per-layer supervision on every row. Target: ~3 days.
 3. **Phase 3: Option A XGBoost baseline.** Train, evaluate against the three bars above, report results publicly. Target: ~1 week.
 4. **Phase 4: decision.** If Option A clears the bar, ship it behind `PWNKIT_FEATURE_LEARNED_ROUTER=1`, A/B test in CI, promote to default when stable. If Option A plateaus, proceed to Phase 5.
-5. **Phase 5 (contingent): Option B cross-attention model.** Fine-tune CodeBERT + feature projection + routing head on v2 dataset. Target: ~3-4 weeks (requires GPU, distribution pipeline, inference integration). This is the joint paper contribution with [Guanni Qu](https://pebblebed.com/blog/kernel-bugs) at Pebblebed Research Residency.
-6. **Phase 6: joint paper.** Submit to a security venue (IEEE S&P, USENIX Security, CCS). Scope: "Learned dynamic triage routing for LLM-agent vulnerability scanners." First half of the empirical section is the [2026-04-11 ablation writeup](/research/2026-04-11-ablation/); second half is the router's measured improvement over the best static profile per slice.
+5. **Phase 5 (contingent): Option B cross-attention model.** Fine-tune CodeBERT + feature projection + routing head on v2 dataset. Target: ~3-4 weeks (requires GPU, distribution pipeline, inference integration). This is the option most aligned with the [VulnBERT](https://pebblebed.com/blog/kernel-bugs) hybrid architecture.
+6. **Phase 6: paper.** Submit to a security venue (IEEE S&P, USENIX Security, CCS). Scope: "Learned dynamic triage routing for LLM-agent vulnerability scanners." First half of the empirical section is the [2026-04-11 ablation writeup](/research/2026-04-11-ablation/); second half is the router's measured improvement over the best static profile per slice.
 
 ## Open questions
 

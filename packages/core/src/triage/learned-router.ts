@@ -1,41 +1,108 @@
 /**
- * Learned Triage Router — v1 hand-coded rules derived from XGBoost
+ * Learned Triage Router — loads the XGBoost model at runtime
  *
- * The XGBoost model trained on triage-dataset-v2.jsonl (1514 rows) found
- * that per-slice classifiers beat any single mixed-data model. The top
- * features by slice are:
+ * Pure TypeScript tree evaluator that reads the XGBoost JSON model format
+ * directly. No native bindings, no ONNX, no Python. Sub-millisecond
+ * inference on CPU.
  *
- *   - xbow white-box: meta_confidence, req_param_count, evidence_completeness
- *   - xbow black-box: cross_response_request_length_ratio, meta_injection_class
- *   - npm-bench: text_description_length, text_analysis_length
- *
- * This module implements the auto-accept / auto-reject thresholds the
- * XGBoost model learned, as hand-coded TypeScript rules. It's Option 2
- * from the dynamic routing design doc — ships today, zero deps, sub-ms.
- *
- * The full XGBoost JSON model is at packages/benchmark/results/triage-router-v1.json
- * for anyone who wants to integrate via ONNX or a JS tree evaluator.
+ * The model was trained on triage-dataset-v2.jsonl (1514 rows) and
+ * achieves F1=0.944 in 5-fold CV on the 45-feature vector. Per-slice
+ * performance: npm-bench F1=0.930, xbow-wb F1=0.914, xbow-bb F1=0.721.
  *
  * Feature flag: PWNKIT_FEATURE_LEARNED_ROUTER (default OFF).
- * See pwnkit#113 for the design doc and pwnkit#72 for the ablation data.
+ * See pwnkit#113 for the design doc.
  */
 
-import type { Finding, Severity, TriageLayerName } from "@pwnkit/shared";
+import { readFileSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Finding, TriageLayerName } from "@pwnkit/shared";
 import { extractFeatures, FEATURE_NAMES } from "./feature-extractor.js";
+
+// ────────────────────────────────────────────────────────────────────
+// XGBoost JSON model evaluator (pure TypeScript, ~50 lines of logic)
+// ────────────────────────────────────────────────────────────────────
+
+interface XGBTree {
+  split_indices: number[];
+  split_conditions: number[];
+  left_children: number[];
+  right_children: number[];
+  base_weights: number[];
+  default_left: number[];
+}
+
+interface XGBModel {
+  trees: XGBTree[];
+  baseScore: number;
+}
+
+function parseModel(json: unknown): XGBModel {
+  const d = json as Record<string, unknown>;
+  const learner = d.learner as Record<string, unknown>;
+  const params = learner.learner_model_param as Record<string, string>;
+  const gb = learner.gradient_booster as Record<string, unknown>;
+  const model = gb.model as Record<string, unknown>;
+  const rawTrees = model.trees as Record<string, unknown>[];
+
+  const trees: XGBTree[] = rawTrees.map((t) => ({
+    split_indices: t.split_indices as number[],
+    split_conditions: t.split_conditions as number[],
+    left_children: t.left_children as number[],
+    right_children: t.right_children as number[],
+    base_weights: t.base_weights as number[],
+    default_left: t.default_left as number[],
+  }));
+
+  const rawBase = (params.base_score ?? "0.5").replace(/[\[\]]/g, "");
+  return {
+    trees,
+    baseScore: parseFloat(rawBase) || 0.5,
+  };
+}
+
+function evaluateTree(tree: XGBTree, features: number[]): number {
+  let nodeIdx = 0;
+  while (tree.left_children[nodeIdx] !== -1) {
+    const splitFeature = tree.split_indices[nodeIdx];
+    const splitValue = tree.split_conditions[nodeIdx];
+    const featureValue = features[splitFeature] ?? 0;
+
+    if (featureValue < splitValue) {
+      nodeIdx = tree.left_children[nodeIdx];
+    } else {
+      nodeIdx = tree.right_children[nodeIdx];
+    }
+  }
+  return tree.base_weights[nodeIdx];
+}
+
+function sigmoid(x: number): number {
+  return 1 / (1 + Math.exp(-x));
+}
+
+function predict(model: XGBModel, features: number[]): number {
+  let sum = model.baseScore;
+  for (const tree of model.trees) {
+    sum += evaluateTree(tree, features);
+  }
+  return sigmoid(sum);
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Router API
+// ────────────────────────────────────────────────────────────────────
 
 export type RouterDecision = "auto_accept" | "auto_reject" | "run_layers";
 
 export interface RouterResult {
   decision: RouterDecision;
-  confidence: number;
+  /** Model's TP probability (0-1). */
+  tpProbability: number;
   reason: string;
-  /** Which layers to run if decision === "run_layers". Empty otherwise. */
   layersToRun: TriageLayerName[];
-  /** Which layers to skip. Inverse of layersToRun. */
   layersToSkip: TriageLayerName[];
 }
-
-type SliceType = "xbow-wb" | "xbow-bb" | "npm" | "unknown";
 
 const ALL_TRIAGE_LAYERS: TriageLayerName[] = [
   "holding_it_wrong",
@@ -58,178 +125,102 @@ const EXPENSIVE_LAYERS: TriageLayerName[] = [
   "pov_gate",
 ];
 
-function featureByName(features: number[], name: string): number {
-  const idx = FEATURE_NAMES.indexOf(name);
-  return idx >= 0 ? features[idx] ?? 0 : 0;
+let cachedModel: XGBModel | null = null;
+
+function getModel(): XGBModel | null {
+  if (cachedModel) return cachedModel;
+
+  const thisDir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    // From packages/core/src/triage/ → packages/benchmark/results/
+    join(thisDir, "../../../../benchmark/results/triage-router-v1.json"),
+    // From packages/core/dist/triage/ → packages/benchmark/results/
+    join(thisDir, "../../../../benchmark/results/triage-router-v1.json"),
+    // From monorepo root
+    join(process.cwd(), "packages/benchmark/results/triage-router-v1.json"),
+    // From packages/core/
+    join(process.cwd(), "../benchmark/results/triage-router-v1.json"),
+    // Fallback
+    join(process.cwd(), "triage-router-v1.json"),
+  ];
+
+  for (const path of candidates) {
+    if (existsSync(path)) {
+      try {
+        const raw = JSON.parse(readFileSync(path, "utf8")) as unknown;
+        cachedModel = parseModel(raw);
+        return cachedModel;
+      } catch {
+        // corrupt model file — fall through
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
- * Route a finding through the learned triage rules.
+ * Route a finding through the trained XGBoost model.
  *
- * @param finding - The finding to triage.
- * @param sliceType - The scan context ("xbow-wb", "xbow-bb", "npm", "unknown").
- *   The scanner knows this at startup from the target type and mode.
- * @returns RouterResult with the decision and which layers to run.
+ * Returns auto_accept / auto_reject / run_layers based on the model's
+ * TP probability. Thresholds derived from the training data:
+ *   - accept_threshold: 0.85 (above → auto-accept, skip expensive layers)
+ *   - reject_threshold: 0.25 (below → auto-reject)
+ *   - middle band → run layers (free layers if prob > 0.5, all if < 0.5)
+ *
+ * Falls back to "run all layers" if the model file is not found.
  */
-export function routeFinding(
-  finding: Finding,
-  sliceType: SliceType = "unknown",
-): RouterResult {
-  const features = extractFeatures(finding);
-  const confidence = finding.confidence ?? featureByName(features, "meta_confidence");
-  const evidenceCompleteness = featureByName(features, "cross_evidence_completeness");
-  const hedging = featureByName(features, "text_hedging_language");
-  const verification = featureByName(features, "text_verification_language");
-  const descriptionLength = featureByName(features, "text_description_length");
-  const analysisLength = featureByName(features, "text_analysis_length");
-  const respReqRatio = featureByName(features, "cross_response_request_length_ratio");
-  const injectionClass = featureByName(features, "meta_injection_class");
+export function routeFinding(finding: Finding): RouterResult {
+  const model = getModel();
 
-  // --- Auto-reject rules (universal across slices) ---
-
-  if (evidenceCompleteness <= 0.33 && confidence < 0.3) {
-    return {
-      decision: "auto_reject",
-      confidence: 0.9,
-      reason: `low evidence (${evidenceCompleteness.toFixed(2)}) + low confidence (${confidence.toFixed(2)})`,
-      layersToRun: [],
-      layersToSkip: ALL_TRIAGE_LAYERS,
-    };
-  }
-
-  // --- Per-slice routing ---
-
-  if (sliceType === "npm") {
-    return routeNpm(features, finding, confidence, descriptionLength, analysisLength, respReqRatio);
-  }
-  if (sliceType === "xbow-bb") {
-    return routeBlackBox(features, finding, confidence, respReqRatio, injectionClass);
-  }
-  if (sliceType === "xbow-wb") {
-    return routeWhiteBox(features, finding, confidence, evidenceCompleteness, hedging, verification);
-  }
-
-  // Unknown slice — fall back to conservative white-box rules
-  return routeWhiteBox(features, finding, confidence, evidenceCompleteness, hedging, verification);
-}
-
-function routeWhiteBox(
-  _features: number[],
-  _finding: Finding,
-  confidence: number,
-  evidenceCompleteness: number,
-  hedging: number,
-  verification: number,
-): RouterResult {
-  // XGBoost wb model: 82% of findings auto-accepted at threshold 0.536.
-  // The top features are meta_confidence and evidence_completeness.
-  // Hand-coded proxy: high confidence + good evidence + no hedging = accept.
-  if (confidence >= 0.8 && evidenceCompleteness >= 0.66 && !hedging && verification) {
-    return {
-      decision: "auto_accept",
-      confidence: 0.92,
-      reason: `wb: high confidence (${confidence.toFixed(2)}) + complete evidence + verification language`,
-      layersToRun: [],
-      layersToSkip: ALL_TRIAGE_LAYERS,
-    };
-  }
-
-  if (confidence >= 0.7 && evidenceCompleteness >= 0.66) {
-    // Moderate confidence — run only the free layers, skip expensive ones
+  if (!model) {
     return {
       decision: "run_layers",
-      confidence: 0.75,
-      reason: `wb: moderate confidence (${confidence.toFixed(2)}), skipping expensive layers`,
-      layersToRun: FREE_LAYERS,
-      layersToSkip: EXPENSIVE_LAYERS,
-    };
-  }
-
-  // Low confidence or thin evidence — run everything
-  return {
-    decision: "run_layers",
-    confidence: 0.5,
-    reason: "wb: uncertain, running full pipeline",
-    layersToRun: ALL_TRIAGE_LAYERS,
-    layersToSkip: [],
-  };
-}
-
-function routeBlackBox(
-  _features: number[],
-  _finding: Finding,
-  confidence: number,
-  respReqRatio: number,
-  injectionClass: number,
-): RouterResult {
-  // XGBoost bb model: 92% auto-accepted. Top feature is response/request
-  // length ratio. FPs tend to have injection-class findings with high ratios.
-  if (injectionClass && respReqRatio > 4 && confidence < 0.6) {
-    return {
-      decision: "run_layers",
-      confidence: 0.4,
-      reason: `bb: injection-class + high resp/req ratio (${respReqRatio.toFixed(1)}) + low confidence`,
+      tpProbability: 0.5,
+      reason: "model file not found, running full pipeline",
       layersToRun: ALL_TRIAGE_LAYERS,
       layersToSkip: [],
     };
   }
 
-  // Most bb findings are TP — auto-accept unless flagged above
-  if (confidence >= 0.5) {
+  const features = extractFeatures(finding);
+  const prob = predict(model, features);
+
+  if (prob >= 0.85) {
     return {
       decision: "auto_accept",
-      confidence: 0.85,
-      reason: `bb: moderate+ confidence (${confidence.toFixed(2)}), auto-accepting`,
+      tpProbability: prob,
+      reason: `model score ${prob.toFixed(3)} >= 0.85`,
       layersToRun: [],
       layersToSkip: ALL_TRIAGE_LAYERS,
     };
   }
 
-  return {
-    decision: "run_layers",
-    confidence: 0.5,
-    reason: "bb: low confidence, running layers",
-    layersToRun: FREE_LAYERS,
-    layersToSkip: EXPENSIVE_LAYERS,
-  };
-}
-
-function routeNpm(
-  _features: number[],
-  _finding: Finding,
-  confidence: number,
-  descriptionLength: number,
-  analysisLength: number,
-  respReqRatio: number,
-): RouterResult {
-  // XGBoost npm model: text_description_length dominates (50%).
-  // FPs have LONGER descriptions (mean 1071) than TPs (mean 580).
-  // FPs also have longer analysis (529 vs 321) and lower resp/req ratio.
-  if (descriptionLength > 900 && analysisLength > 450 && respReqRatio < 2) {
+  if (prob <= 0.25) {
     return {
       decision: "auto_reject",
-      confidence: 0.8,
-      reason: `npm: long description (${descriptionLength}) + long analysis (${analysisLength}) + low ratio — likely FP`,
+      tpProbability: prob,
+      reason: `model score ${prob.toFixed(3)} <= 0.25`,
       layersToRun: [],
       layersToSkip: ALL_TRIAGE_LAYERS,
     };
   }
 
-  if (descriptionLength < 700 && confidence >= 0.5) {
+  if (prob > 0.5) {
     return {
-      decision: "auto_accept",
-      confidence: 0.88,
-      reason: `npm: concise description (${descriptionLength}) + confidence ${confidence.toFixed(2)}`,
-      layersToRun: [],
-      layersToSkip: ALL_TRIAGE_LAYERS,
+      decision: "run_layers",
+      tpProbability: prob,
+      reason: `model score ${prob.toFixed(3)} — moderate confidence, free layers only`,
+      layersToRun: FREE_LAYERS,
+      layersToSkip: EXPENSIVE_LAYERS,
     };
   }
 
   return {
     decision: "run_layers",
-    confidence: 0.5,
-    reason: "npm: ambiguous, running free layers only",
-    layersToRun: FREE_LAYERS,
-    layersToSkip: EXPENSIVE_LAYERS,
+    tpProbability: prob,
+    reason: `model score ${prob.toFixed(3)} — low confidence, full pipeline`,
+    layersToRun: ALL_TRIAGE_LAYERS,
+    layersToSkip: [],
   };
 }

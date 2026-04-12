@@ -45,6 +45,7 @@ import {
   checkMultiModalAgreement,
   fuseTriageSignals,
   checkReachability,
+  routeFinding,
 } from "./triage/index.js";
 import { runSelfConsistencyVerify } from "./triage/verify-pipeline.js";
 import { generatePov } from "./triage/pov-gate.js";
@@ -795,6 +796,59 @@ export async function agenticScan(opts: AgenticScanOptions): Promise<ScanReport>
           : `evidence_completeness=${evidenceCompleteness.toFixed(2)} > 0.5`,
         startedAt: evidenceGateStartedAt,
       });
+
+      // ── Learned router (pwnkit#113) ──
+      // When enabled, the XGBoost model decides per-finding whether to
+      // auto-accept, auto-reject, or run a subset of layers. This runs
+      // AFTER the two free always-on filters (holding-it-wrong +
+      // evidence_gate) and BEFORE any expensive layer. The model loads
+      // once from triage-router-v1.json and evaluates in sub-millisecond.
+      if (features.learnedRouter) {
+        const routerResult = routeFinding(finding);
+        db.logEvent?.({
+          scanId,
+          stage: "verify",
+          eventType: "learned_router",
+          agentRole: "triage",
+          payload: {
+            findingId: finding.id,
+            decision: routerResult.decision,
+            tpProbability: routerResult.tpProbability,
+            reason: routerResult.reason,
+            layersToRun: routerResult.layersToRun,
+            layersToSkip: routerResult.layersToSkip,
+          },
+          timestamp: Date.now(),
+        });
+
+        if (routerResult.decision === "auto_accept") {
+          finding.confidence = Math.max(finding.confidence ?? 0, routerResult.tpProbability);
+          finding.triageStatus = "accepted";
+          finding.triageNote = `router_auto_accept: ${routerResult.reason}`;
+          db.saveFinding?.(scanId, finding);
+          verifyCandidates.push(finding);
+          continue;
+        }
+
+        if (routerResult.decision === "auto_reject") {
+          finding.triageStatus = "suppressed";
+          finding.triageNote = `router_auto_reject: ${routerResult.reason}`;
+          db.updateFindingStatus?.(finding.id, "false-positive");
+          finding.status = "false-positive";
+          db.saveFinding?.(scanId, finding);
+          emit({
+            type: "stage:end",
+            stage: "attack",
+            message: `Router rejected ${finding.id}: ${routerResult.reason}`,
+          });
+          continue;
+        }
+
+        // decision === "run_layers" — continue to the layers below,
+        // but the router's layersToSkip list is available for future
+        // per-layer gating (not wired yet — the static feature flags
+        // still control which layers run for now).
+      }
 
       // ── Reachability gate ("Endor Labs moat") ──
       // Opt-in via PWNKIT_FEATURE_REACHABILITY_GATE. Only runs in white-box
